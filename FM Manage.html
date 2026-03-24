@@ -7,18 +7,18 @@
 <link rel="icon" type="image/png" href="favicon.png">
 <style>
   :root {
-    --bg: #141e30;
-    --surface: #1c2942;
-    --surface2: #24354e;
-    --border: #334d6e;
-    --text: #e2e8f0;
-    --text-dim: #8da3be;
-    --accent: #00c8eb;
-    --accent-dim: rgba(0,200,235,0.10);
-    --green: #34d399;
-    --green-dim: rgba(52,211,153,0.10);
-    --red: #f87171;
-    --red-dim: rgba(248,113,113,0.10);
+    --bg: #e2e6ef;
+    --surface: #ffffff;
+    --surface2: #dde2ec;
+    --border: #d4dbe8;
+    --text: #1e2d44;
+    --text-dim: #6b7d96;
+    --accent: #00b0d4;
+    --accent-dim: rgba(0,176,212,0.08);
+    --green: #1a9a6b;
+    --green-dim: rgba(26,154,107,0.08);
+    --red: #e5534b;
+    --red-dim: rgba(229,83,75,0.08);
     --yellow: #ffd250;
     --yellow-dim: rgba(255,210,80,0.10);
     --orange: #ff8c5a;
@@ -68,7 +68,7 @@
 
   .btn:hover { background: var(--border); color: var(--text); }
   .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-  .btn.primary:hover { background: rgba(0,200,235,0.25); }
+  .btn.primary:hover { background: rgba(0,176,212,0.25); }
   .btn.danger { color: var(--red); }
   .btn.danger:hover { background: var(--red-dim); border-color: var(--red); }
   .btn.success { color: var(--green); }
@@ -213,7 +213,7 @@
     white-space: nowrap;
   }
 
-  .tag-monthly { background: rgba(0,200,235,0.15); color: #00c8eb; }
+  .tag-monthly { background: rgba(0,176,212,0.15); color: #00b0d4; }
   .tag-quarterly { background: rgba(255,170,80,0.15); color: #ffaa50; }
 
   .tag-status-done { background: var(--green-dim); color: var(--green); }
@@ -313,7 +313,7 @@
   /* ── Modal ── */
   .modal-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.3);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -334,7 +334,7 @@
     max-width: 95vw;
     max-height: 90vh;
     overflow-y: auto;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.15);
   }
 
   .modal h3 { font-size: 16px; margin-bottom: 20px; }
@@ -390,7 +390,7 @@
     border-radius: 8px;
     font-size: 13px;
     font-weight: 600;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
     opacity: 0;
     transform: translateY(10px);
     transition: all 0.3s;
@@ -412,7 +412,7 @@
 <body>
 
 <div class="topbar">
-  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo ONLY.png" style="height:30px;width:auto;border-radius:3px" alt="FM"><span style="font-weight:300;font-size:16px;letter-spacing:0.5px"><span style="color:var(--text)">FIRST</span><span style="color:var(--accent)">MILE</span></span><span style="color:var(--text-dim);font-weight:400;font-size:13px">Manage Data</span></h1>
+  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo_RGB.png" style="height:38px;width:auto" alt="First Mile Capital"><span style="color:var(--text-dim);font-weight:400;font-size:13px">Manage Data</span></h1>
   <div class="topbar-actions">
     <div class="sync-pill loading" id="syncPill"><div class="sync-dot"></div><span>Connecting...</span></div>
     <button class="btn" onclick="refreshData()">&#8635; Refresh</button>
@@ -571,7 +571,7 @@ const FIELD_IDS = {
 };
 
 const PALETTE = [
-  "#00c8eb","#50dcb4","#ff8c5a","#dc78ff","#ffd250",
+  "#00b0d4","#50dcb4","#ff8c5a","#dc78ff","#ffd250",
   "#50c8ff","#ff6482","#a78bfa","#f472b6","#38bdf8",
   "#4ade80","#fb923c","#e879f9","#22d3ee","#b4b4b4"
 ];

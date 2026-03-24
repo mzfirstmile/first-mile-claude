@@ -8,17 +8,17 @@
 <style>
   .logo-icon { height: 28px; width: auto; margin-right: 10px; vertical-align: middle; }
   :root {
-    --bg: #141e30;
-    --surface: #1c2942;
-    --surface2: #24354e;
-    --border: #334d6e;
-    --text: #e2e8f0;
-    --text-dim: #8da3be;
-    --accent: #00c8eb;
-    --accent-dim: rgba(0,200,235,0.10);
-    --green: #34d399;
-    --green-dim: rgba(52,211,153,0.10);
-    --red: #f87171;
+    --bg: #e2e6ef;
+    --surface: #ffffff;
+    --surface2: #dde2ec;
+    --border: #d4dbe8;
+    --text: #1e2d44;
+    --text-dim: #6b7d96;
+    --accent: #00b0d4;
+    --accent-dim: rgba(0,176,212,0.08);
+    --green: #1a9a6b;
+    --green-dim: rgba(26,154,107,0.08);
+    --red: #e5534b;
   }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
@@ -42,7 +42,7 @@
   .setup-card .steps code { background:var(--surface2); padding:1px 6px; border-radius:3px; font-size:11px; color:var(--accent); }
   .setup-actions { display:flex; gap:10px; }
   .setup-btn { flex:1; padding:10px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--accent); background:var(--accent-dim); color:var(--accent); transition:all .2s; text-align:center; }
-  .setup-btn:hover { background:rgba(0,200,235,.25); }
+  .setup-btn:hover { background:rgba(0,176,212,.25); }
   .setup-btn.secondary { border-color:var(--border); background:var(--surface); color:var(--text-dim); }
   .setup-error { color:var(--red); font-size:12px; margin-bottom:12px; display:none; }
   .setup-error.show { display:block; }
@@ -58,7 +58,7 @@
   .sync-pill.error { color:var(--red); } .sync-pill.error .sync-dot { background:var(--red); }
   .btn { padding:7px 14px; border-radius:7px; font-size:12px; font-weight:600; text-decoration:none; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .2s; }
   .btn:hover { background:var(--surface2); color:var(--text); }
-  .btn.accent { color:var(--accent); border-color:rgba(0,200,235,.3); background:var(--accent-dim); }
+  .btn.accent { color:var(--accent); border-color:rgba(0,176,212,.3); background:var(--accent-dim); }
   .view-toggle { display:flex; background:var(--surface); border-radius:8px; overflow:hidden; border:1px solid var(--border); }
   .view-toggle button { padding:7px 16px; background:none; border:none; color:var(--text-dim); font-size:12px; cursor:pointer; transition:all .2s; }
   .view-toggle button.active { background:var(--accent-dim); color:var(--accent); font-weight:600; }
@@ -76,7 +76,7 @@
   .btn-sm.success { border-color:var(--green); color:var(--green); background:var(--green-dim); }
   .progress-track { width:100%; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
   .progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:3px; transition:width .4s cubic-bezier(.4,0,.2,1); }
-  .all-done { margin-top:8px; padding:8px 14px; background:var(--green-dim); border:1px solid rgba(52,211,153,.3); border-radius:7px; font-size:12px; color:var(--green); font-weight:600; text-align:center; display:none; }
+  .all-done { margin-top:8px; padding:8px 14px; background:var(--green-dim); border:1px solid rgba(26,154,107,.3); border-radius:7px; font-size:12px; color:var(--green); font-weight:600; text-align:center; display:none; }
   .all-done.show { display:block; }
 
   /* ── Filters ── */
@@ -119,7 +119,7 @@
   .row .tag { padding:2px 7px; border-radius:3px; font-size:10px; font-weight:600; text-align:center; }
   .row .task { color:var(--text); }
   .row .owner { color:var(--text-dim); text-align:right; font-size:11px; }
-  .tag-m { background:rgba(0,200,235,.15); color:#00c8eb; }
+  .tag-m { background:rgba(0,176,212,.15); color:#00b0d4; }
   .tag-q { background:rgba(255,170,80,.15); color:#ffaa50; }
   .cb-wrap { display:flex; align-items:center; justify-content:center; }
   .cb { width:18px; height:18px; border-radius:4px; border:2px solid var(--border); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; background:transparent; flex-shrink:0; }
@@ -145,7 +145,7 @@
   .modal-btns { display:flex; gap:8px; justify-content:center; }
   .mbtn { padding:7px 18px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface2); color:var(--text); transition:all .2s; }
   .mbtn:hover { background:var(--border); }
-  .mbtn.danger { background:rgba(248,113,113,.15); border-color:var(--red); color:var(--red); }
+  .mbtn.danger { background:rgba(229,83,75,.15); border-color:var(--red); color:var(--red); }
 
   @media(max-width:800px) {
     header,.filters,.cal-nav,.list-view,.progress-section { padding-left:14px; padding-right:14px; }
@@ -188,7 +188,7 @@
 
 <!-- Main App -->
 <header>
-  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo ONLY.png" style="height:36px;width:auto;border-radius:4px" alt="FM"><span style="font-weight:300;font-size:18px;letter-spacing:0.5px"><span style="color:var(--text)">FIRST</span><span style="color:var(--accent)">MILE</span></span><span style="color:var(--text-dim);font-weight:400;font-size:14px">Accounting Calendar — 2026</span></h1>
+  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo_RGB.png" style="height:44px;width:auto" alt="First Mile Capital"><span style="color:var(--text-dim);font-weight:400;font-size:14px">Accounting Calendar — 2026</span></h1>
   <div class="header-right">
     <div class="sync-pill live" id="syncPill" style="display:none"><div class="sync-dot"></div><span>Live</span></div>
     <button class="btn accent" onclick="refreshData()" style="display:none" id="refreshBtn">↻ Refresh</button>
@@ -243,7 +243,7 @@ const BASE_ID='app27jUbqonTIiHXY', TABLE_NAME='Sheet1', TOKEN_KEY='fm_airtable_t
 const STATUS_FIELD='fld1MOQBkRaFEIXdl', COMPLETED_BY_FIELD='fldnYp9qfMKY7bFA7', COMPLETED_DATE_FIELD='fldKBm9ch5K8EfCCR';
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
 const QTR=[0,3,6,9];
-const PALETTE=["#00c8eb","#50dcb4","#ff8c5a","#dc78ff","#ffd250","#50c8ff","#ff6482","#a78bfa","#f472b6","#38bdf8","#4ade80","#fb923c","#e879f9","#22d3ee","#b4b4b4"];
+const PALETTE=["#00b0d4","#50dcb4","#ff8c5a","#dc78ff","#ffd250","#50c8ff","#ff6482","#a78bfa","#f472b6","#38bdf8","#4ade80","#fb923c","#e879f9","#22d3ee","#b4b4b4"];
 let colorMap={},colorIdx=0;
 function getClr(p){if(!colorMap[p]){colorMap[p]=PALETTE[colorIdx%PALETTE.length];colorIdx++;}return colorMap[p];}
 function hexA(h,a){h=h.replace('#','');return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;}

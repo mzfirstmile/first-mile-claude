@@ -8,17 +8,17 @@
 <style>
   .logo-icon { height: 28px; width: auto; margin-right: 10px; vertical-align: middle; }
   :root {
-    --bg: #141e30;
-    --surface: #1c2942;
-    --surface2: #24354e;
-    --border: #334d6e;
-    --text: #e2e8f0;
-    --text-dim: #8da3be;
-    --accent: #00c8eb;
-    --accent-dim: rgba(0,200,235,0.10);
-    --green: #34d399;
-    --green-dim: rgba(52,211,153,0.10);
-    --red: #f87171;
+    --bg: #e2e6ef;
+    --surface: #ffffff;
+    --surface2: #dde2ec;
+    --border: #d4dbe8;
+    --text: #1e2d44;
+    --text-dim: #6b7d96;
+    --accent: #00b0d4;
+    --accent-dim: rgba(0,176,212,0.08);
+    --green: #1a9a6b;
+    --green-dim: rgba(26,154,107,0.08);
+    --red: #e5534b;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -151,7 +151,7 @@
     margin-top: 10px;
     padding: 10px 16px;
     background: var(--green-dim);
-    border: 1px solid rgba(52,211,153,0.3);
+    border: 1px solid rgba(26,154,107,0.3);
     border-radius: 8px;
     font-size: 13px;
     color: var(--green);
@@ -317,7 +317,7 @@
   .list-item .task { color: var(--text); }
   .list-item .owner { color: var(--text-dim); text-align: right; font-size: 12px; }
 
-  .badge-monthly { background: rgba(0,200,235,0.15); color: #00c8eb; }
+  .badge-monthly { background: rgba(0,176,212,0.15); color: #00b0d4; }
   .badge-quarterly { background: rgba(255,170,80,0.15); color: #ffaa50; }
 
   /* ── Checkbox (shared) ── */
@@ -365,7 +365,7 @@
     font-size: 13px;
     max-width: 340px;
     z-index: 100;
-    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.15);
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.15s;
@@ -403,7 +403,7 @@
   /* ── Confirm modal ── */
   .modal-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.3);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -422,7 +422,7 @@
     padding: 28px 32px;
     max-width: 380px;
     text-align: center;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.15);
   }
 
   .modal-box h3 { font-size: 16px; margin-bottom: 8px; }
@@ -443,8 +443,8 @@
   }
 
   .modal-btn:hover { background: var(--border); }
-  .modal-btn.danger { background: rgba(248,113,113,0.15); border-color: var(--red); color: var(--red); }
-  .modal-btn.danger:hover { background: rgba(248,113,113,0.25); }
+  .modal-btn.danger { background: rgba(229,83,75,0.15); border-color: var(--red); color: var(--red); }
+  .modal-btn.danger:hover { background: rgba(229,83,75,0.25); }
 
   .btn-link {
     padding: 8px 16px;
@@ -454,10 +454,10 @@
     text-decoration: none;
     color: var(--accent);
     background: var(--accent-dim);
-    border: 1px solid rgba(0,200,235,0.3);
+    border: 1px solid rgba(0,176,212,0.3);
     transition: all 0.2s;
   }
-  .btn-link:hover { background: rgba(0,200,235,0.25); }
+  .btn-link:hover { background: rgba(0,176,212,0.25); }
 
   @media (max-width: 800px) {
     header, .filters, .calendar-nav, .list-view, .summary-strip, .progress-section { padding-left: 16px; padding-right: 16px; }
@@ -471,7 +471,7 @@
 <body>
 
 <header>
-  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo ONLY.png" style="height:36px;width:auto;border-radius:4px" alt="FM"><span style="font-weight:300;font-size:18px;letter-spacing:0.5px"><span style="color:var(--text)">FIRST</span><span style="color:var(--accent)">MILE</span></span><span style="color:var(--text-dim);font-weight:400;font-size:14px">Accounting Calendar — 2026</span></h1>
+  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo_RGB.png" style="height:44px;width:auto" alt="First Mile Capital"><span style="color:var(--text-dim);font-weight:400;font-size:14px">Accounting Calendar — 2026</span></h1>
   <div class="header-right">
     <a class="btn-link" href="FM Manage.html">Manage Data</a>
     <div class="view-toggle">
@@ -568,7 +568,7 @@ const EVENTS = shared
   : DEFAULT_EVENTS;
 
 const DEFAULT_COLORS = {
-  "Pref Fund I - Solow": { bg: "rgba(0,200,235,0.15)", fg: "#00c8eb", border: "#00c8eb" },
+  "Pref Fund I - Solow": { bg: "rgba(0,176,212,0.15)", fg: "#00b0d4", border: "#00b0d4" },
   "41 Flatbush Ave":     { bg: "rgba(80,220,180,0.15)", fg: "#50dcb4", border: "#50dcb4" },
   "Paramus Plaza":       { bg: "rgba(255,140,90,0.15)", fg: "#ff8c5a", border: "#ff8c5a" },
   "Pref Fund II - JPY":  { bg: "rgba(220,120,255,0.15)", fg: "#dc78ff", border: "#dc78ff" },
