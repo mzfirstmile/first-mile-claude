@@ -4,22 +4,23 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>First Mile — Manage Data</title>
+<link rel="icon" type="image/png" href="favicon.png">
 <style>
   :root {
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --surface2: #232733;
-    --border: #2e3344;
-    --text: #e2e4ea;
-    --text-dim: #8b8fa3;
-    --accent: #6c8cff;
-    --accent-dim: rgba(108,140,255,0.12);
+    --bg: #141e30;
+    --surface: #1c2942;
+    --surface2: #24354e;
+    --border: #334d6e;
+    --text: #e2e8f0;
+    --text-dim: #8da3be;
+    --accent: #00c8eb;
+    --accent-dim: rgba(0,200,235,0.10);
     --green: #34d399;
-    --green-dim: rgba(52,211,153,0.12);
+    --green-dim: rgba(52,211,153,0.10);
     --red: #f87171;
-    --red-dim: rgba(248,113,113,0.12);
+    --red-dim: rgba(248,113,113,0.10);
     --yellow: #ffd250;
-    --yellow-dim: rgba(255,210,80,0.12);
+    --yellow-dim: rgba(255,210,80,0.10);
     --orange: #ff8c5a;
   }
 
@@ -67,7 +68,7 @@
 
   .btn:hover { background: var(--border); color: var(--text); }
   .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
-  .btn.primary:hover { background: rgba(108,140,255,0.25); }
+  .btn.primary:hover { background: rgba(0,200,235,0.25); }
   .btn.danger { color: var(--red); }
   .btn.danger:hover { background: var(--red-dim); border-color: var(--red); }
   .btn.success { color: var(--green); }
@@ -212,7 +213,7 @@
     white-space: nowrap;
   }
 
-  .tag-monthly { background: rgba(108,140,255,0.15); color: #6c8cff; }
+  .tag-monthly { background: rgba(0,200,235,0.15); color: #00c8eb; }
   .tag-quarterly { background: rgba(255,170,80,0.15); color: #ffaa50; }
 
   .tag-status-done { background: var(--green-dim); color: var(--green); }
@@ -411,7 +412,7 @@
 <body>
 
 <div class="topbar">
-  <h1><span>First Mile</span> — Manage Data</h1>
+  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo ONLY.png" style="height:30px;width:auto;border-radius:3px" alt="FM"><span style="font-weight:300;font-size:16px;letter-spacing:0.5px"><span style="color:var(--text)">FIRST</span><span style="color:var(--accent)">MILE</span></span><span style="color:var(--text-dim);font-weight:400;font-size:13px">Manage Data</span></h1>
   <div class="topbar-actions">
     <div class="sync-pill loading" id="syncPill"><div class="sync-dot"></div><span>Connecting...</span></div>
     <button class="btn" onclick="refreshData()">&#8635; Refresh</button>
@@ -570,7 +571,7 @@ const FIELD_IDS = {
 };
 
 const PALETTE = [
-  "#6c8cff","#50dcb4","#ff8c5a","#dc78ff","#ffd250",
+  "#00c8eb","#50dcb4","#ff8c5a","#dc78ff","#ffd250",
   "#50c8ff","#ff6482","#a78bfa","#f472b6","#38bdf8",
   "#4ade80","#fb923c","#e879f9","#22d3ee","#b4b4b4"
 ];

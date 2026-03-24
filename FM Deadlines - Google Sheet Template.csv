@@ -1,0 +1,15 @@
+Day,Cadence,Property,Type,Task,Owner,Color
+8,Monthly,Pref Fund I - Solow,AM Fee,"Transfer Solow AM fees to FMC - $5,208 (BofA scheduled)",BofA - automatic,#6c8cff
+8,Monthly,41 Flatbush Ave,AM Fee,Receive JLL Financial Package from JLL. Invoice them for AM Fee - 2.5%,Anthony,#50dcb4
+10,Monthly,Paramus Plaza,Reporting,Upload Monthly Management Reports to DRA,Anthony,#ff8c5a
+20,Quarterly,Pref Fund II - JPY,Investor Payment,Purchase JPY to Goldman Sachs. Loan from FMC if cash shortfall.,Anthony,#dc78ff
+20,Quarterly,Pref Fund II - JPY,Investor Payment,Send JPY to investors via Goldman Sachs,Anthony,#dc78ff
+20,Monthly,61 S Paramus,AM Fee,Transfer distros from property to FM Paramus Member (BofA scheduled),BofA - automatic,#ffd250
+21,Monthly,61 S Paramus,AM Fee,"Transfer AM fee split 48k to FM and 4k to Ring (BofA scheduled)",BofA - automatic,#ffd250
+23,Monthly,61 S Paramus,Investor Payment,Send Distros via Appfolio,Anthony,#ffd250
+23,Monthly,Paramus Plaza,Investor Payment,Send Distros via Appfolio,Anthony,#ff8c5a
+23,Monthly,One River Centre,Investor Payment,"Send Distros via Appfolio (*Xuan sends for now, will be transferred soon to Anthony)",Xuan,#50c8ff
+23,Monthly,1700 East Putnam,Investor Payment,Send Distros via Appfolio (*Currently Suspended),Xuan,#ff6482
+23,Monthly,Pref Fund I - Solow,Investor Payment,Send Distros via Appfolio,Anthony,#6c8cff
+25,Monthly,Paramus Plaza,AM Fee,"Pay Paramus Plaza AM Fee, if cash distro received by DRA",Anthony,#ff8c5a
+25,Quarterly,ALL,Reporting,Send Asset Management Report,Morris,#b4b4b4

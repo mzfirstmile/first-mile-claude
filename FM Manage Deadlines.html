@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>First Mile — Manage Deadlines</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  :root {
+    --bg: #141e30;
+    --surface: #1c2942;
+    --surface2: #24354e;
+    --border: #334d6e;
+    --text: #e2e8f0;
+    --text-dim: #8da3be;
+    --accent: #00c8eb;
+    --accent-dim: rgba(0,200,235,0.10);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.10);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.10);
+    --yellow: #ffd250;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── Top Bar ── */
+  .topbar {
+    padding: 24px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .topbar h1 { font-size: 20px; font-weight: 600; }
+  .topbar h1 span { color: var(--accent); }
+
+  .topbar-actions { display: flex; gap: 10px; align-items: center; }
+
+  .btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    transition: all 0.2s;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn:hover { background: var(--surface2); color: var(--text); }
+  .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); }
+  .btn.primary:hover { background: rgba(0,200,235,0.25); }
+  .btn.danger { color: var(--red); }
+  .btn.danger:hover { background: var(--red-dim); border-color: var(--red); }
+  .btn.success { color: var(--green); }
+  .btn.success:hover { background: var(--green-dim); border-color: var(--green); }
+
+  /* ── Layout ── */
+  .page { display: flex; min-height: calc(100vh - 73px); }
+
+  .sidebar {
+    width: 260px;
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    flex-shrink: 0;
+    overflow-y: auto;
+  }
+
+  .sidebar-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    padding: 0 20px 12px;
+  }
+
+  .prop-item {
+    padding: 10px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.15s;
+    border-left: 3px solid transparent;
+    font-size: 13px;
+  }
+
+  .prop-item:hover { background: var(--surface2); }
+  .prop-item.active { background: var(--accent-dim); border-left-color: var(--accent); font-weight: 600; }
+
+  .prop-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .prop-count { margin-left: auto; font-size: 11px; color: var(--text-dim); background: var(--surface2); padding: 2px 7px; border-radius: 10px; }
+
+  .prop-item-add {
+    padding: 10px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--accent);
+    transition: background 0.15s;
+    margin-top: 8px;
+    border-top: 1px solid var(--border);
+    padding-top: 16px;
+  }
+
+  .prop-item-add:hover { background: var(--surface2); }
+
+  .main {
+    flex: 1;
+    padding: 28px 36px;
+    overflow-y: auto;
+  }
+
+  /* ── Property Header ── */
+  .prop-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .prop-header .prop-dot-lg { width: 14px; height: 14px; border-radius: 50%; }
+
+  .prop-header h2 { font-size: 18px; font-weight: 600; flex: 1; }
+
+  .prop-header .badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--surface2);
+    color: var(--text-dim);
+  }
+
+  /* ── Deadline Cards ── */
+  .deadline-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: start;
+    transition: all 0.15s;
+  }
+
+  .deadline-card:hover { border-color: var(--accent); }
+
+  .dc-top { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; flex-wrap: wrap; }
+
+  .dc-day {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+    min-width: 50px;
+  }
+
+  .dc-cadence {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .dc-cadence.monthly { background: rgba(0,200,235,0.15); color: #00c8eb; }
+  .dc-cadence.quarterly { background: rgba(255,170,80,0.15); color: #ffaa50; }
+
+  .dc-type {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--surface2);
+    color: var(--text-dim);
+  }
+
+  .dc-task { font-size: 13px; line-height: 1.5; margin-bottom: 4px; }
+  .dc-owner { font-size: 12px; color: var(--text-dim); }
+
+  .dc-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  .icon-btn {
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.15s;
+  }
+
+  .icon-btn:hover { color: var(--text); background: var(--border); }
+  .icon-btn.delete:hover { color: var(--red); background: var(--red-dim); border-color: var(--red); }
+
+  /* ── Empty State ── */
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+  }
+
+  .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+  .empty-state p { font-size: 14px; margin-bottom: 16px; }
+
+  /* ── Modal / Form ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+  }
+
+  .modal-overlay.show { opacity: 1; pointer-events: all; }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px 32px;
+    width: 480px;
+    max-width: 95vw;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  }
+
+  .modal h3 { font-size: 16px; margin-bottom: 20px; }
+
+  .form-group { margin-bottom: 16px; }
+
+  .form-group label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: inherit;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus { border-color: var(--accent); }
+
+  .form-group textarea { resize: vertical; min-height: 70px; }
+
+  .form-group select { cursor: pointer; }
+  .form-group select option { background: var(--surface2); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+  /* ── Color Picker ── */
+  .color-options { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .color-swatch {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s;
+  }
+
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.selected { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--surface2);
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.3s;
+    z-index: 300;
+  }
+
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  /* ── Responsive ── */
+  @media (max-width: 700px) {
+    .page { flex-direction: column; }
+    .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 12px 0; display: flex; overflow-x: auto; gap: 0; }
+    .sidebar-title { display: none; }
+    .prop-item { white-space: nowrap; border-left: none; border-bottom: 3px solid transparent; }
+    .prop-item.active { border-left: none; border-bottom-color: var(--accent); }
+    .prop-item-add { margin-top: 0; border-top: none; padding-top: 10px; }
+    .main { padding: 20px 16px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo ONLY.png" style="height:30px;width:auto;border-radius:3px" alt="FM"><span style="font-weight:300;font-size:16px;letter-spacing:0.5px"><span style="color:var(--text)">FIRST</span><span style="color:var(--accent)">MILE</span></span><span style="color:var(--text-dim);font-weight:400;font-size:13px">Manage Deadlines</span></h1>
+  <div class="topbar-actions">
+    <a class="btn" href="FM Accounting Calendar.html">← Back to Calendar</a>
+    <button class="btn success" onclick="exportData()">Export JSON</button>
+    <button class="btn" onclick="importData()">Import JSON</button>
+  </div>
+</div>
+
+<div class="page">
+  <div class="sidebar">
+    <div class="sidebar-title">Properties & Funds</div>
+    <div id="propList"></div>
+    <div class="prop-item-add" onclick="openPropertyModal()">+ Add Property</div>
+  </div>
+  <div class="main" id="mainContent"></div>
+</div>
+
+<!-- Deadline Modal -->
+<div class="modal-overlay" id="deadlineModal">
+  <div class="modal">
+    <h3 id="deadlineModalTitle">Add Deadline</h3>
+    <input type="hidden" id="editingDeadlineIdx" value="-1">
+    <div class="form-row">
+      <div class="form-group">
+        <label>Day of Month</label>
+        <select id="fDay"></select>
+      </div>
+      <div class="form-group">
+        <label>Cadence</label>
+        <select id="fCadence">
+          <option value="Monthly">Monthly</option>
+          <option value="Quarterly">Quarterly</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Payment Type</label>
+        <select id="fType">
+          <option value="AM Fee">AM Fee</option>
+          <option value="Investor Payment">Investor Payment</option>
+          <option value="Reporting">Reporting</option>
+          <option value="Insurance">Insurance</option>
+          <option value="Tax">Tax</option>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Task Owner</label>
+        <input type="text" id="fOwner" placeholder="e.g. Anthony">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Task Description</label>
+      <textarea id="fTask" placeholder="Describe what needs to be done..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDeadlineModal()">Cancel</button>
+      <button class="btn primary" onclick="saveDeadline()">Save Deadline</button>
+    </div>
+  </div>
+</div>
+
+<!-- Property Modal -->
+<div class="modal-overlay" id="propertyModal">
+  <div class="modal">
+    <h3 id="propModalTitle">Add Property</h3>
+    <input type="hidden" id="editingPropKey" value="">
+    <div class="form-group">
+      <label>Property / Fund Name</label>
+      <input type="text" id="fPropName" placeholder="e.g. 123 Main Street">
+    </div>
+    <div class="form-group">
+      <label>Color</label>
+      <div class="color-options" id="colorPicker"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closePropertyModal()">Cancel</button>
+      <button class="btn primary" onclick="saveProperty()">Save Property</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirm -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal" style="text-align:center; max-width: 380px;">
+    <h3 id="deleteTitle">Delete?</h3>
+    <p id="deleteMsg" style="font-size:13px; color:var(--text-dim); margin-bottom:20px;"></p>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="btn" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn danger" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="importInput" accept=".json" style="display:none">
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Color palette ──
+const PALETTE = [
+  "#00c8eb", "#50dcb4", "#ff8c5a", "#dc78ff",
+  "#ffd250", "#50c8ff", "#ff6482", "#b4b4b4",
+  "#a78bfa", "#f472b6", "#38bdf8", "#4ade80",
+  "#fb923c", "#e879f9", "#22d3ee", "#facc15"
+];
+
+// ── Default data ──
+const DEFAULT_DATA = {
+  properties: {
+    "Pref Fund I - Solow": { color: "#00c8eb" },
+    "41 Flatbush Ave": { color: "#50dcb4" },
+    "Paramus Plaza": { color: "#ff8c5a" },
+    "Pref Fund II - JPY": { color: "#dc78ff" },
+    "61 S Paramus": { color: "#ffd250" },
+    "One River Centre": { color: "#50c8ff" },
+    "1700 East Putnam": { color: "#ff6482" },
+    "ALL": { color: "#b4b4b4" },
+  },
+  deadlines: [
+    { day: 8, cadence: "Monthly", property: "Pref Fund I - Solow", type: "AM Fee", task: "Transfer Solow AM fees to FMC - $5,208 (BofA scheduled)", owner: "BofA - automatic" },
+    { day: 8, cadence: "Monthly", property: "41 Flatbush Ave", type: "AM Fee", task: "Receive JLL Financial Package from JLL. Invoice them for AM Fee - 2.5%", owner: "Anthony" },
+    { day: 10, cadence: "Monthly", property: "Paramus Plaza", type: "Reporting", task: "Upload Monthly Management Reports to DRA", owner: "Anthony" },
+    { day: 20, cadence: "Quarterly", property: "Pref Fund II - JPY", type: "Investor Payment", task: "Purchase JPY to Goldman Sachs. Loan from FMC if cash shortfall.", owner: "Anthony" },
+    { day: 20, cadence: "Quarterly", property: "Pref Fund II - JPY", type: "Investor Payment", task: "Send JPY to investors via Goldman Sachs", owner: "Anthony" },
+    { day: 20, cadence: "Monthly", property: "61 S Paramus", type: "AM Fee", task: "Transfer distros from property to FM Paramus Member (BofA scheduled)", owner: "BofA - automatic" },
+    { day: 21, cadence: "Monthly", property: "61 S Paramus", type: "AM Fee", task: "Transfer AM fee split 48k to FM and 4k to Ring (BofA scheduled)", owner: "BofA - automatic" },
+    { day: 23, cadence: "Monthly", property: "61 S Paramus", type: "Investor Payment", task: "Send Distros via Appfolio", owner: "Anthony" },
+    { day: 23, cadence: "Monthly", property: "Paramus Plaza", type: "Investor Payment", task: "Send Distros via Appfolio", owner: "Anthony" },
+    { day: 23, cadence: "Monthly", property: "One River Centre", type: "Investor Payment", task: "Send Distros via Appfolio (*Xuan sends for now, will be transferred soon to Anthony)", owner: "Xuan" },
+    { day: 23, cadence: "Monthly", property: "1700 East Putnam", type: "Investor Payment", task: "Send Distros via Appfolio (*Currently Suspended)", owner: "Xuan" },
+    { day: 23, cadence: "Monthly", property: "Pref Fund I - Solow", type: "Investor Payment", task: "Send Distros via Appfolio", owner: "Anthony" },
+    { day: 25, cadence: "Monthly", property: "Paramus Plaza", type: "AM Fee", task: "Pay Paramus Plaza AM Fee, if cash distro received by DRA", owner: "Anthony" },
+    { day: 25, cadence: "Quarterly", property: "ALL", type: "Reporting", task: "Send Asset Management Report", owner: "Morris" },
+  ]
+};
+
+const STORAGE_KEY = 'fm_cal_data';
+
+// ── State ──
+let data;
+let selectedProp = null;
+let selectedColor = PALETTE[0];
+
+// ── Persistence ──
+function loadData() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) { data = JSON.parse(raw); return; }
+  } catch(e) {}
+  data = JSON.parse(JSON.stringify(DEFAULT_DATA));
+  saveData();
+}
+
+function saveData() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch(e) {}
+  // Also sync to calendar format
+  syncToCalendar();
+}
+
+function syncToCalendar() {
+  // Write a simplified version the calendar can read
+  try {
+    localStorage.setItem('fm_cal_events', JSON.stringify(data.deadlines));
+    localStorage.setItem('fm_cal_colors', JSON.stringify(data.properties));
+  } catch(e) {}
+}
+
+// ── Day dropdown ──
+function initDayDropdown() {
+  const sel = document.getElementById('fDay');
+  sel.innerHTML = '';
+  for (let d = 1; d <= 31; d++) {
+    const o = document.createElement('option');
+    o.value = d;
+    o.textContent = ordinal(d);
+    sel.appendChild(o);
+  }
+}
+
+function ordinal(n) {
+  const s = ["th","st","nd","rd"];
+  const v = n % 100;
+  return n + (s[(v-20)%10] || s[v] || s[0]);
+}
+
+// ── Render sidebar ──
+function renderSidebar() {
+  const el = document.getElementById('propList');
+  el.innerHTML = '';
+
+  const props = Object.keys(data.properties).sort();
+  props.forEach(name => {
+    const p = data.properties[name];
+    const count = data.deadlines.filter(d => d.property === name).length;
+    const item = document.createElement('div');
+    item.className = 'prop-item' + (selectedProp === name ? ' active' : '');
+    item.innerHTML = `
+      <div class="prop-dot" style="background:${p.color}"></div>
+      <span>${name}</span>
+      <span class="prop-count">${count}</span>
+    `;
+    item.onclick = () => { selectedProp = name; renderAll(); };
+    el.appendChild(item);
+  });
+}
+
+// ── Render main ──
+function renderMain() {
+  const el = document.getElementById('mainContent');
+
+  if (!selectedProp || !data.properties[selectedProp]) {
+    el.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">📋</div>
+        <p>Select a property from the sidebar to view and manage its deadlines.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const prop = data.properties[selectedProp];
+  const deadlines = data.deadlines
+    .map((d, i) => ({ ...d, _idx: i }))
+    .filter(d => d.property === selectedProp)
+    .sort((a, b) => a.day - b.day);
+
+  let html = `
+    <div class="prop-header">
+      <div class="prop-dot-lg" style="background:${prop.color}"></div>
+      <h2>${selectedProp}</h2>
+      <span class="badge">${deadlines.length} deadline${deadlines.length !== 1 ? 's' : ''}</span>
+      <button class="btn" onclick="openPropertyModal('${esc(selectedProp)}')">Edit Property</button>
+      ${selectedProp !== 'ALL' ? `<button class="btn danger" onclick="confirmDeleteProperty('${esc(selectedProp)}')">Delete Property</button>` : ''}
+    </div>
+  `;
+
+  if (deadlines.length === 0) {
+    html += `
+      <div class="empty-state">
+        <div class="icon">📅</div>
+        <p>No deadlines yet for this property.</p>
+        <button class="btn primary" onclick="openDeadlineModal()">+ Add First Deadline</button>
+      </div>
+    `;
+  } else {
+    deadlines.forEach(d => {
+      html += `
+        <div class="deadline-card">
+          <div>
+            <div class="dc-top">
+              <span class="dc-day">${ordinal(d.day)}</span>
+              <span class="dc-cadence ${d.cadence.toLowerCase()}">${d.cadence}</span>
+              <span class="dc-type">${d.type}</span>
+            </div>
+            <div class="dc-task">${d.task}</div>
+            <div class="dc-owner">Owner: ${d.owner}</div>
+          </div>
+          <div class="dc-actions">
+            <button class="icon-btn" title="Edit" onclick="openDeadlineModal(${d._idx})">✏️</button>
+            <button class="icon-btn delete" title="Delete" onclick="confirmDeleteDeadline(${d._idx})">🗑</button>
+          </div>
+        </div>
+      `;
+    });
+
+    html += `<div style="margin-top:16px;"><button class="btn primary" onclick="openDeadlineModal()">+ Add Deadline</button></div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function esc(s) { return s.replace(/'/g, "\\'").replace(/"/g, '&quot;'); }
+
+function renderAll() {
+  renderSidebar();
+  renderMain();
+}
+
+// ── Deadline Modal ──
+function openDeadlineModal(idx) {
+  const isEdit = idx !== undefined && idx >= 0;
+  document.getElementById('deadlineModalTitle').textContent = isEdit ? 'Edit Deadline' : 'Add Deadline';
+  document.getElementById('editingDeadlineIdx').value = isEdit ? idx : -1;
+
+  if (isEdit) {
+    const d = data.deadlines[idx];
+    document.getElementById('fDay').value = d.day;
+    document.getElementById('fCadence').value = d.cadence;
+    document.getElementById('fType').value = d.type;
+    document.getElementById('fOwner').value = d.owner;
+    document.getElementById('fTask').value = d.task;
+  } else {
+    document.getElementById('fDay').value = 1;
+    document.getElementById('fCadence').value = 'Monthly';
+    document.getElementById('fType').value = 'AM Fee';
+    document.getElementById('fOwner').value = '';
+    document.getElementById('fTask').value = '';
+  }
+
+  document.getElementById('deadlineModal').classList.add('show');
+}
+
+function closeDeadlineModal() {
+  document.getElementById('deadlineModal').classList.remove('show');
+}
+
+function saveDeadline() {
+  const idx = parseInt(document.getElementById('editingDeadlineIdx').value);
+  const dl = {
+    day: parseInt(document.getElementById('fDay').value),
+    cadence: document.getElementById('fCadence').value,
+    property: selectedProp,
+    type: document.getElementById('fType').value,
+    task: document.getElementById('fTask').value.trim(),
+    owner: document.getElementById('fOwner').value.trim(),
+  };
+
+  if (!dl.task) { document.getElementById('fTask').focus(); return; }
+  if (!dl.owner) { document.getElementById('fOwner').focus(); return; }
+
+  if (idx >= 0) {
+    data.deadlines[idx] = dl;
+    showToast('Deadline updated');
+  } else {
+    data.deadlines.push(dl);
+    showToast('Deadline added');
+  }
+
+  saveData();
+  closeDeadlineModal();
+  renderAll();
+}
+
+// ── Property Modal ──
+function openPropertyModal(editKey) {
+  const isEdit = !!editKey;
+  document.getElementById('propModalTitle').textContent = isEdit ? 'Edit Property' : 'Add Property';
+  document.getElementById('editingPropKey').value = editKey || '';
+
+  if (isEdit) {
+    document.getElementById('fPropName').value = editKey;
+    selectedColor = data.properties[editKey]?.color || PALETTE[0];
+  } else {
+    document.getElementById('fPropName').value = '';
+    selectedColor = PALETTE[Math.floor(Math.random() * PALETTE.length)];
+  }
+
+  renderColorPicker();
+  document.getElementById('propertyModal').classList.add('show');
+}
+
+function closePropertyModal() {
+  document.getElementById('propertyModal').classList.remove('show');
+}
+
+function renderColorPicker() {
+  const el = document.getElementById('colorPicker');
+  el.innerHTML = '';
+  PALETTE.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (selectedColor === c ? ' selected' : '');
+    sw.style.background = c;
+    sw.onclick = () => { selectedColor = c; renderColorPicker(); };
+    el.appendChild(sw);
+  });
+}
+
+function saveProperty() {
+  const editKey = document.getElementById('editingPropKey').value;
+  const name = document.getElementById('fPropName').value.trim();
+
+  if (!name) { document.getElementById('fPropName').focus(); return; }
+
+  if (editKey && editKey !== name) {
+    // Rename: update all deadlines
+    data.properties[name] = { color: selectedColor };
+    delete data.properties[editKey];
+    data.deadlines.forEach(d => { if (d.property === editKey) d.property = name; });
+    selectedProp = name;
+    showToast('Property renamed');
+  } else if (editKey) {
+    data.properties[editKey].color = selectedColor;
+    showToast('Property updated');
+  } else {
+    if (data.properties[name]) { showToast('Property already exists'); return; }
+    data.properties[name] = { color: selectedColor };
+    selectedProp = name;
+    showToast('Property added');
+  }
+
+  saveData();
+  closePropertyModal();
+  renderAll();
+}
+
+// ── Delete ──
+let pendingDelete = null;
+
+function confirmDeleteDeadline(idx) {
+  const d = data.deadlines[idx];
+  document.getElementById('deleteTitle').textContent = 'Delete Deadline?';
+  document.getElementById('deleteMsg').textContent = `"${d.task}" on the ${ordinal(d.day)} will be permanently removed.`;
+  pendingDelete = { type: 'deadline', idx };
+  document.getElementById('deleteConfirmBtn').onclick = doDelete;
+  document.getElementById('deleteModal').classList.add('show');
+}
+
+function confirmDeleteProperty(name) {
+  const count = data.deadlines.filter(d => d.property === name).length;
+  document.getElementById('deleteTitle').textContent = 'Delete Property?';
+  document.getElementById('deleteMsg').textContent = `"${name}" and its ${count} deadline${count !== 1 ? 's' : ''} will be permanently removed.`;
+  pendingDelete = { type: 'property', name };
+  document.getElementById('deleteConfirmBtn').onclick = doDelete;
+  document.getElementById('deleteModal').classList.add('show');
+}
+
+function closeDeleteModal() {
+  document.getElementById('deleteModal').classList.remove('show');
+  pendingDelete = null;
+}
+
+function doDelete() {
+  if (!pendingDelete) return;
+  if (pendingDelete.type === 'deadline') {
+    data.deadlines.splice(pendingDelete.idx, 1);
+    showToast('Deadline deleted');
+  } else if (pendingDelete.type === 'property') {
+    data.deadlines = data.deadlines.filter(d => d.property !== pendingDelete.name);
+    delete data.properties[pendingDelete.name];
+    selectedProp = Object.keys(data.properties)[0] || null;
+    showToast('Property deleted');
+  }
+  saveData();
+  closeDeleteModal();
+  renderAll();
+}
+
+// ── Export / Import ──
+function exportData() {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'fm-deadlines-backup.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Exported successfully');
+}
+
+function importData() {
+  document.getElementById('importInput').click();
+}
+
+document.getElementById('importInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const imported = JSON.parse(ev.target.result);
+      if (imported.properties && imported.deadlines) {
+        data = imported;
+        saveData();
+        selectedProp = Object.keys(data.properties)[0] || null;
+        renderAll();
+        showToast('Imported successfully');
+      } else {
+        showToast('Invalid file format');
+      }
+    } catch(err) {
+      showToast('Error reading file');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
+
+// ── Toast ──
+let toastTimeout;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ── Init ──
+initDayDropdown();
+loadData();
+selectedProp = Object.keys(data.properties).sort()[0] || null;
+renderAll();
+</script>
+</body>
+</html>

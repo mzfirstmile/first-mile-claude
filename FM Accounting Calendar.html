@@ -4,18 +4,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>First Mile Accounting Calendar — 2026</title>
+<link rel="icon" type="image/png" href="favicon.png">
 <style>
+  .logo-icon { height: 28px; width: auto; margin-right: 10px; vertical-align: middle; }
   :root {
-    --bg: #0f1117;
-    --surface: #1a1d27;
-    --surface2: #232733;
-    --border: #2e3344;
-    --text: #e2e4ea;
-    --text-dim: #8b8fa3;
-    --accent: #6c8cff;
-    --accent-dim: rgba(108,140,255,0.12);
+    --bg: #141e30;
+    --surface: #1c2942;
+    --surface2: #24354e;
+    --border: #334d6e;
+    --text: #e2e8f0;
+    --text-dim: #8da3be;
+    --accent: #00c8eb;
+    --accent-dim: rgba(0,200,235,0.10);
     --green: #34d399;
-    --green-dim: rgba(52,211,153,0.12);
+    --green-dim: rgba(52,211,153,0.10);
     --red: #f87171;
   }
 
@@ -315,7 +317,7 @@
   .list-item .task { color: var(--text); }
   .list-item .owner { color: var(--text-dim); text-align: right; font-size: 12px; }
 
-  .badge-monthly { background: rgba(108,140,255,0.15); color: #6c8cff; }
+  .badge-monthly { background: rgba(0,200,235,0.15); color: #00c8eb; }
   .badge-quarterly { background: rgba(255,170,80,0.15); color: #ffaa50; }
 
   /* ── Checkbox (shared) ── */
@@ -452,10 +454,10 @@
     text-decoration: none;
     color: var(--accent);
     background: var(--accent-dim);
-    border: 1px solid rgba(108,140,255,0.3);
+    border: 1px solid rgba(0,200,235,0.3);
     transition: all 0.2s;
   }
-  .btn-link:hover { background: rgba(108,140,255,0.25); }
+  .btn-link:hover { background: rgba(0,200,235,0.25); }
 
   @media (max-width: 800px) {
     header, .filters, .calendar-nav, .list-view, .summary-strip, .progress-section { padding-left: 16px; padding-right: 16px; }
@@ -469,7 +471,7 @@
 <body>
 
 <header>
-  <h1><span>First Mile</span> Accounting Calendar — 2026</h1>
+  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo ONLY.png" style="height:36px;width:auto;border-radius:4px" alt="FM"><span style="font-weight:300;font-size:18px;letter-spacing:0.5px"><span style="color:var(--text)">FIRST</span><span style="color:var(--accent)">MILE</span></span><span style="color:var(--text-dim);font-weight:400;font-size:14px">Accounting Calendar — 2026</span></h1>
   <div class="header-right">
     <a class="btn-link" href="FM Manage.html">Manage Data</a>
     <div class="view-toggle">
@@ -492,8 +494,6 @@
   <div class="progress-header">
     <div class="progress-label"><span class="done-count" id="progDone">0</span> / <span class="total-count" id="progTotal">0</span> tasks completed</div>
     <div class="progress-actions">
-      <button class="btn-sm success" onclick="markAllDone()">Mark All Done</button>
-      <button class="btn-sm danger" onclick="confirmReset()">Reset Month</button>
     </div>
   </div>
   <div class="progress-track"><div class="progress-fill" id="progFill" style="width:0%"></div></div>
@@ -568,7 +568,7 @@ const EVENTS = shared
   : DEFAULT_EVENTS;
 
 const DEFAULT_COLORS = {
-  "Pref Fund I - Solow": { bg: "rgba(108,140,255,0.15)", fg: "#6c8cff", border: "#6c8cff" },
+  "Pref Fund I - Solow": { bg: "rgba(0,200,235,0.15)", fg: "#00c8eb", border: "#00c8eb" },
   "41 Flatbush Ave":     { bg: "rgba(80,220,180,0.15)", fg: "#50dcb4", border: "#50dcb4" },
   "Paramus Plaza":       { bg: "rgba(255,140,90,0.15)", fg: "#ff8c5a", border: "#ff8c5a" },
   "Pref Fund II - JPY":  { bg: "rgba(220,120,255,0.15)", fg: "#dc78ff", border: "#dc78ff" },

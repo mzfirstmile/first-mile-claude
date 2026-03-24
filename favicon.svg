@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Background: dark navy -->
+  <rect width="100" height="100" fill="#2c3e54"/>
+
+  <!-- Diagonal stripe across top - slightly lighter navy -->
+  <polygon points="0,0 100,0 100,22 0,44" fill="#384f68"/>
+
+  <!-- Cyan right vertical bar -->
+  <rect x="78" y="0" width="22" height="100" fill="#00c8eb"/>
+
+  <!-- Cyan bottom horizontal bar -->
+  <rect x="0" y="78" width="100" height="22" fill="#00c8eb"/>
+
+  <!-- Dark gap / frame structure -->
+  <!-- Top horizontal dark bar -->
+  <rect x="0" y="22" width="78" height="8" fill="#0e1820"/>
+
+  <!-- Left vertical dark gap -->
+  <rect x="22" y="22" width="8" height="78" fill="#0e1820"/>
+
+  <!-- Inner dark block (center) -->
+  <rect x="30" y="30" width="48" height="48" fill="#0e1820"/>
+
+  <!-- Small cyan vertical bar inside lower-left -->
+  <rect x="30" y="52" width="18" height="26" fill="#00c8eb"/>
+
+  <!-- Dark gap inside the small cyan bar -->
+  <rect x="48" y="52" width="8" height="26" fill="#0e1820"/>
+
+  <!-- Dark cover over diagonal on right cyan bar top -->
+  <polygon points="78,0 100,0 100,22 78,22" fill="#00c8eb"/>
+  <polygon points="78,0 78,18 96,0" fill="#384f68"/>
+</svg>

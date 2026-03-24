@@ -1,4 +1,3 @@
-<!-- test push -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -161,6 +160,31 @@
 
 <div class="loading-bar" id="loadBar"></div>
 
+<!-- Setup Screen -->
+<div class="setup-overlay" id="setupScreen">
+  <div class="setup-card">
+    <h2><span>First Mile</span> Calendar Setup</h2>
+    <p class="sub">Connect to your Airtable base to pull deadlines live. One-time setup.</p>
+    <div class="steps">
+      <strong>How to get your API token:</strong><br>
+      1. Go to <code>airtable.com/create/tokens</code><br>
+      2. Click <strong>Create new token</strong><br>
+      3. Name it anything (e.g. "Calendar")<br>
+      4. Scope: add <code>data.records:read</code> and <code>data.records:write</code><br>
+      5. Access: add your <strong>Accounting Calendar</strong> base<br>
+      6. Click <strong>Create token</strong> and copy it
+    </div>
+    <label>Personal Access Token</label>
+    <input type="password" id="inputToken" placeholder="pat...">
+    <label>Your Name (for tracking who completes tasks)</label>
+    <input type="text" id="inputName" placeholder="e.g. Anthony, Morris, Xuan">
+    <div class="setup-error" id="setupErr"></div>
+    <div class="setup-actions">
+      <button class="setup-btn" onclick="connectAirtable()">Connect</button>
+      <button class="setup-btn secondary" onclick="useOffline()">Use Demo Data</button>
+    </div>
+  </div>
+</div>
 
 <!-- Main App -->
 <header>
@@ -168,8 +192,8 @@
   <div class="header-right">
     <div class="sync-pill live" id="syncPill" style="display:none"><div class="sync-dot"></div><span>Live</span></div>
     <button class="btn accent" onclick="refreshData()" style="display:none" id="refreshBtn">↻ Refresh</button>
-    <a class="btn" href="FM Manage.html" id="manageBtn" style="display:none">Manage Data</a>
     <a class="btn" href="https://airtable.com/app27jUbqonTIiHXY" target="_blank" id="editBtn" style="display:none">Edit in Airtable</a>
+    <button class="btn" onclick="showSetup()" id="settingsBtn" style="display:none">⚙</button>
     <div class="view-toggle">
       <button class="active" onclick="setView('calendar')">Calendar</button>
       <button onclick="setView('list')">By Investment</button>
@@ -215,9 +239,8 @@
 </div>
 
 <script>
-const BASE_ID='app27jUbqonTIiHXY', TABLE_NAME='Sheet1';
-const API_TOKEN='__AIRTABLE_TOKEN__';
-const STATUS_FIELD='fld1MOQBkRaFEIXdl', COMPLETED_DATE_FIELD='fldKBm9ch5K8EfCCR';
+const BASE_ID='app27jUbqonTIiHXY', TABLE_NAME='Sheet1', TOKEN_KEY='fm_airtable_token', NAME_KEY='fm_user_name';
+const STATUS_FIELD='fld1MOQBkRaFEIXdl', COMPLETED_BY_FIELD='fldnYp9qfMKY7bFA7', COMPLETED_DATE_FIELD='fldKBm9ch5K8EfCCR';
 const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
 const QTR=[0,3,6,9];
 const PALETTE=["#00c8eb","#50dcb4","#ff8c5a","#dc78ff","#ffd250","#50c8ff","#ff6482","#a78bfa","#f472b6","#38bdf8","#4ade80","#fb923c","#e879f9","#22d3ee","#b4b4b4"];
@@ -227,6 +250,7 @@ function hexA(h,a){h=h.replace('#','');return `rgba(${parseInt(h.slice(0,2),16)}
 
 let EVENTS=[],COLORS={},currentMonth=0,currentView='calendar',activeFilters=new Set();
 const today=new Date(),todayDay=today.getDate(),todayMonth=today.getMonth(),todayYear=today.getFullYear();
+function userName(){return localStorage.getItem(NAME_KEY)||'';}
 
 const DEFAULTS=[
   {id:0,day:8,cadence:"Monthly",property:"Pref Fund I - Solow",type:"AM Fee",task:"Transfer Solow AM fees to FMC - $5,208 (BofA scheduled)",owner:"BofA - automatic"},
@@ -248,10 +272,10 @@ const DEFAULTS=[
 // ── Airtable fetch ──
 function parseDay(s){const m=String(s).match(/(\d+)/);return m?parseInt(m[1]):1;}
 
-async function fetchAT(){
+async function fetchAT(token){
   setLoading(true);
   try{
-    const r=await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}?pageSize=100`,{headers:{'Authorization':`Bearer ${API_TOKEN}`}});
+    const r=await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}?pageSize=100`,{headers:{'Authorization':`Bearer ${token}`}});
     if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
     const d=await r.json();
     EVENTS=d.records.map((r,i)=>({
@@ -275,8 +299,18 @@ async function fetchAT(){
 function buildClrs(){colorMap={};colorIdx=0;COLORS={};[...new Set(EVENTS.map(e=>e.property))].sort().forEach(p=>{const c=getClr(p);COLORS[p]={bg:hexA(c,.15),fg:c,border:c};});}
 
 // ── Setup ──
-function showUI(){['progArea','refreshBtn','editBtn','manageBtn','syncPill'].forEach(id=>document.getElementById(id).style.display='');}
-async function refreshData(){const ok=await fetchAT();if(ok){activeFilters=new Set(Object.keys(COLORS));buildFilters();render();}}
+async function connectAirtable(){
+  const t=document.getElementById('inputToken').value.trim();if(!t)return;
+  const n=document.getElementById('inputName').value.trim();
+  document.getElementById('setupErr').classList.remove('show');
+  const ok=await fetchAT(t);
+  if(ok){localStorage.setItem(TOKEN_KEY,t);if(n)localStorage.setItem(NAME_KEY,n);document.getElementById('setupScreen').classList.add('hidden');showUI();activeFilters=new Set(Object.keys(COLORS));buildFilters();render();setInterval(()=>refreshData(),120000);}
+  else{const el=document.getElementById('setupErr');el.textContent='Could not connect. Check your token has data.records:read and data.records:write scope and access to this base.';el.classList.add('show');}
+}
+function useOffline(){EVENTS=[...DEFAULTS];buildClrs();activeFilters=new Set(Object.keys(COLORS));setSync('error','Demo mode');document.getElementById('setupScreen').classList.add('hidden');showUI();buildFilters();render();}
+function showSetup(){document.getElementById('setupScreen').classList.remove('hidden');const t=localStorage.getItem(TOKEN_KEY);if(t)document.getElementById('inputToken').value=t;const n=localStorage.getItem(NAME_KEY);if(n)document.getElementById('inputName').value=n;}
+function showUI(){['progArea','refreshBtn','editBtn','settingsBtn','syncPill'].forEach(id=>document.getElementById(id).style.display='');}
+async function refreshData(){const t=localStorage.getItem(TOKEN_KEY);if(!t)return;const ok=await fetchAT(t);if(ok){activeFilters=new Set(Object.keys(COLORS));buildFilters();render();}}
 
 // ── Checks (Airtable-backed) ──
 function isC(id){const ev=EVENTS[id];return ev&&ev.status==='Done';}
@@ -286,20 +320,22 @@ function cBy(id){const ev=EVENTS[id];return ev?ev.completedBy:'';}
 async function tog(id){
   const ev=EVENTS[id];if(!ev||!ev.airtableId)return;
   const wasDone=ev.status==='Done';
+  const token=localStorage.getItem(TOKEN_KEY);if(!token)return;
 
   // Optimistic update
-  if(wasDone){ev.status='';ev.completedDate='';}
-  else{ev.status='Done';ev.completedDate=new Date().toISOString();}
+  if(wasDone){ev.status='';ev.completedBy='';ev.completedDate='';}
+  else{ev.status='Done';ev.completedBy=userName();ev.completedDate=new Date().toISOString();}
   render();
 
   // Write to Airtable
   try{
     const fields={};
     fields[STATUS_FIELD]=wasDone?null:'Done';
+    fields[COMPLETED_BY_FIELD]=wasDone?'':userName();
     fields[COMPLETED_DATE_FIELD]=wasDone?null:new Date().toISOString();
     const res=await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
       method:'PATCH',
-      headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
+      headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({records:[{id:ev.airtableId,fields}]})
     });
     if(!res.ok){const err=await res.json().catch(()=>({}));console.error('Write-back error:',err);}
@@ -307,24 +343,28 @@ async function tog(id){
 }
 
 async function markAllDoneAT(){
+  const token=localStorage.getItem(TOKEN_KEY);if(!token)return;
   const evts=mEvts(currentMonth).filter(e=>e.status!=='Done');
   if(!evts.length)return;
 
-  evts.forEach(ev=>{ev.status='Done';ev.completedDate=new Date().toISOString();});
+  // Optimistic
+  evts.forEach(ev=>{ev.status='Done';ev.completedBy=userName();ev.completedDate=new Date().toISOString();});
   render();
 
+  // Batch write (max 10 per request)
   for(let i=0;i<evts.length;i+=10){
     const batch=evts.slice(i,i+10);
     const records=batch.map(ev=>{
       const fields={};
       fields[STATUS_FIELD]='Done';
+      fields[COMPLETED_BY_FIELD]=userName();
       fields[COMPLETED_DATE_FIELD]=new Date().toISOString();
       return{id:ev.airtableId,fields};
     });
     try{
       await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
         method:'PATCH',
-        headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
+        headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
         body:JSON.stringify({records})
       });
     }catch(e){console.error('Batch write failed:',e);}
@@ -332,10 +372,11 @@ async function markAllDoneAT(){
 }
 
 async function resetMonthAT(){
+  const token=localStorage.getItem(TOKEN_KEY);if(!token)return;
   const evts=mEvts(currentMonth).filter(e=>e.status==='Done');
   if(!evts.length)return;
 
-  evts.forEach(ev=>{ev.status='';ev.completedDate='';});
+  evts.forEach(ev=>{ev.status='';ev.completedBy='';ev.completedDate='';});
   render();
 
   for(let i=0;i<evts.length;i+=10){
@@ -343,13 +384,14 @@ async function resetMonthAT(){
     const records=batch.map(ev=>{
       const fields={};
       fields[STATUS_FIELD]=null;
+      fields[COMPLETED_BY_FIELD]='';
       fields[COMPLETED_DATE_FIELD]=null;
       return{id:ev.airtableId,fields};
     });
     try{
       await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
         method:'PATCH',
-        headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
+        headers:{'Authorization':`Bearer ${token}`,'Content-Type':'application/json'},
         body:JSON.stringify({records})
       });
     }catch(e){console.error('Batch reset failed:',e);}
@@ -424,9 +466,9 @@ function renderChk(){
     const dn=d.filter(e=>isC(e.id)).length;
     sec.innerHTML=`<div class="grp-hdr"><h3>${MONTHS[currentMonth]} ${ord(+day)}</h3><div class="cnt">${dn}/${d.length} done</div></div>`;
     d.forEach(ev=>{
-      const c=COLORS[ev.property]||{fg:'#b4b4b4',border:'#b4b4b4'};const chk=isC(ev.id);const ts=cT(ev.id);
+      const c=COLORS[ev.property]||{fg:'#b4b4b4',border:'#b4b4b4'};const chk=isC(ev.id);const ts=cT(ev.id);const by=cBy(ev.id);
       const row=document.createElement('div');row.className='row'+(chk?' done':'');row.style.borderLeft=`4px solid ${chk?'var(--green)':c.border}`;
-      row.innerHTML=`<div class="cb-wrap"><div class="cb ${chk?'on':''}"></div></div><div class="day" style="color:${c.fg}">${ev.property}</div><div class="tag tag-${ev.cadence==='Monthly'?'m':'q'}">${ev.type}</div><div class="task">${ev.task}${chk?'<br><span style="font-size:9px;color:var(--green)">✓ Completed '+new Date(ts).toLocaleString()+'</span>':''}</div><div class="owner">${ev.owner}</div>`;
+      row.innerHTML=`<div class="cb-wrap"><div class="cb ${chk?'on':''}"></div></div><div class="day" style="color:${c.fg}">${ev.property}</div><div class="tag tag-${ev.cadence==='Monthly'?'m':'q'}">${ev.type}</div><div class="task">${ev.task}${chk?'<br><span style="font-size:9px;color:var(--green)">✓ '+(by?by+' · ':'')+new Date(ts).toLocaleString()+'</span>':''}</div><div class="owner">${ev.owner}</div>`;
       row.querySelector('.cb').onclick=()=>tog(ev.id);sec.appendChild(row);
     });el.appendChild(sec);
   });
@@ -442,15 +484,16 @@ function closeReset(){document.getElementById('resetModal').classList.remove('sh
 function doReset(){closeReset();resetMonthAT();}
 
 // ── Tooltip ──
-function showTT(e,ev){const t=document.getElementById('tooltip'),c=COLORS[ev.property]||{fg:'#b4b4b4'};const chk=isC(ev.id),ts=cT(ev.id);t.innerHTML=`<div class="tp" style="color:${c.fg}">${ev.property}</div><div class="ty">${ev.type} · ${ev.cadence}</div><div class="tk">${ev.task}</div><div class="to">Owner: ${ev.owner}</div><div class="ts" style="color:${chk?'var(--green)':'var(--red)'}">${chk?'✓ Completed '+new Date(ts).toLocaleString():'Not yet completed'}</div>`;const r=e.target.getBoundingClientRect();let left=r.right+10,top=r.top;if(left+320>window.innerWidth)left=r.left-330;if(top+180>window.innerHeight)top=window.innerHeight-190;t.style.left=left+'px';t.style.top=top+'px';t.classList.add('show');}
+function showTT(e,ev){const t=document.getElementById('tooltip'),c=COLORS[ev.property]||{fg:'#b4b4b4'};const chk=isC(ev.id),ts=cT(ev.id),by=cBy(ev.id);t.innerHTML=`<div class="tp" style="color:${c.fg}">${ev.property}</div><div class="ty">${ev.type} · ${ev.cadence}</div><div class="tk">${ev.task}</div><div class="to">Owner: ${ev.owner}</div><div class="ts" style="color:${chk?'var(--green)':'var(--red)'}">${chk?'✓ Completed by '+(by||'unknown')+' · '+new Date(ts).toLocaleString():'Not yet completed'}</div>`;const r=e.target.getBoundingClientRect();let left=r.right+10,top=r.top;if(left+320>window.innerWidth)left=r.left-330;if(top+180>window.innerHeight)top=window.innerHeight-190;t.style.left=left+'px';t.style.top=top+'px';t.classList.add('show');}
 function hideTT(){document.getElementById('tooltip').classList.remove('show');}
 
 // ── Init ──
 async function init(){
   currentMonth=todayYear===2026?todayMonth:0;
-  const ok=await fetchAT();
-  if(ok){showUI();activeFilters=new Set(Object.keys(COLORS));buildFilters();render();setInterval(()=>refreshData(),120000);}
-  else{EVENTS=[...DEFAULTS];buildClrs();activeFilters=new Set(Object.keys(COLORS));setSync('error','Could not connect');showUI();buildFilters();render();}
+  const token=localStorage.getItem(TOKEN_KEY);
+  const savedName=localStorage.getItem(NAME_KEY);
+  if(savedName)document.getElementById('inputName').value=savedName;
+  if(token){document.getElementById('inputToken').value=token;const ok=await fetchAT(token);if(ok){document.getElementById('setupScreen').classList.add('hidden');showUI();activeFilters=new Set(Object.keys(COLORS));buildFilters();render();setInterval(()=>refreshData(),120000);return;}}
 }
 init();
 </script>
