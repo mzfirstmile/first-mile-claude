@@ -537,9 +537,17 @@ const ALL_CATEGORIES = [
 const CLAUDE_API_KEY_FALLBACK = '__CLAUDE_API_KEY__';
 function getClaudeKey() { return window.CLAUDE_API_KEY || CLAUDE_API_KEY_FALLBACK; }
 
+// Known payroll reimbursement splits within PM fee payments (Appfolio CORPTRDEXC)
+// These are portions of PM fee payments that are actually payroll reimbursements
+const KNOWN_PAYROLL_SPLITS = {
+  'reckTlT5OGIOUDeN4': 54601.60,  // Mar 2026 CORPTRDEXC $94,508.25 → $54,601.60 is payroll
+  'recAEPWtWqgcxqgVY': 53305.93   // Feb 2026 CORPTRDEXC $108,165.44 → $53,305.93 is payroll
+};
+
 // State
 let allRecords = [];
 let categoryOverrides = {}; // recordId -> category
+let payrollSplits = {};     // recordId -> payroll amount to deduct from PM fee
 let cfMode = 'monthly';
 let selectedPeriodIndex = -1; // -1 means latest
 let periods = [];
@@ -604,6 +612,9 @@ function getToken() { return window.AIRTABLE_TOKEN || AIRTABLE_TOKEN_FALLBACK; }
 function initDashboard() {
   // Load category overrides from localStorage
   try { categoryOverrides = JSON.parse(localStorage.getItem('_exec_cat_overrides') || '{}'); } catch(e) { categoryOverrides = {}; }
+  // Load payroll splits (merge known defaults with any user overrides)
+  try { payrollSplits = JSON.parse(localStorage.getItem('_exec_payroll_splits') || '{}'); } catch(e) { payrollSplits = {}; }
+  Object.keys(KNOWN_PAYROLL_SPLITS).forEach(k => { if (!(k in payrollSplits)) payrollSplits[k] = KNOWN_PAYROLL_SPLITS[k]; });
 
   loadData();
 }
@@ -743,6 +754,12 @@ function categorize(record) {
   // AM Partner payout from Member accounts → Owner Distribution
   if (MEMBER_ACCOUNTS.some(m => acctName.toUpperCase().includes(m.toUpperCase())) && amount < 0 && !isTransfer) {
     return { category: 'distribution', type: 'AM Partner Payout' };
+  }
+
+  // PM account — payroll reimbursement BILLPAY (pa-mgmt in description)
+  if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT'))
+      && desc.includes('PA-MGMT') && amount > 0) {
+    return { category: 'payroll_offset', type: 'Payroll Reimbursement' };
   }
 
   // PM Fees — credits in Management account
@@ -911,7 +928,14 @@ function computePeriod(records) {
 
   records.forEach(r => {
     const { category, type } = categorize(r);
-    const amount = getAmount(r);
+    let amount = getAmount(r);
+
+    // Handle payroll splits: deduct payroll portion from PM fee income
+    const splitAmt = payrollSplits[r.id];
+    if (splitAmt && splitAmt > 0 && category === 'income') {
+      payrollReimb += splitAmt;
+      amount -= splitAmt;
+    }
 
     if (category === 'income') {
       totalIncome += amount;
@@ -1126,10 +1150,12 @@ function renderPeriodDashboard() {
   // Operating expense rows — add payroll reimbursement into Payroll display
   const opexDisplay = { ...comp.opexBuckets };
   if (opexDisplay['Payroll'] && comp.payrollReimb > 0) {
+    const grossPayroll = opexDisplay['Payroll'].total; // negative
+    const netPayroll = grossPayroll + comp.payrollReimb;
     opexDisplay['Payroll'] = {
       ...opexDisplay['Payroll'],
-      total: opexDisplay['Payroll'].total + comp.payrollReimb,
-      subNote: `Gross: ${fmtFull(opexDisplay['Payroll'].total)} + Reimb: +${fmtFull(comp.payrollReimb)}`
+      total: netPayroll,
+      subNote: `Out: ${fmtFull(grossPayroll)} | In: +${fmtFull(comp.payrollReimb)}`
     };
   }
   renderCategoryRows('opexRows', opexDisplay, 'expense', comp.totalOpex);
@@ -1162,6 +1188,7 @@ function renderCategoryRows(containerId, buckets, cssClass, total) {
     const pct = total > 0 ? (Math.abs(data.total) / total * 100) : 0;
     const barWidth = Math.max((Math.abs(data.total) / maxVal) * 100, 3);
     const icon = CAT_ICONS[type] || (cssClass === 'income' ? '💵' : '📋');
+    const subNote = data.subNote ? `<div style="font-size:11px;color:var(--text-dim);margin-top:1px;">${data.subNote}</div>` : '';
     return `
       <div class="cat-row ${cssClass}" onclick="openDrilldown('${type}', '${cssClass}')">
         <div class="cat-icon">${icon}</div>
@@ -1173,7 +1200,7 @@ function renderCategoryRows(containerId, buckets, cssClass, total) {
             <span class="cat-bar-label">${type}</span>
           </div>
         </div>
-        <div class="cat-amount">${fmtFull(Math.abs(data.total))} (${pct.toFixed(1)}%)</div>
+        <div class="cat-amount">${fmtFull(Math.abs(data.total))} (${pct.toFixed(1)}%)${subNote}</div>
       </div>`;
   }).join('');
 }
