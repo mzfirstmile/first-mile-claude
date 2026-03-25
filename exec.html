@@ -128,7 +128,10 @@
   .txn-date-group { font-size:12px; font-weight:600; color:var(--text-dim); padding:10px 0 6px; border-bottom:1px solid var(--border); margin-bottom:4px; }
   .txn-row { display:grid; grid-template-columns:1fr 180px 180px 120px; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .txn-row:last-child { border-bottom:none; }
-  .txn-desc { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .txn-desc { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; position:relative; cursor:default; }
+  .txn-desc:hover { overflow:visible; white-space:normal; z-index:10; }
+  .txn-desc .txn-tooltip { display:none; position:absolute; left:0; top:100%; background:var(--text); color:#fff; padding:10px 14px; border-radius:8px; font-size:12px; font-weight:400; white-space:pre-wrap; word-break:break-all; max-width:500px; min-width:280px; z-index:20; box-shadow:0 8px 24px rgba(0,0,0,.2); line-height:1.5; pointer-events:none; }
+  .txn-desc:hover .txn-tooltip { display:block; }
   .txn-acct { color:var(--text-dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .txn-cat-select { padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); font-size:12px; color:var(--text); cursor:pointer; max-width:180px; width:100%; }
   .txn-cat-select:focus { outline:none; border-color:var(--accent); }
@@ -815,6 +818,9 @@ function categorize(record) {
     if (desc.includes('CORPORATION SERV') || desc.includes('LEGAL')) return { category: 'expense', type: 'Legal/Corp Services' };
     if (desc.includes('NYS DTF') || desc.includes('NJ WEB PMT') || desc.includes('TAX')) return { category: 'expense', type: 'Taxes' };
     if (desc.includes('JPMORGAN') || (desc.includes('CHASE') && !desc.includes('CREDIT'))) return { category: 'expense', type: 'Banking' };
+    // Appfolio settlement — owner distributions (~$80K/mo via "Checking ...0383 DES:Settlement")
+    if (desc.includes('SETTLEMENT') && amount < 0) return { category: 'distribution', type: 'Owner Distributions' };
+
     // Outbound wires — classify by description
     if (desc.includes('WIRE') && amount < 0) {
       // Investment contributions: wires to deals/properties/funds
@@ -1284,7 +1290,7 @@ function openDrilldown(type, cssClass) {
         // Synthetic row (no category dropdown)
         html += `
           <div class="txn-row">
-            <div class="txn-desc" title="${d.desc}" style="color:var(--green-dark);font-style:italic;">${d.desc}</div>
+            <div class="txn-desc" style="color:var(--green-dark);font-style:italic;">${d.desc}<span class="txn-tooltip">${d.desc}</span></div>
             <div class="txn-acct">${d.acct}</div>
             <div class="txn-cat-select" style="border:none;background:none;font-size:12px;color:var(--text-dim);">PM Split</div>
             <div class="txn-amount ${amtClass}">${amtStr}</div>
@@ -1296,7 +1302,7 @@ function openDrilldown(type, cssClass) {
         ).join('');
         html += `
           <div class="txn-row">
-            <div class="txn-desc" title="${d.desc}">${d.desc}</div>
+            <div class="txn-desc">${d.desc}<span class="txn-tooltip">${d.desc}</span></div>
             <div class="txn-acct">${d.acct}</div>
             <select class="txn-cat-select" onchange="changeCategory('${d.recordId}', this.value)">
               ${options}
