@@ -1482,7 +1482,7 @@ function renderBalanceSheet() {
     const netEquity = f[INV_FIELDS.netEquity] || f['Net Equity'] || 0;
     const status = f[INV_FIELDS.status] || f['Status'] || '';
 
-    const value = valuation || unreturned;
+    const value = valuation || unreturned || contributed;
     investmentsTotal += value;
 
     return { name, ownership, committed, contributed, distributed, unreturned, valuation, netEquity, status, value };
