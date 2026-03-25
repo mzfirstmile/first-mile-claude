@@ -778,9 +778,9 @@ function categorize(record) {
     return { category: 'income', type: 'Investment Income' };
   }
 
-  // Appfolio distributions — owner distributions from property investments
+  // Appfolio distributions (description contains APPFOLIO or SIGONFILE for property deposits)
   if (desc.includes('APPFOLIO') && amount > 0) {
-    return { category: 'distribution', type: 'Owner Distributions' };
+    return { category: 'income', type: 'Investment Income' };
   }
 
   // Main operating account logic
@@ -796,7 +796,7 @@ function categorize(record) {
     if (isTransfer && amount < 0) return { category: 'excluded', type: 'Internal Transfer' };
 
     // Sigonfile deposits
-    if (desc.includes('SIGONFILE') && amount > 0) return { category: 'distribution', type: 'Owner Distributions' };
+    if (desc.includes('SIGONFILE') && amount > 0) return { category: 'income', type: 'Investment Income' };
 
     // Wire in
     if (desc.includes('WIRE') && amount > 0) return { category: 'income', type: 'Other Income' };
