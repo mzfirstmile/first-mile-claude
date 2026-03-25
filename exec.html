@@ -1960,8 +1960,8 @@ async function saveNewLiability() {
   const fields = {
     [LIAB_FIELDS.lender]: lender,
     [LIAB_FIELDS.principal]: principal,
-    [LIAB_FIELDS.currency]: { name: currency },
-    [LIAB_FIELDS.status]: { name: 'Active' }
+    [LIAB_FIELDS.currency]: currency,
+    [LIAB_FIELDS.status]: 'Active'
   };
   if (maturity) fields[LIAB_FIELDS.maturity] = maturity;
   if (notes) fields[LIAB_FIELDS.notes] = notes;
@@ -2017,7 +2017,7 @@ async function saveEditLiability(recordId) {
   const fields = {
     [LIAB_FIELDS.lender]: lender,
     [LIAB_FIELDS.principal]: principal,
-    [LIAB_FIELDS.currency]: { name: currency }
+    [LIAB_FIELDS.currency]: currency
   };
   if (maturity) fields[LIAB_FIELDS.maturity] = maturity;
   fields[LIAB_FIELDS.notes] = notes;
