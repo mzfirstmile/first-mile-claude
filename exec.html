@@ -476,7 +476,8 @@ const ALL_CATEGORIES = [
 ];
 
 // Claude API key — injected at build time by GitHub Actions
-const CLAUDE_API_KEY = window.CLAUDE_API_KEY || '__CLAUDE_API_KEY__';
+const CLAUDE_API_KEY_FALLBACK = '__CLAUDE_API_KEY__';
+function getClaudeKey() { return window.CLAUDE_API_KEY || CLAUDE_API_KEY_FALLBACK; }
 
 // State
 let allRecords = [];
@@ -538,8 +539,8 @@ async function checkPassword() {
 // ── Token Management ──
 // Production: injected at build time by GitHub Actions (sed replaces placeholder)
 // Local dev: loaded from config.js (gitignored) which sets window.AIRTABLE_TOKEN
-const AIRTABLE_TOKEN = window.AIRTABLE_TOKEN || '__AIRTABLE_TOKEN__';
-function getToken() { return AIRTABLE_TOKEN; }
+const AIRTABLE_TOKEN_FALLBACK = '__AIRTABLE_TOKEN__';
+function getToken() { return window.AIRTABLE_TOKEN || AIRTABLE_TOKEN_FALLBACK; }
 
 // ── Init ──
 function initDashboard() {
@@ -1218,7 +1219,7 @@ When the user asks questions, just answer naturally. Be concise.`;
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY,
+        'x-api-key': getClaudeKey(),
         'anthropic-version': '2023-06-01',
         'anthropic-dangerous-direct-browser-access': 'true'
       },
