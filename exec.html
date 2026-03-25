@@ -412,6 +412,10 @@ if (sessionStorage.getItem('_exec_auth') === '1') {
   initDashboard();
 }
 
+// Redraw chart on resize
+let resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (allRecords.length) renderChart(); }, 200); });
+
 // ── Data Fetch ──
 async function fetchAllRecords(token) {
   let records = [];
@@ -747,9 +751,11 @@ function renderChart() {
   let cumulative = 0;
   periodData.forEach(p => { cumulative += p.net; p.cumulative = cumulative; });
 
-  const W = Math.max(periods.length * 70, 600);
-  const H = 220;
-  const padL = 60, padR = 20, padT = 30, padB = 40;
+  // Use container width for full-stretch chart
+  const containerWidth = document.getElementById('cfChart').clientWidth || 900;
+  const W = Math.max(containerWidth, 400);
+  const H = 260;
+  const padL = 65, padR = 25, padT = 35, padB = 45;
   const chartW = W - padL - padR;
   const chartH = H - padT - padB;
 
@@ -760,10 +766,10 @@ function renderChart() {
   const rangeY = maxY - minY || 1;
 
   const y = v => padT + chartH - ((v - minY) / rangeY * chartH);
-  const barW = Math.min(chartW / periods.length * 0.55, 40);
   const gap = chartW / periods.length;
+  const barW = Math.min(gap * 0.55, 50);
 
-  let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="min-width:${W}px;">`;
+  let svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
 
   // Zero line
   const zeroY = y(0);
@@ -800,20 +806,23 @@ function renderChart() {
     const selected = i === selectedPeriodIndex;
     const opacity = selected ? 1 : 0.7;
 
+    // Full-height clickable hit area for the entire column
+    svg += `<rect x="${padL + i * gap}" y="${padT}" width="${gap}" height="${chartH + padB}" fill="transparent" style="cursor:pointer" onclick="selectPeriod(${i})"/>`;
+
+    // Selection highlight
+    if (selected) {
+      svg += `<rect x="${padL + i * gap + 2}" y="${padT}" width="${gap - 4}" height="${chartH}" fill="rgba(0,0,0,0.04)" rx="4"/>`;
+    }
+
     // Income bar (green, going up)
     if (p.income > 0) {
       const barH = (p.income / rangeY) * chartH;
-      svg += `<rect x="${cx - barW/2}" y="${zeroY - barH}" width="${barW/2 - 1}" height="${barH}" fill="var(--green)" rx="2" opacity="${opacity}" style="cursor:pointer" onclick="selectPeriod(${i})"/>`;
+      svg += `<rect x="${cx - barW/2}" y="${zeroY - barH}" width="${barW/2 - 1}" height="${barH}" fill="var(--green)" rx="2" opacity="${opacity}" pointer-events="none"/>`;
     }
     // Expense bar (red, going down)
     if (p.expense > 0) {
       const barH = (p.expense / rangeY) * chartH;
-      svg += `<rect x="${cx}" y="${zeroY}" width="${barW/2 - 1}" height="${barH}" fill="var(--red)" rx="2" opacity="${opacity}" style="cursor:pointer" onclick="selectPeriod(${i})"/>`;
-    }
-
-    // Selection indicator
-    if (selected) {
-      svg += `<rect x="${cx - gap/2 + 4}" y="${padT}" width="${gap - 8}" height="${chartH}" fill="rgba(0,0,0,0.04)" rx="4"/>`;
+      svg += `<rect x="${cx}" y="${zeroY}" width="${barW/2 - 1}" height="${barH}" fill="var(--red)" rx="2" opacity="${opacity}" pointer-events="none"/>`;
     }
   });
 
