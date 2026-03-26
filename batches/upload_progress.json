@@ -1,0 +1,97 @@
+{
+  "completedBatches": [
+    25,
+    26,
+    27
+  ],
+  "pendingBatches": [
+    {
+      "batchNumber": 28,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 29,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 30,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 31,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 32,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 33,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 34,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 35,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 36,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 37,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 38,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 39,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 40,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 41,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 42,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 43,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 44,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 45,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 46,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 47,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 48,
+      "recordCount": 10
+    },
+    {
+      "batchNumber": 49,
+      "recordCount": 6
+    }
+  ]
+}

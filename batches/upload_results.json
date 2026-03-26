@@ -1,0 +1,133 @@
+{
+  "totalBatches": 25,
+  "totalRecords": 246,
+  "successfulBatches": 0,
+  "failedBatches": 0,
+  "batchDetails": [
+    {
+      "batchNumber": 25,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 26,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 27,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 28,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 29,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 30,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 31,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 32,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 33,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 34,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 35,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 36,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 37,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 38,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 39,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 40,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 41,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 42,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 43,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 44,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 45,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 46,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 47,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 48,
+      "recordCount": 10,
+      "status": "pending"
+    },
+    {
+      "batchNumber": 49,
+      "recordCount": 6,
+      "status": "pending"
+    }
+  ]
+}
