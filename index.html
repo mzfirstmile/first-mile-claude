@@ -651,6 +651,24 @@
   .fb-autosave-toast { position:fixed; bottom:24px; right:24px; background:var(--green); color:#fff; padding:8px 16px; border-radius:8px; font-size:12px; font-weight:600; z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; }
   .fb-autosave-toast.show { opacity:1; }
 
+  /* ── Balance Sheet ── */
+  .bs-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px; }
+  .bs-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .bs-card-title { padding:12px 16px; font-size:13px; font-weight:700; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+  .bs-card-title .bs-total { font-variant-numeric:tabular-nums; color:var(--accent); }
+  .bs-row { display:flex; justify-content:space-between; padding:6px 16px; font-size:12px; border-bottom:1px solid rgba(0,0,0,.03); }
+  .bs-row:last-child { border-bottom:none; }
+  .bs-row.bs-header { background:var(--surface2); font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--text-dim); padding:8px 16px; cursor:pointer; user-select:none; }
+  .bs-row.bs-total { font-weight:700; border-top:1.5px solid var(--border); background:rgba(0,176,212,.03); }
+  .bs-row.bs-total .bs-val { color:var(--accent); }
+  .bs-row.bs-grand-total { font-weight:700; font-size:13px; border-top:2px solid var(--border); background:var(--surface2); padding:10px 16px; }
+  .bs-row .bs-label { flex:1; }
+  .bs-row .bs-code { color:var(--text-dim); font-size:10px; font-family:monospace; min-width:40px; }
+  .bs-row .bs-val { font-variant-numeric:tabular-nums; text-align:right; min-width:100px; }
+  .bs-row.bs-indent .bs-label { padding-left:12px; }
+  .bs-equity-card { grid-column:1 / -1; }
+  @media (max-width: 900px) { .bs-grid { grid-template-columns:1fr; } }
+
   /* ── Chat Widget ── */
   .chat-fab { position:fixed; bottom:24px; right:24px; width:52px; height:52px; border-radius:50%; background:var(--accent); color:#fff; border:none; cursor:pointer; box-shadow:0 4px 16px rgba(0,176,212,.35); z-index:300; display:flex; align-items:center; justify-content:center; transition:all .2s; font-size:22px; }
   .chat-fab:hover { transform:scale(1.08); box-shadow:0 6px 24px rgba(0,176,212,.45); }
@@ -928,6 +946,7 @@
         <button class="fb-nav-btn" onclick="fbShowTab('revenue')">Revenue</button>
         <button class="fb-nav-btn" onclick="fbShowTab('opex')">Operating Expenses</button>
         <button class="fb-nav-btn" onclick="fbShowTab('capital')">Capital &amp; Debt</button>
+        <button class="fb-nav-btn" onclick="fbShowTab('balancesheet')">Balance Sheet</button>
         <div class="fb-nav-spacer"></div>
         <div class="bgt-toggle" id="fbModeToggle" style="margin-right:4px">
           <button class="bgt-tog-btn active" onclick="fbSetMode('nominal')">$</button>
@@ -2232,7 +2251,9 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
   }
 
   // Helper: build year data (summaryRows, detailRows, totals) from raw Supabase rows for one property+year
-  function fbBuildYearData(rows, gl, glLookup) {
+  let fbReserveDraws = {}; // { propertyId: [{ year, month, reserve_type, draw_amount }] }
+
+  function fbBuildYearData(rows, gl, glLookup, propertyId, year) {
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const byGl = {};
     rows.forEach(r => {
@@ -2362,20 +2383,56 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       const netCashAnnual = MONTHS.reduce((s, m) => s + netCashMonths[m], 0);
       const netCashRow = { label: 'NET CASH AFTER DEBT SERVICE', isHeader: false, isTotal: true, budget26: netCashAnnual, months: netCashMonths, _isNetCash: true };
 
-      // Compute NET CASH AVAILABLE FOR DISTRIBUTION = Net Cash After Debt - Capital Expenses
+      // Compute NET CASH AVAILABLE FOR DISTRIBUTION = Net Cash After Debt - Capital Expenses + Reserve Draws
       const capTotalRow = sections.capital.find(r => r.isTotal);
+
+      // Build Reserve Draws section from stored data (populated by fbLoadReserveDraws)
+      const reserveDrawRows = [];
+      const propDraws = fbReserveDraws[propertyId] || [];
+      const yearDraws = propDraws.filter(d => d.year === year);
+      if (yearDraws.length) {
+        // Group by reserve_type
+        const byType = {};
+        yearDraws.forEach(d => {
+          if (!byType[d.reserve_type]) byType[d.reserve_type] = {};
+          const mk = MONTHS[d.month - 1];
+          byType[d.reserve_type][mk] = (byType[d.reserve_type][mk] || 0) + d.draw_amount;
+        });
+        const drawHeader = { label: 'RESERVE DRAWS', isHeader: true, _isReserveDraw: true };
+        reserveDrawRows.push(drawHeader);
+        let drawTotalMonths = {};
+        MONTHS.forEach(m => { drawTotalMonths[m] = 0; });
+        const typeLabels = { 'ti_reserve': 'TI Reserve Draw', 'base_bldg_reserve': 'Base Bldg Reserve Draw', 'repair_reserve': 'Repair Reserve Draw', 'misc_reserve': 'Misc Reserve Draw' };
+        Object.keys(byType).forEach(type => {
+          const drawMonths = {};
+          let drawTotal = 0;
+          MONTHS.forEach(m => {
+            drawMonths[m] = byType[type][m] || 0;
+            drawTotal += drawMonths[m];
+            drawTotalMonths[m] += drawMonths[m];
+          });
+          reserveDrawRows.push({ label: typeLabels[type] || type, months: drawMonths, budget26: drawTotal, _isReserveDraw: true });
+        });
+        const drawTotalAnnual = MONTHS.reduce((s, m) => s + drawTotalMonths[m], 0);
+        reserveDrawRows.push({ label: 'TOTAL RESERVE DRAWS', isTotal: true, months: drawTotalMonths, budget26: drawTotalAnnual, _isReserveDraw: true });
+      }
+
+      // Get total reserve draws per month
+      const drawTotalRow = reserveDrawRows.find(r => r.isTotal);
+
       const distMonths = {};
       MONTHS.forEach(m => {
         const ncM = netCashMonths[m] || 0;
         const capM = capTotalRow && capTotalRow.months ? (capTotalRow.months[m] || 0) : 0;
-        distMonths[m] = ncM - Math.abs(capM);
+        const drawM = drawTotalRow && drawTotalRow.months ? (drawTotalRow.months[m] || 0) : 0;
+        distMonths[m] = ncM - Math.abs(capM) + drawM;
       });
       const distAnnual = MONTHS.reduce((s, m) => s + distMonths[m], 0);
       const distRow = { label: 'NET CASH AVAILABLE FOR DISTRIBUTION', isHeader: false, isTotal: true, budget26: distAnnual, months: distMonths };
 
-      // Reassemble: above NOI + G&A + Debt + Net Cash After Debt + Capital + Net Cash for Distribution + Depreciation + other
+      // Reassemble: above NOI + G&A + Debt + Net Cash After Debt + Capital + Reserve Draws + Net Cash for Distribution + Depreciation + other
       summaryRows.length = 0;
-      summaryRows.push(...aboveNoi, ...sections.ga, ...sections.debt, netCashRow, ...sections.capital, distRow, ...sections.depreciation, ...sections.other);
+      summaryRows.push(...aboveNoi, ...sections.ga, ...sections.debt, netCashRow, ...sections.capital, ...reserveDrawRows, distRow, ...sections.depreciation, ...sections.other);
     }
 
     const totalIncomeRow = summaryRows.find(r => r.label === 'TOTAL INCOME');
@@ -2441,6 +2498,20 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
           }
         });
 
+        // Load reserve draws
+        try {
+          const drawResp = await supaFetch('/rest/v1/reserve_draws?order=year.asc,month.asc');
+          if (drawResp.ok) {
+            const draws = await drawResp.json();
+            fbReserveDraws = {};
+            draws.forEach(d => {
+              if (!fbReserveDraws[d.property_id]) fbReserveDraws[d.property_id] = [];
+              fbReserveDraws[d.property_id].push(d);
+            });
+            console.log('Reserve draws loaded:', draws.length);
+          }
+        } catch(e) { console.warn('Reserve draws not loaded:', e); }
+
         // Combine both sources
         const allRows = [...budgetRows, ...actualsRows];
         console.log('Total rows loaded:', allRows.length);
@@ -2463,7 +2534,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
           const years = {};
           fbYearTotals[meta.name] = {};
           for (const [yr, rows] of Object.entries(yearMap)) {
-            const yd = fbBuildYearData(rows, gl, glLookup);
+            const yd = fbBuildYearData(rows, gl, glLookup, propId, parseInt(yr));
             years[yr] = yd;
             fbYearTotals[meta.name][parseInt(yr)] = { rev: Math.abs(yd.totalIncome), exp: Math.abs(yd.totalExpenses), noi: yd.noi };
           }
@@ -2471,6 +2542,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
           // Use 2026 as primary display (for cards)
           const primary = years[2026] || years[2025] || { totalIncome: 0, totalExpenses: 0, noi: 0, summaryRows: [], detailRows: [] };
           bgtData.push({
+            id: propId,
             name: meta.name,
             sqft: meta.sqft,
             budgetYear: 2026,
@@ -2794,7 +2866,9 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     fbActiveTab = tab;
     document.querySelectorAll('.fb-nav-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.fb-nav-btn').forEach(b => {
-      if (b.textContent.trim().toLowerCase().includes(tab === 'opex' ? 'operating' : tab === 'capital' ? 'capital' : tab)) b.classList.add('active');
+      const txt = b.textContent.trim().toLowerCase();
+      const match = tab === 'opex' ? 'operating' : tab === 'capital' ? 'capital' : tab === 'balancesheet' ? 'balance' : tab;
+      if (txt.includes(match)) b.classList.add('active');
     });
     fbRenderDetail();
   }
@@ -2846,6 +2920,102 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     return p;
   }
 
+  // ── Balance Sheet Renderer ──
+  async function fbRenderBalanceSheet(body, prop) {
+    const propId = prop.id;
+    body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim)">Loading balance sheet...</div>';
+
+    try {
+      const resp = await supaFetch(`/rest/v1/balance_sheet_items?property_id=eq.${propId}&order=sort_order.asc`);
+      if (!resp.ok) throw new Error('Failed to fetch');
+      const items = await resp.json();
+      if (!items.length) {
+        body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim)">No balance sheet data available for this property.</div>';
+        return;
+      }
+
+      const fmt = (v) => {
+        if (v === 0 || v === null) return '—';
+        const neg = v < 0;
+        const abs = Math.abs(v);
+        const s = abs >= 1000 ? '$' + abs.toLocaleString('en-US', {minimumFractionDigits:0, maximumFractionDigits:0}) : '$' + abs.toFixed(2);
+        return neg ? '(' + s + ')' : s;
+      };
+
+      // Group by account_type
+      const assets = items.filter(i => i.account_type === 'asset');
+      const liabilities = items.filter(i => i.account_type === 'liability');
+      const equity = items.filter(i => i.account_type === 'equity');
+
+      const totalAssets = assets.find(i => i.bs_code === '1990');
+      const totalLiabilities = liabilities.find(i => i.bs_code === '2990');
+      const totalEquity = equity.find(i => i.bs_code === '3890');
+      const totalLiabAndCap = items.find(i => i.bs_code === '3990');
+
+      function renderSection(rows, skipCodes) {
+        const skip = new Set(skipCodes || []);
+        let html = '';
+        let currentHeader = null;
+        let collapsed = {};
+
+        rows.forEach(item => {
+          if (skip.has(item.bs_code)) return;
+          if (item.is_header && !item.is_total) {
+            currentHeader = item.account_name;
+            html += `<div class="bs-row bs-header" data-section="${item.bs_code}"><span class="bs-label">${item.account_name}</span><span class="bs-val"></span></div>`;
+          } else if (item.is_total) {
+            html += `<div class="bs-row bs-total"><span class="bs-label">${item.account_name}</span><span class="bs-val">${fmt(item.amount)}</span></div>`;
+          } else {
+            html += `<div class="bs-row bs-indent"><span class="bs-code">${item.bs_code}</span><span class="bs-label">${item.account_name}</span><span class="bs-val">${fmt(item.amount)}</span></div>`;
+          }
+        });
+        return html;
+      }
+
+      const period = items[0]?.period || '2025-12';
+      const periodLabel = period === '2025-12' ? 'December 2025' : period;
+
+      let html = `<div style="margin-bottom:8px;font-size:12px;color:var(--text-dim)">Period: <strong>${periodLabel}</strong></div>`;
+      html += '<div class="bs-grid">';
+
+      // Assets card
+      html += '<div class="bs-card">';
+      html += `<div class="bs-card-title">Assets <span class="bs-total">${totalAssets ? fmt(totalAssets.amount) : ''}</span></div>`;
+      html += renderSection(assets, ['1000', '1990']);
+      if (totalAssets) html += `<div class="bs-row bs-grand-total"><span class="bs-label">TOTAL ASSETS</span><span class="bs-val">${fmt(totalAssets.amount)}</span></div>`;
+      html += '</div>';
+
+      // Liabilities card
+      html += '<div class="bs-card">';
+      html += `<div class="bs-card-title">Liabilities <span class="bs-total">${totalLiabilities ? fmt(totalLiabilities.amount) : ''}</span></div>`;
+      html += renderSection(liabilities, ['2000', '2001', '2990']);
+      if (totalLiabilities) html += `<div class="bs-row bs-grand-total"><span class="bs-label">TOTAL LIABILITIES</span><span class="bs-val">${fmt(totalLiabilities.amount)}</span></div>`;
+      html += '</div>';
+
+      // Equity card (full width)
+      html += '<div class="bs-card bs-equity-card">';
+      html += `<div class="bs-card-title">Capital / Equity <span class="bs-total">${totalEquity ? fmt(totalEquity.amount) : ''}</span></div>`;
+      html += renderSection(equity, ['3000', '3890', '3990']);
+      if (totalEquity) html += `<div class="bs-row bs-grand-total"><span class="bs-label">TOTAL CAPITAL</span><span class="bs-val">${fmt(totalEquity.amount)}</span></div>`;
+      html += '</div>';
+
+      html += '</div>'; // close bs-grid
+
+      // Total liabilities and capital
+      if (totalLiabAndCap) {
+        html += `<div style="margin-top:12px;padding:12px 16px;background:var(--surface);border:2px solid var(--accent);border-radius:10px;display:flex;justify-content:space-between;font-weight:700;font-size:14px;">`;
+        html += `<span>TOTAL LIABILITIES AND CAPITAL</span>`;
+        html += `<span style="color:var(--accent);font-variant-numeric:tabular-nums">${fmt(totalLiabAndCap.amount)}</span>`;
+        html += `</div>`;
+      }
+
+      body.innerHTML = html;
+    } catch(e) {
+      console.error('Balance sheet error:', e);
+      body.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim)">Error loading balance sheet. Make sure the balance_sheet_items table exists in Supabase.</div>';
+    }
+  }
+
   function fbRenderDetail() {
     const body = document.getElementById('fbDetailBody');
     const base = bgtData[fbSelectedIdx];
@@ -2854,6 +3024,8 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
 
     if (fbActiveTab === 'summary') {
       fbRenderSummary(body, p, base);
+    } else if (fbActiveTab === 'balancesheet') {
+      fbRenderBalanceSheet(body, base);
     } else {
       fbRenderMonthlyDetail(body, p, fbActiveTab);
     }
@@ -3026,7 +3198,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         if (!topLevelPattern.test(stripped) && !headerLabels.has(stripped)) {
           // Check it's not a major aggregate total (TOTAL INCOME, TOTAL OPERATING EXPENSES, NOI, etc.)
           const lbl = row.label.toLowerCase();
-          const isMajorTotal = lbl === 'total income' || lbl === 'total revenue' || lbl.includes('total operating expenses') || lbl.includes('net operating income') || lbl.includes('net income') || lbl.includes('net cash');
+          const isMajorTotal = lbl === 'total income' || lbl === 'total revenue' || lbl.includes('total operating expenses') || lbl.includes('net operating income') || lbl.includes('net income') || lbl.includes('net cash') || lbl.includes('reserve draw');
           if (!isMajorTotal) return;
         }
       }
@@ -3036,7 +3208,8 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         const lbl = row.label.toLowerCase();
         if (lbl.includes('net cash') || lbl.includes('net operating income') || lbl.includes('net income')) totalCls = 'bgt-row-total bgt-total-noi';
         else if (lbl === 'total income' || lbl === 'total revenue') totalCls = 'bgt-row-total bgt-total-income';
-        else if (lbl.includes('expenses') || lbl.includes('total operating')) totalCls = 'bgt-row-total bgt-total-expense';
+        else if (lbl.includes('total reserve draw')) totalCls = 'bgt-row-total bgt-total-income'; // green style for positive draws
+        else if (lbl.includes('expenses') || lbl.includes('total operating') || lbl.includes('total capital')) totalCls = 'bgt-row-total bgt-total-expense';
         else totalCls = 'bgt-row-total';
       }
       const detailHide = !row.isTotal ? ' bgt-detail-row bgt-hidden' : '';
