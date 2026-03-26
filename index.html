@@ -465,7 +465,7 @@
   .bgt-legend { display:flex; gap:20px; margin-bottom:14px; flex-wrap:wrap; }
   .bgt-legend-item { font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:5px; }
   .bgt-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-  .bgt-table-wrap { overflow:auto; border-radius:10px; border:1px solid var(--border); max-height:calc(100vh - 260px); }
+  .bgt-table-wrap { border-radius:10px; border:1px solid var(--border); }
   .bgt-table { width:100%; border-collapse:collapse; font-size:12px; white-space:nowrap; }
   .bgt-table th, .bgt-table td { padding:7px 10px; text-align:right; border-bottom:1px solid var(--border); }
   .bgt-table th { background:var(--surface2); font-weight:600; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:.3px; position:sticky; top:0; z-index:4; }
@@ -833,7 +833,7 @@
   </div>
 
   <!-- Placeholder views for future modules -->
-  <div class="manage-view" id="view-financials" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
+  <div class="manage-view" id="view-financials" style="padding:24px 32px; overflow:auto; max-height:calc(100vh - 65px);">
     <!-- Property Cards Grid (home state) -->
     <div id="fbCards" class="fb-cards-grid"></div>
     <!-- Property Tabs + Detail View (active state) -->
@@ -1932,12 +1932,15 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
 
     let colSpan, html;
 
+    const planMonths = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
     if (status === 'planning') {
-      // Planning: just the budget column for this year — no actuals comparison
-      colSpan = 2; // label + budget
+      // Planning: monthly breakdown + total — no actuals comparison
+      colSpan = planMonths.length + 2; // label + 12 months + total
       html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
-        <th class="bgt-th-label">Line Item</th>
-        <th class="bgt-th-group a bgt-col-a">'${yy} Budget</th>
+        <th class="bgt-th-label">Line Item</th>`;
+      planMonths.forEach(m => { html += `<th class="bgt-th-group a">${m}</th>`; });
+      html += `<th class="bgt-th-group a" style="font-weight:700;color:var(--accent)">Total</th>
       </tr></thead><tbody>`;
     } else if (status === 'active') {
       // Active: budget vs actuals for current year + prior year comparisons
@@ -1999,10 +2002,55 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       const vc3 = fbValClass(row.varActualVsBudget, isExpenseSection);
 
       if (status === 'planning') {
-        html += `<tr${cls}>
-          <td>${row.label}</td>
-          <td class="bgt-col-a">${fmt(row.budget26)}</td>
-        </tr>`;
+        // For planning, show monthly values derived from detailRows
+        // Match summary row to a section total from detail data
+        const lbl = row.label.toLowerCase();
+        let matchRows = [];
+        if (lbl.includes('total income') || lbl.includes('total revenue')) {
+          matchRows = (p.detailRows || []).filter(r => r.section === 'revenue');
+        } else if (lbl.includes('total operating') || lbl.includes('total recoverable') || lbl.includes('total building')) {
+          matchRows = (p.detailRows || []).filter(r => r.section === 'opex');
+        } else if (lbl.includes('net operating income') || lbl.includes('net income')) {
+          // NOI = revenue - expenses
+          const revRows = (p.detailRows || []).filter(r => r.section === 'revenue');
+          const expRows = (p.detailRows || []).filter(r => r.section === 'opex' || r.section === 'capital');
+          html += `<tr${cls}><td>${row.label}</td>`;
+          let rowTotal = 0;
+          planMonths.forEach(m => {
+            const rev = revRows.reduce((s, r) => s + ((r.months && r.months[m]) || 0), 0);
+            const exp = expRows.reduce((s, r) => s + ((r.months && r.months[m]) || 0), 0);
+            const v = rev - exp;
+            rowTotal += v;
+            html += `<td>${fmt(v)}</td>`;
+          });
+          html += `<td style="font-weight:700">${fmt(rowTotal)}</td></tr>`;
+          return;
+        } else if (lbl.includes('total rent')) {
+          matchRows = (p.detailRows || []).filter(r => r.section === 'revenue' && (r.gl || '').startsWith('40'));
+        } else if (lbl.includes('total other rental')) {
+          matchRows = (p.detailRows || []).filter(r => r.section === 'revenue' && (r.gl || '').startsWith('41'));
+        }
+
+        if (matchRows.length > 0 || row.isTotal) {
+          html += `<tr${cls}><td>${row.label}</td>`;
+          let rowTotal = 0;
+          planMonths.forEach(m => {
+            const v = matchRows.reduce((s, r) => s + ((r.months && r.months[m]) || 0), 0);
+            rowTotal += v;
+            html += `<td>${fmt(v)}</td>`;
+          });
+          html += `<td style="font-weight:700">${fmt(rowTotal || row.budget26)}</td></tr>`;
+        } else {
+          // Regular line items — show annual total spread or just the total
+          html += `<tr${cls}><td>${row.label}</td>`;
+          // Try to find matching detail row by name
+          const detail = (p.detailRows || []).find(r => r.name && row.label && r.name.toLowerCase().includes(row.label.toLowerCase().replace('total ','')));
+          planMonths.forEach(m => {
+            const v = detail ? ((detail.months && detail.months[m]) || 0) : 0;
+            html += `<td>${v ? fmt(v) : '—'}</td>`;
+          });
+          html += `<td style="font-weight:700">${fmt(row.budget26)}</td></tr>`;
+        }
       } else {
         html += `<tr${cls}>
           <td>${row.label}</td>
