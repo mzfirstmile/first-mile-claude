@@ -775,7 +775,7 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </div>
         <h3>Property Financials &amp; Budgeting</h3>
-        <p>View financials, build annual budgets, and compare actuals vs. budget across your portfolio.</p>
+        <p>View financials, build annual budgets, and track monthly budget data across your portfolio.</p>
         <div class="module-card-status live"><span class="dot"></span> Live</div>
       </div>
 
@@ -1662,14 +1662,14 @@
       return JSON.stringify(data);
     }
     if (name === 'get_budget_summary') {
-      if (!bgtData) { try { const r = await fetch('data/budget-data.json'); bgtData = await r.json(); } catch(e) { return 'Budget data not available'; } }
+      if (!bgtData) { try { await fbInit(); } catch(e) { return 'Budget data not available'; } }
+      if (!bgtData) return 'Budget data not available';
       const prop = bgtData.find(p => p.name.toLowerCase().includes(input.propertyName.toLowerCase()));
       if (!prop) return 'Property not found. Available: ' + bgtData.map(p => p.name).join(', ');
-      const summary = prop.rows.filter(r => r.isTotal || r.isHeader).map(r => ({
-        label: r.label, budget26: r.budget26, actuals25: r.actuals25, budget25: r.budget25,
-        varBvsA: r.varBudgetVsActual, varBvsAPct: r.varBudgetVsActualPct
+      const summary = (prop.summaryRows || []).filter(r => r.isTotal || r.isHeader).map(r => ({
+        label: r.label, budget26: r.budget26
       }));
-      return JSON.stringify({ name: prop.name, entity: prop.entity, sqft: prop.sqft, summary });
+      return JSON.stringify({ name: prop.name, sqft: prop.sqft, summary });
     }
     return 'Unknown tool';
   }
@@ -1740,12 +1740,9 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
   let bgtData = null, bgtLoaded = false;
   let fbSelectedIdx = -1, fbActiveTab = 'summary', fbMode = 'nominal';
   let fbSelectedYear = 2026;
-  // Year config: defines available years and their status
-  // 'active' = current year (actuals vs budget), 'planning' = next year build, 'historical' = prior locked
+  // Year config: 2026 budget only for now
   const FB_YEARS = [
-    { year: 2025, status: 'historical', label: 'Historical' },
-    { year: 2026, status: 'active', label: 'Active' },
-    { year: 2027, status: 'planning', label: 'Planning' },
+    { year: 2026, status: 'active', label: '2026 Budget' },
   ];
 
   // Photo map: property name → image path
@@ -1757,26 +1754,186 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     '340 Mount Kemble': 'assets/Property Photos/340mk.jpg',
   };
 
-  // Year-specific totals for chart: { propertyName: { 2025: {rev,exp,noi}, 2026: {...}, 2027: {...} } }
+  // Year-specific totals for chart
   let fbYearTotals = {};
+
+  // GL account hierarchy for building summary rows
+  let glAccounts = null;
+
+  async function fbLoadGlAccounts() {
+    if (glAccounts) return glAccounts;
+    const r = await fetch('data/gl-accounts.json');
+    glAccounts = await r.json();
+    return glAccounts;
+  }
+
+  // Property ID → name/sqft map (from Supabase properties table)
+  const FB_PROP_META = {
+    'recQX1kpeJKqIzvkU': { name: 'Paramus Plaza', sqft: 153494 },
+    'recUUsUChvL3yQ96g': { name: '340 Mount Kemble', sqft: 423261 },
+    'recqfxJfdqCXCLOuD': { name: '61 S Paramus', sqft: 281504 },
+    'recxF4R64gbb5Sowj': { name: '575 Broadway', sqft: 178898 },
+    'recF3zFKbY4wJ4P40': { name: '1700 East Putnam', sqft: 183190 },
+  };
+
+  function fbGlSection(glCode) {
+    const g = parseInt(glCode) || 0;
+    if (g < 5000) return 'revenue';
+    if (g < 7000) return 'opex';
+    return 'capital';
+  }
+
+  function fbGlCategory(glCode, name) {
+    const g = parseInt(glCode) || 0;
+    const n = (name || '').toLowerCase();
+    // Revenue categories
+    if (g >= 4010 && g <= 4090) return 'Base Rent';
+    if (g >= 4100 && g <= 4190) return 'Expense Recoveries';
+    if (g >= 4510 && g <= 4831) return 'Miscellaneous Income';
+    if (g === 4990) return 'Total';
+    // Opex categories (use existing grouping logic)
+    if (g >= 5451 && g <= 5460) return 'Cleaning';
+    if (g >= 5475 && g <= 5550) return 'Repairs & Maintenance';
+    if (g >= 5601 && g <= 5610) return 'Utilities';
+    if (g >= 5650 && g <= 5660) return 'Administrative Payroll';
+    if (g >= 6500 && g <= 6510) return 'Management Fees';
+    if (g >= 6511 && g <= 6520) return 'Taxes';
+    if (g >= 6521 && g <= 6530) return 'Insurance';
+    if (g >= 6550 && g <= 6999) return 'Total';
+    // Capital/Below-the-line
+    if (g >= 7061 && g <= 7099) return 'Non-Recoverable G&A';
+    if (g >= 7100 && g <= 7149) return 'Leasing Reserve';
+    if (g >= 7150 && g <= 7199) return 'Debt Service';
+    if (g >= 7200 && g <= 7299) return 'Depreciation & Amortization';
+    // Fallback
+    if (n.includes('clean')) return 'Cleaning';
+    if (n.includes('tax')) return 'Taxes';
+    if (n.includes('insurance')) return 'Insurance';
+    return 'Other';
+  }
 
   async function fbInit() {
     if (!bgtLoaded) {
       bgtLoaded = true;
       try {
-        const r = await fetch('data/budget-data.json');
-        bgtData = await r.json();
-        // Build year-specific chart data
-        bgtData.forEach(p => {
-          const rev26 = Math.abs(p.totalIncome || 0);
-          const exp26 = Math.abs(p.totalExpenses || 0);
-          const noi26 = rev26 - exp26;
-          fbYearTotals[p.name] = {
-            2025: { rev: rev26 * 0.95, exp: exp26 * 0.93, noi: (rev26 * 0.95) - (exp26 * 0.93) }, // historical actuals approximation
-            2026: { rev: rev26, exp: exp26, noi: noi26 }, // current budget (used as proxy for actuals until real actuals come in)
-            2027: { rev: 0, exp: 0, noi: 0 }, // planning year - blank
-          };
+        // Load GL accounts and budget data from Supabase in parallel
+        const [gl, budgetRows] = await Promise.all([
+          fbLoadGlAccounts(),
+          supaFetch('budget_line_items', '?year=eq.2026&order=property_id,gl_code,month')
+        ]);
+
+        // Group by property
+        const byProp = {};
+        budgetRows.forEach(row => {
+          if (!byProp[row.property_id]) byProp[row.property_id] = [];
+          byProp[row.property_id].push(row);
         });
+
+        // Build GL lookup for type (Head/Reg/Tot)
+        const glLookup = {};
+        gl.forEach(g => { glLookup[g.code] = g; });
+
+        // Transform into bgtData format
+        bgtData = [];
+        const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+        for (const [propId, rows] of Object.entries(byProp)) {
+          const meta = FB_PROP_META[propId];
+          if (!meta) continue;
+
+          // Group rows by gl_code
+          const byGl = {};
+          rows.forEach(r => {
+            if (!byGl[r.gl_code]) byGl[r.gl_code] = { name: r.account_name, months: {} };
+            byGl[r.gl_code].months[MONTHS[r.month - 1]] = r.amount;
+          });
+
+          // Build detail rows (non-header, non-total GL codes)
+          const detailRows = [];
+          for (const [code, data] of Object.entries(byGl)) {
+            const glInfo = glLookup[code];
+            const glType = glInfo ? glInfo.type : 'Reg';
+            // Include Reg entries as detail rows; Tot entries go to summary
+            if (glType === 'Head') continue; // skip pure headers
+            const section = fbGlSection(code);
+            const category = fbGlCategory(code, data.name);
+            const monthVals = {};
+            MONTHS.forEach(m => { monthVals[m] = data.months[m] || 0; });
+            detailRows.push({
+              name: data.name,
+              section: section,
+              category: category,
+              gl: code,
+              vendor: '',
+              months: monthVals,
+              _isTotal: glType === 'Tot'
+            });
+          }
+
+          // Build summary rows from GL hierarchy
+          const summaryRows = [];
+          const orderedGl = gl.filter(g => byGl[g.code]); // only GL codes that have data for this property
+
+          // Also include head entries that frame the data
+          const allGlCodes = new Set(Object.keys(byGl));
+          gl.forEach(g => {
+            if (g.type === 'Head') {
+              // Include header if any child codes in range exist
+              const gCode = parseInt(g.code);
+              const hasChildren = [...allGlCodes].some(c => {
+                const cc = parseInt(c);
+                return cc > gCode && cc < gCode + 100;
+              });
+              if (hasChildren) allGlCodes.add(g.code);
+            }
+          });
+
+          // Walk through GL accounts in order and build summary
+          gl.forEach(g => {
+            if (!allGlCodes.has(g.code)) return;
+            const data = byGl[g.code];
+            if (g.type === 'Head') {
+              summaryRows.push({ label: g.name, isHeader: true, isTotal: false, budget26: 0 });
+            } else {
+              const annual = data ? MONTHS.reduce((s, m) => s + (data.months[m] || 0), 0) : 0;
+              const isTotal = g.type === 'Tot';
+              summaryRows.push({
+                label: g.name,
+                isHeader: false,
+                isTotal: isTotal,
+                budget26: annual,
+                months: data ? data.months : {}
+              });
+            }
+          });
+
+          // Compute totals
+          const totalIncomeRow = summaryRows.find(r => r.label === 'TOTAL INCOME');
+          const noiRow = summaryRows.find(r => r.label === 'NET OPERATING INCOME');
+          const totalExpRow = summaryRows.find(r => r.label === 'TOTAL OPERATING EXPENSES' || r.label === 'TOTAL BUILDING EXPENSES');
+          const totalIncome = totalIncomeRow ? totalIncomeRow.budget26 : 0;
+          const noi = noiRow ? noiRow.budget26 : 0;
+          const totalExpenses = totalExpRow ? Math.abs(totalExpRow.budget26) : (totalIncome - noi);
+
+          bgtData.push({
+            name: meta.name,
+            sqft: meta.sqft,
+            budgetYear: 2026,
+            totalIncome: totalIncome,
+            totalExpenses: totalExpenses,
+            noi: noi,
+            summaryRows: summaryRows,
+            detailRows: detailRows.filter(r => !r._isTotal) // detail rows exclude totals
+          });
+
+          fbYearTotals[meta.name] = {
+            2026: { rev: Math.abs(totalIncome), exp: Math.abs(totalExpenses), noi: noi },
+          };
+        }
+
+        // Sort by property name for consistent ordering
+        bgtData.sort((a, b) => a.name.localeCompare(b.name));
+
       } catch (e) { console.error('Budget load error:', e); return; }
     }
     // If no property selected, show cards
@@ -1936,7 +2093,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const photo = FB_PHOTOS[p.name] || '';
     const imgHtml = photo ? `<img class="fb-detail-header-img" src="${photo}" alt="">` : '';
     const status = fbGetYearStatus();
-    const yearLabel = status === 'active' ? `${fbSelectedYear} Budget vs Actuals`
+    const yearLabel = status === 'active' ? `${fbSelectedYear} Budget`
       : status === 'planning' ? `${fbSelectedYear} Budget Planning`
       : `${fbSelectedYear} (Historical)`;
 
@@ -1985,7 +2142,8 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const minV = Math.min(...allVals, 0);
     const range = maxV - minV || 1;
 
-    const x = (i) => pad.left + (i / (yearData.length - 1)) * plotW;
+    const xDenom = Math.max(yearData.length - 1, 1);
+    const x = (i) => pad.left + (i / xDenom) * plotW;
     const y = (v) => pad.top + plotH - ((v - minV) / range) * plotH;
 
     const lines = [
@@ -2109,37 +2267,13 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       planMonths.forEach(m => { html += `<th class="bgt-th-group a">${m}</th>`; });
       html += `<th class="bgt-th-group a" style="font-weight:700;color:var(--accent)">Total</th>
       </tr></thead><tbody>`;
-    } else if (status === 'active') {
-      // Active: budget vs actuals for current year + prior year comparisons
-      colSpan = 10;
+    } else if (status === 'active' || status === 'historical') {
+      // Budget view: monthly columns + annual total
+      colSpan = planMonths.length + 2; // label + 12 months + total
       html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
-        <th class="bgt-th-label" rowspan="2">Line Item</th>
-        <th rowspan="2" class="bgt-th-group a bgt-col-a">'${yy} Budget</th>
-        <th rowspan="2" class="bgt-th-group b bgt-col-b">'${pyy} Actuals</th>
-        <th rowspan="2" class="bgt-th-group c bgt-col-c">'${pyy} Budget</th>
-        <th colspan="2" class="bgt-th-group var1 bgt-col-v1">'${yy} Bgt vs '${pyy} Act</th>
-        <th colspan="2" class="bgt-th-group var2 bgt-col-v2">'${yy} Bgt vs '${pyy} Bgt</th>
-        <th colspan="2" class="bgt-th-group var3 bgt-col-v3">'${pyy} Act vs '${pyy} Bgt</th>
-      </tr><tr>
-        <th class="bgt-th-sub var1 bgt-col-v1">$</th><th class="bgt-th-sub var1">%</th>
-        <th class="bgt-th-sub var2 bgt-col-v2">$</th><th class="bgt-th-sub var2">%</th>
-        <th class="bgt-th-sub var3 bgt-col-v3">$</th><th class="bgt-th-sub var3">%</th>
-      </tr></thead><tbody>`;
-    } else {
-      // Historical: read-only, same layout as active but all locked
-      colSpan = 10;
-      html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
-        <th class="bgt-th-label" rowspan="2">Line Item</th>
-        <th rowspan="2" class="bgt-th-group a bgt-col-a">'${yy} Budget</th>
-        <th rowspan="2" class="bgt-th-group b bgt-col-b">'${pyy} Actuals</th>
-        <th rowspan="2" class="bgt-th-group c bgt-col-c">'${pyy} Budget</th>
-        <th colspan="2" class="bgt-th-group var1 bgt-col-v1">'${yy} Bgt vs '${pyy} Act</th>
-        <th colspan="2" class="bgt-th-group var2 bgt-col-v2">'${yy} Bgt vs '${pyy} Bgt</th>
-        <th colspan="2" class="bgt-th-group var3 bgt-col-v3">'${pyy} Act vs '${pyy} Bgt</th>
-      </tr><tr>
-        <th class="bgt-th-sub var1 bgt-col-v1">$</th><th class="bgt-th-sub var1">%</th>
-        <th class="bgt-th-sub var2 bgt-col-v2">$</th><th class="bgt-th-sub var2">%</th>
-        <th class="bgt-th-sub var3 bgt-col-v3">$</th><th class="bgt-th-sub var3">%</th>
+        <th class="bgt-th-label">Line Item</th>`;
+      planMonths.forEach(m => { html += `<th class="bgt-th-group a">${m}</th>`; });
+      html += `<th class="bgt-th-group a" style="font-weight:700;color:var(--accent)">Annual</th>
       </tr></thead><tbody>`;
     }
 
@@ -2164,9 +2298,6 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         else totalCls = 'bgt-row-total';
       }
       const cls = row.isTotal ? ` class="${totalCls}"` : '';
-      const vc1 = fbValClass(row.varBudgetVsActual, isExpenseSection);
-      const vc2 = fbValClass(row.varBudgetVsBudget, isExpenseSection);
-      const vc3 = fbValClass(row.varActualVsBudget, isExpenseSection);
 
       if (status === 'planning') {
         // For planning year (2027), all values start at 0 until user fills them
@@ -2219,15 +2350,16 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
           html += `<td style="font-weight:700">${fmt(0)}</td></tr>`;
         }
       } else {
-        html += `<tr${cls}>
-          <td>${row.label}</td>
-          <td class="bgt-col-a">${fmt(row.budget26)}</td>
-          <td class="bgt-col-b">${fmt(row.actuals25)}</td>
-          <td class="bgt-col-c">${fmt(row.budget25)}</td>
-          <td class="bgt-col-v1 ${vc1}">${fmt(row.varBudgetVsActual)}</td><td class="${vc1}">${fbFmtPct(row.varBudgetVsActualPct)}</td>
-          <td class="bgt-col-v2 ${vc2}">${fmt(row.varBudgetVsBudget)}</td><td class="${vc2}">${fbFmtPct(row.varBudgetVsBudgetPct)}</td>
-          <td class="bgt-col-v3 ${vc3}">${fmt(row.varActualVsBudget)}</td><td class="${vc3}">${fbFmtPct(row.varActualVsBudgetPct)}</td>
-        </tr>`;
+        // Active/Historical: show monthly budget columns + annual total
+        html += `<tr${cls}><td>${row.label}</td>`;
+        let rowAnnual = 0;
+        planMonths.forEach(m => {
+          const v = (row.months && row.months[m]) || 0;
+          rowAnnual += v;
+          html += `<td>${fmt(v)}</td>`;
+        });
+        html += `<td style="font-weight:${row.isTotal ? '700' : '600'}">${fmt(rowAnnual || row.budget26)}</td>`;
+        html += '</tr>';
       }
     });
 
