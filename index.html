@@ -1077,7 +1077,7 @@
 
   function msalInit() {
     const isLocal = ['localhost','127.0.0.1'].includes(window.location.hostname);
-    if (isLocal || MSAL_CLIENT_ID.includes('__MSAL_CLIENT_ID__')) {
+    if (isLocal || MSAL_CLIENT_ID.includes('__MSAL_' + 'CLIENT_ID__')) {
       console.warn(isLocal ? 'Localhost detected — bypassing SSO' : 'MSAL not configured — skipping auth');
       authBypass();
       return;
@@ -1175,11 +1175,11 @@
       initials,
       isAdmin: userRecord ? userRecord.is_admin : false,
       access: {
-        calendar: userRecord ? userRecord.access_calendar !== false : true,
-        financials: userRecord ? userRecord.access_financials !== false : true,
-        forecasting: userRecord ? userRecord.access_forecasting !== false : true,
+        calendar: userRecord ? userRecord.access_calendar === true : false,
+        financials: userRecord ? userRecord.access_financials === true : false,
+        forecasting: userRecord ? userRecord.access_forecasting === true : false,
         exec: userRecord ? userRecord.access_exec === true : false,
-        properties: userRecord ? userRecord.access_properties !== false : true,
+        properties: userRecord ? userRecord.access_properties === true : false,
         users: userRecord ? (userRecord.access_users === true || userRecord.is_admin) : false,
       },
     };
@@ -1227,6 +1227,12 @@
           last_login: new Date().toISOString(),
           is_blocked: false,
           is_admin: false,
+          access_calendar: false,
+          access_financials: false,
+          access_forecasting: false,
+          access_exec: false,
+          access_properties: false,
+          access_users: false,
         })
       });
       if (newUser.ok) {
