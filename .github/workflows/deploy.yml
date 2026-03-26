@@ -24,8 +24,8 @@ jobs:
 
       - name: Inject secrets
         run: |
-          sed -i "s|__AIRTABLE_TOKEN__|${{ secrets.AIRTABLE_TOKEN }}|g" index.html "FM Manage.html" exec.html
-          sed -i "s|__CLAUDE_API_KEY__|${{ secrets.CLAUDE_API_KEY }}|g" exec.html index.html
+          sed -i "s|__AIRTABLE_TOKEN__|${{ secrets.AIRTABLE_TOKEN }}|g" index.html calendar.html "FM Manage.html" exec.html
+          sed -i "s|__CLAUDE_API_KEY__|${{ secrets.CLAUDE_API_KEY }}|g" exec.html index.html calendar.html
           PW_HASH=$(echo -n "${{ secrets.EXEC_PASSWORD }}" | sha256sum | cut -d' ' -f1)
           sed -i "s|__EXEC_PW_HASH__|${PW_HASH}|g" exec.html
 
