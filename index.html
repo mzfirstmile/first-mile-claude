@@ -217,6 +217,7 @@
   .module-card-icon.calendar { background: var(--accent-dim); color: var(--accent); }
   .module-card-icon.financials { background: var(--green-dim); color: var(--green); }
   .module-card-icon.budgeting { background: rgba(212,134,10,0.08); color: #d4860a; }
+  .module-card-icon.forecasting { background: rgba(167,139,250,0.08); color: #a78bfa; }
 
   .module-card h3 {
     font-size: 17px;
@@ -422,6 +423,34 @@
   .cal-tooltip .tt-task { margin-bottom:4px; }
   .cal-tooltip .tt-owner { font-size:10px; color:var(--text-dim); }
 
+  /* ── CRUD Table ── */
+  .crud-toolbar { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .crud-count { font-size:12px; color:var(--text-dim); }
+  .crud-table-wrap { overflow-x:auto; border:1px solid var(--border); border-radius:10px; }
+  .crud-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .crud-table thead { background:var(--surface2); }
+  .crud-table th { padding:10px 12px; text-align:left; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; border-bottom:1px solid var(--border); }
+  .crud-table td { padding:9px 12px; border-bottom:1px solid var(--border); background:var(--surface); }
+  .crud-table tr:last-child td { border-bottom:none; }
+  .crud-table tr:hover td { background:var(--surface2); }
+  .crud-table .crud-tag { display:inline-block; padding:2px 8px; border-radius:4px; font-size:10px; font-weight:600; }
+  .crud-table .crud-tag.done { background:var(--green-dim); color:var(--green); }
+  .crud-table .crud-tag.open { background:var(--accent-dim); color:var(--accent); }
+  .crud-act { display:flex; gap:4px; }
+  .crud-act button { padding:4px 8px; border-radius:5px; font-size:10px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .15s; }
+  .crud-act button:hover { background:var(--surface2); color:var(--text); }
+  .crud-act button.del:hover { border-color:#e5534b; color:#e5534b; }
+
+  /* ── CRUD Modal ── */
+  .crud-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:200; display:flex; align-items:center; justify-content:center; }
+  .crud-modal { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:28px; width:90%; max-width:480px; box-shadow:0 20px 60px rgba(0,0,0,.15); }
+  .crud-modal h3 { font-size:16px; font-weight:600; margin-bottom:20px; }
+  .crud-row { margin-bottom:14px; }
+  .crud-row label { display:block; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; margin-bottom:5px; }
+  .crud-row input, .crud-row select { width:100%; padding:9px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:7px; color:var(--text); font-size:13px; }
+  .crud-row input:focus, .crud-row select:focus { outline:none; border-color:var(--accent); }
+  .crud-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:20px; }
+
   /* ── Responsive ── */
   @media (max-width: 768px) {
     .sidebar { width: 60px; }
@@ -460,6 +489,10 @@
     <a class="sidebar-item" data-view="budgeting">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
       <span>Property Budgeting</span>
+    </a>
+    <a class="sidebar-item" data-view="forecasting">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <span>Strategic Forecasting</span>
     </a>
   </div>
 
@@ -538,6 +571,18 @@
         </div>
         <h3>Property Budgeting</h3>
         <p>Build and track annual budgets per property. Compare actuals vs. budget in real time.</p>
+        <div class="module-card-status coming"><span class="dot"></span> Coming Soon</div>
+      </div>
+
+      <div class="module-card" onclick="switchView('forecasting')" style="cursor:pointer">
+        <div class="module-card-icon forecasting">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <div class="module-card-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <h3>Strategic Forecasting</h3>
+        <p>Multi-year pro forma projections, initial forecast vs. actuals, and scenario analysis.</p>
         <div class="module-card-status coming"><span class="dot"></span> Coming Soon</div>
       </div>
     </div>
@@ -621,19 +666,84 @@
       </div>
       <div class="cal-right">
         <button class="cal-btn" onclick="calRefresh()">↻ Refresh</button>
-        <a class="cal-btn accent" href="https://airtable.com/app27jUbqonTIiHXY" target="_blank">✎ Manage Data</a>
+        <button class="cal-btn accent" onclick="calToggleManage()" id="calManageBtn">✎ Manage Data</button>
       </div>
     </div>
-    <div class="cal-progress-section">
-      <div class="cal-progress-header">
-        <div class="cal-progress-label"><span class="done-count" id="calDoneCount">0</span> / <span class="total-count" id="calTotalCount">0</span> tasks complete</div>
+
+    <!-- Calendar view (default) -->
+    <div id="calCalendarPane">
+      <div class="cal-progress-section">
+        <div class="cal-progress-header">
+          <div class="cal-progress-label"><span class="done-count" id="calDoneCount">0</span> / <span class="total-count" id="calTotalCount">0</span> tasks complete</div>
+        </div>
+        <div class="cal-progress"><div class="cal-progress-fill" id="calProgress" style="width:0%"></div></div>
+        <div class="cal-all-done" id="calAllDone">All tasks complete for this view!</div>
       </div>
-      <div class="cal-progress"><div class="cal-progress-fill" id="calProgress" style="width:0%"></div></div>
-      <div class="cal-all-done" id="calAllDone">🎉 All tasks complete for this view!</div>
+      <div class="cal-filters" id="calFilters"></div>
+      <div class="cal-grid" id="calGrid"></div>
+      <div class="cal-tooltip" id="calTooltip"></div>
     </div>
-    <div class="cal-filters" id="calFilters"></div>
-    <div class="cal-grid" id="calGrid"></div>
-    <div class="cal-tooltip" id="calTooltip"></div>
+
+    <!-- Manage data table (hidden by default) -->
+    <div id="calManagePane" style="display:none;">
+      <div class="crud-toolbar">
+        <button class="cal-btn accent" onclick="calCrudNew()">+ Add Task</button>
+        <span class="crud-count" id="crudCount"></span>
+      </div>
+      <div class="crud-table-wrap">
+        <table class="crud-table">
+          <thead>
+            <tr>
+              <th style="width:60px">Day</th>
+              <th style="width:90px">Cadence</th>
+              <th>Property</th>
+              <th>Payment Type</th>
+              <th>Description</th>
+              <th style="width:100px">Owner</th>
+              <th style="width:80px">Status</th>
+              <th style="width:90px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="crudBody"></tbody>
+        </table>
+      </div>
+
+      <!-- Inline edit modal -->
+      <div class="crud-modal-bg" id="crudModal" style="display:none;" onclick="if(event.target===this)calCrudClose()">
+        <div class="crud-modal">
+          <h3 id="crudModalTitle">Add Task</h3>
+          <input type="hidden" id="crudId">
+          <div class="crud-row">
+            <label>Day of Month</label>
+            <input type="number" id="crudDay" min="1" max="31" placeholder="1-31">
+          </div>
+          <div class="crud-row">
+            <label>Cadence</label>
+            <select id="crudCadence"><option>Monthly</option><option>Quarterly</option><option>Annual</option></select>
+          </div>
+          <div class="crud-row">
+            <label>Property</label>
+            <select id="crudProperty"></select>
+          </div>
+          <div class="crud-row">
+            <label>Payment Type</label>
+            <input type="text" id="crudType" placeholder="e.g. Mortgage, Insurance, Tax">
+          </div>
+          <div class="crud-row">
+            <label>Description</label>
+            <input type="text" id="crudDesc" placeholder="Task description">
+          </div>
+          <div class="crud-row">
+            <label>Owner</label>
+            <input type="text" id="crudOwner" placeholder="Who is responsible">
+          </div>
+          <div class="crud-actions">
+            <button class="cal-btn" onclick="calCrudClose()">Cancel</button>
+            <button class="cal-btn accent" onclick="calCrudSave()">Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Executive Dashboard (iframe) -->
@@ -649,6 +759,14 @@
     </div>
   </div>
 
+  <div class="manage-view" id="view-forecasting">
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      <p>Strategic Forecasting</p>
+      <p class="sub">Multi-year projections, pro forma analysis, and scenario modeling.</p>
+    </div>
+  </div>
+
 </div>
 
 <script>
@@ -658,6 +776,7 @@
     calendar: 'Accounting <span>Calendar</span>',
     financials: 'Property <span>Financials</span>',
     budgeting: 'Property <span>Budgeting</span>',
+    forecasting: 'Strategic <span>Forecasting</span>',
     properties: 'Manage <span>Properties</span>',
     users: 'Manage <span>Users</span>',
     exec: 'Executive <span>Dashboard</span>',
@@ -934,6 +1053,135 @@
     if (ok) { calBuildFilters(); calRender(); }
     else {
       document.getElementById('calGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim);">Could not connect to Airtable. Check your API token.</div>';
+    }
+  }
+
+  // ══════════════════════════════════════
+  // ── CRUD MANAGE DATA ──
+  // ══════════════════════════════════════
+  let calManageOpen = false;
+
+  function calToggleManage() {
+    calManageOpen = !calManageOpen;
+    document.getElementById('calCalendarPane').style.display = calManageOpen ? 'none' : '';
+    document.getElementById('calManagePane').style.display = calManageOpen ? '' : 'none';
+    document.getElementById('calManageBtn').innerHTML = calManageOpen ? '← Back to Calendar' : '✎ Manage Data';
+    document.getElementById('calManageBtn').className = calManageOpen ? 'cal-btn' : 'cal-btn accent';
+    if (calManageOpen) calCrudRender();
+  }
+
+  function calCrudRender() {
+    const tbody = document.getElementById('crudBody');
+    const sorted = [...calEvents].sort((a, b) => a.day - b.day || a.property.localeCompare(b.property));
+    document.getElementById('crudCount').textContent = `${sorted.length} tasks`;
+    tbody.innerHTML = sorted.map(ev => {
+      const isDone = ev.status === 'Done';
+      return `<tr>
+        <td style="font-weight:600;color:var(--accent);">${ev.day}</td>
+        <td>${ev.cadence}</td>
+        <td style="font-weight:600;">${ev.property}</td>
+        <td>${ev.type}</td>
+        <td>${ev.task}</td>
+        <td>${ev.owner}</td>
+        <td><span class="crud-tag ${isDone ? 'done' : 'open'}">${isDone ? 'Done' : 'Open'}</span></td>
+        <td><div class="crud-act">
+          <button onclick="calCrudEdit(${ev.idx})">Edit</button>
+          <button class="del" onclick="calCrudDelete(${ev.idx})">Del</button>
+        </div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function calCrudNew() {
+    document.getElementById('crudModalTitle').textContent = 'Add Task';
+    document.getElementById('crudId').value = '';
+    document.getElementById('crudDay').value = '';
+    document.getElementById('crudCadence').value = 'Monthly';
+    document.getElementById('crudType').value = '';
+    document.getElementById('crudDesc').value = '';
+    document.getElementById('crudOwner').value = '';
+    // Populate property dropdown
+    const propSel = document.getElementById('crudProperty');
+    const props = [...new Set(calEvents.map(e => e.property))].sort();
+    propSel.innerHTML = props.map(p => `<option>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
+    document.getElementById('crudModal').style.display = '';
+  }
+
+  function calCrudEdit(idx) {
+    const ev = calEvents[idx];
+    if (!ev) return;
+    document.getElementById('crudModalTitle').textContent = 'Edit Task';
+    document.getElementById('crudId').value = ev.airtableId || '';
+    document.getElementById('crudDay').value = ev.day;
+    document.getElementById('crudCadence').value = ev.cadence;
+    document.getElementById('crudType').value = ev.type;
+    document.getElementById('crudDesc').value = ev.task;
+    document.getElementById('crudOwner').value = ev.owner;
+    const propSel = document.getElementById('crudProperty');
+    const props = [...new Set(calEvents.map(e => e.property))].sort();
+    propSel.innerHTML = props.map(p => `<option${p === ev.property ? ' selected' : ''}>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
+    document.getElementById('crudModal').style.display = '';
+  }
+
+  function calCrudClose() {
+    document.getElementById('crudModal').style.display = 'none';
+  }
+
+  async function calCrudSave() {
+    let prop = document.getElementById('crudProperty').value;
+    if (prop === '__new') {
+      prop = prompt('Enter new property name:');
+      if (!prop) return;
+    }
+    const fields = {
+      'Day of Month': document.getElementById('crudDay').value,
+      'Cadence': document.getElementById('crudCadence').value,
+      'Property': prop,
+      'Payment Type': document.getElementById('crudType').value,
+      'Description': document.getElementById('crudDesc').value,
+      'Owner': document.getElementById('crudOwner').value,
+    };
+    const recordId = document.getElementById('crudId').value;
+    try {
+      if (recordId) {
+        // Update existing
+        await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}`, {
+          method: 'PATCH',
+          headers: { 'Authorization': `Bearer ${CAL_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: [{ id: recordId, fields }] })
+        });
+      } else {
+        // Create new
+        await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${CAL_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: [{ fields }] })
+        });
+      }
+      calCrudClose();
+      // Refresh data
+      await calFetchAT();
+      calBuildFilters();
+      calCrudRender();
+    } catch (e) {
+      alert('Save failed: ' + e.message);
+    }
+  }
+
+  async function calCrudDelete(idx) {
+    const ev = calEvents[idx];
+    if (!ev || !ev.airtableId) return;
+    if (!confirm(`Delete task: "${ev.task || ev.property + ' - ' + ev.type}"?`)) return;
+    try {
+      await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}?records[]=${ev.airtableId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${CAL_TOKEN}` }
+      });
+      await calFetchAT();
+      calBuildFilters();
+      calCrudRender();
+    } catch (e) {
+      alert('Delete failed: ' + e.message);
     }
   }
 </script>
