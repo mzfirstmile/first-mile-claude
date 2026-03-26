@@ -545,7 +545,7 @@ const KNOWN_PAYROLL_SPLITS = {
 
 // State
 let allRecords = [];
-let categoryOverrides = {}; // recordId -> category
+let categoryOverrides = {}; // recordId -> category (persisted in Supabase)
 let payrollSplits = {};     // recordId -> payroll amount to deduct from PM fee
 let cfMode = 'monthly';
 let selectedPeriodIndex = -1; // -1 means latest
@@ -558,8 +558,7 @@ initDashboard();
 
 // ── Init ──
 function initDashboard() {
-  // Load category overrides from localStorage
-  try { categoryOverrides = JSON.parse(localStorage.getItem('_exec_cat_overrides') || '{}'); } catch(e) { categoryOverrides = {}; }
+  // Category overrides loaded from Supabase in loadData()
   // Load payroll splits (merge known defaults with any user overrides)
   try { payrollSplits = JSON.parse(localStorage.getItem('_exec_payroll_splits') || '{}'); } catch(e) { payrollSplits = {}; }
   Object.keys(KNOWN_PAYROLL_SPLITS).forEach(k => { if (!(k in payrollSplits)) payrollSplits[k] = KNOWN_PAYROLL_SPLITS[k]; });
@@ -582,25 +581,29 @@ async function loadData() {
     const includeNums = new Set(Object.keys(INCLUDE_ACCOUNTS));
     const includeNames = new Set(Object.values(INCLUDE_ACCOUNTS).map(n => n.toUpperCase()));
     const raw = await supaFetch('exec_transactions', '?date=gte.2026-01-01&order=date.asc');
-    // Map to legacy record format for compatibility
+    // Build category overrides from Supabase column + map to legacy record format
+    categoryOverrides = {};
     allRecords = raw.filter(r => {
       const acctNum = String(r.account_number || '').trim();
       const acctName = (r.account_name || '').toUpperCase().trim();
       return includeNums.has(acctNum) || includeNames.has(acctName);
-    }).map(r => ({
-      id: r.id,
-      fields: {
-        Date: r.date,
-        Description: r.description,
-        Amount: r.amount,
-        'Ledger Balance': r.ledger_balance,
-        'Transaction Type': r.transaction_type,
-        'Credit/Debit': r.credit_debit,
-        'Account Name': r.account_name,
-        'Account Number': r.account_number
-      }
-    }));
-    console.log(`Loaded ${raw.length} rows, filtered to ${allRecords.length} corporate accounts`);
+    }).map(r => {
+      if (r.category_override) categoryOverrides[r.id] = r.category_override;
+      return {
+        id: r.id,
+        fields: {
+          Date: r.date,
+          Description: r.description,
+          Amount: r.amount,
+          'Ledger Balance': r.ledger_balance,
+          'Transaction Type': r.transaction_type,
+          'Credit/Debit': r.credit_debit,
+          'Account Name': r.account_name,
+          'Account Number': r.account_number
+        }
+      };
+    });
+    console.log(`Loaded ${raw.length} rows, filtered to ${allRecords.length} corporate accounts, ${Object.keys(categoryOverrides).length} overrides`);
     bar.className = 'loading-bar done';
     buildPeriods();
     selectedPeriodIndex = periods.length - 1;
@@ -1275,11 +1278,14 @@ function closeDrilldown() {
   document.getElementById('investSection').style.display = '';
 }
 
-function changeCategory(recordId, newCategory) {
+async function changeCategory(recordId, newCategory) {
   categoryOverrides[recordId] = newCategory;
-  localStorage.setItem('_exec_cat_overrides', JSON.stringify(categoryOverrides));
   showToast(`Category → ${newCategory}`);
   renderPeriodDashboard();
+  // Persist to Supabase
+  try {
+    await supaWrite('exec_transactions', 'PATCH', { category_override: newCategory }, `?id=eq.${recordId}`);
+  } catch(e) { console.error('Failed to save override:', e); }
 }
 
 // ── Chat Widget ──
@@ -1390,8 +1396,9 @@ When the user asks questions, just answer naturally. Be concise.`;
         const json = JSON.parse(line.replace('ACTION:', '').trim());
         if (json.type === 'recategorize' && json.recordId && json.category) {
           categoryOverrides[json.recordId] = json.category;
-          localStorage.setItem('_exec_cat_overrides', JSON.stringify(categoryOverrides));
           addChatMsg('system', `Updated: ${json.category}`);
+          // Persist to Supabase
+          supaWrite('exec_transactions', 'PATCH', { category_override: json.category }, `?id=eq.${json.recordId}`).catch(e => console.error('Override save error:', e));
         }
       } catch(e) { /* skip malformed action */ }
     }
