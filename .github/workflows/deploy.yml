@@ -26,8 +26,6 @@ jobs:
         run: |
           sed -i "s|__AIRTABLE_TOKEN__|${{ secrets.AIRTABLE_TOKEN }}|g" index.html calendar.html "FM Manage.html" exec.html
           sed -i "s|__CLAUDE_API_KEY__|${{ secrets.CLAUDE_API_KEY }}|g" exec.html index.html calendar.html
-          PW_HASH=$(echo -n "${{ secrets.EXEC_PASSWORD }}" | sha256sum | cut -d' ' -f1)
-          sed -i "s|__EXEC_PW_HASH__|${PW_HASH}|g" exec.html
           sed -i "s|__SUPABASE_URL__|${{ secrets.SUPABASE_URL }}|g" index.html exec.html
           sed -i "s|__SUPABASE_KEY__|${{ secrets.SUPABASE_KEY }}|g" index.html exec.html
           sed -i "s|__MSAL_CLIENT_ID__|${{ secrets.MSAL_CLIENT_ID }}|g" index.html

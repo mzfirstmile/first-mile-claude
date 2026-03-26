@@ -34,19 +34,6 @@
   .loading-bar.done { width:100%; opacity:0; transition:width .2s, opacity .5s .3s; }
 
   /* ── Password Gate ── */
-  .gate-overlay { position:fixed; inset:0; background:var(--bg); z-index:400; display:flex; align-items:center; justify-content:center; }
-  .gate-overlay.hidden { display:none; }
-  .gate-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px; max-width:420px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.06); }
-  .gate-card h2 { font-size:20px; margin-bottom:6px; }
-  .gate-card h2 span { color:var(--accent); }
-  .gate-card .sub { font-size:13px; color:var(--text-dim); margin-bottom:24px; line-height:1.6; }
-  .gate-card label { display:block; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
-  .gate-card input { width:100%; padding:11px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:14px; margin-bottom:16px; }
-  .gate-card input:focus { outline:none; border-color:var(--accent); }
-  .gate-error { color:var(--red); font-size:12px; margin-bottom:12px; display:none; }
-  .gate-error.show { display:block; }
-  .gate-btn { width:100%; padding:11px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--accent); background:var(--accent); color:#fff; transition:all .2s; }
-  .gate-btn:hover { background:#009ab8; }
 
   /* ── Header ── */
   header { padding:20px 40px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; background:var(--surface); border-bottom:1px solid var(--border); }
@@ -293,23 +280,12 @@
 <div class="loading-bar" id="loadBar"></div>
 <div class="toast" id="toast">Category updated</div>
 
-<!-- Password Gate -->
-<div class="gate-overlay" id="gateOverlay">
-  <div class="gate-card">
-    <h2><img src="assets/favicon.png" class="logo-icon" alt="">Executive <span>Dashboard</span></h2>
-    <p class="sub">Enter the access password to continue.</p>
-    <label>Password</label>
-    <input type="password" id="pwInput" placeholder="Enter password" autofocus>
-    <div class="gate-error" id="gateError">Incorrect password. Try again.</div>
-    <button class="gate-btn" id="gateBtn" onclick="checkPassword()">Unlock</button>
-  </div>
-</div>
 
 
 
 <!-- Dashboard -->
-<header style="display:none" id="mainHeader">
-  <h1><img src="assets/favicon.png" class="logo-icon" alt="">Executive <span>Dashboard</span></h1>
+<header id="mainHeader">
+  <h1><img src="assets/favicon.png" class="logo-icon" alt="">Executive <span>Financials</span></h1>
   <div class="header-right">
     <button class="btn" onclick="refreshData()">Refresh</button>
     <a href="index.html" class="btn">Calendar</a>
@@ -472,8 +448,6 @@
 <script src="config.js" onerror=""></script>
 <script>
 // ── Constants ──
-// Production: hash injected at build time. Local dev: computed from config.js password.
-const PW_HASH = '__EXEC_PW_HASH__';
 const BASE_ID = 'appTXzlQGcpVk3IcU';
 const TABLE_ID = 'tbl9ahPA1hA2hZrv0';
 const MAIN_ACCT = '483101560383';
@@ -556,61 +530,14 @@ let cfMode = 'monthly';
 let selectedPeriodIndex = -1; // -1 means latest
 let periods = [];
 
-// ── Password Check (24-hour session) ──
-const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours in ms
-
-function isSessionValid() {
-  const ts = localStorage.getItem('_exec_auth_ts');
-  if (!ts) return false;
-  return (Date.now() - parseInt(ts, 10)) < SESSION_DURATION;
-}
-
-function setSession() {
-  localStorage.setItem('_exec_auth_ts', Date.now().toString());
-}
-
 // ── Token Management ──
 // Production: injected at build time by GitHub Actions (sed replaces placeholder)
 // Local dev: loaded from config.js (gitignored) which sets window.AIRTABLE_TOKEN
 const AIRTABLE_TOKEN_FALLBACK = '__AIRTABLE_TOKEN__';
 function getToken() { return window.AIRTABLE_TOKEN || AIRTABLE_TOKEN_FALLBACK; }
 
-// Auto-unlock if session still valid
-if (isSessionValid()) {
-  document.getElementById('gateOverlay').classList.add('hidden');
-  initDashboard();
-}
-
-document.getElementById('pwInput').addEventListener('keydown', e => { if(e.key==='Enter') checkPassword(); });
-
-async function checkPassword() {
-  const pw = document.getElementById('pwInput').value;
-
-  // Local dev: compare plaintext from config.js
-  if (window.EXEC_PASSWORD && pw === window.EXEC_PASSWORD) {
-    setSession();
-    document.getElementById('gateOverlay').classList.add('hidden');
-    initDashboard();
-    return;
-  }
-
-  // Production: compare SHA-256 hash
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pw);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2,'0')).join('');
-
-  if (hashHex === PW_HASH) {
-    setSession();
-    document.getElementById('gateOverlay').classList.add('hidden');
-    initDashboard();
-  } else {
-    document.getElementById('gateError').classList.add('show');
-    document.getElementById('pwInput').value = '';
-    document.getElementById('pwInput').focus();
-  }
-}
+// Auto-init (auth handled by parent site's Microsoft SSO)
+initDashboard();
 
 // ── Init ──
 function initDashboard() {
@@ -647,7 +574,6 @@ async function fetchAllRecords(token) {
 async function loadData() {
   const bar = document.getElementById('loadBar');
   bar.className = 'loading-bar active';
-  document.getElementById('mainHeader').style.display = 'flex';
   document.getElementById('dashboard').classList.add('show');
 
   try {
