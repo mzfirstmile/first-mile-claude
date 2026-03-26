@@ -1475,6 +1475,10 @@ window.addEventListener('message', function(e) {
     loadData();
   }
 });
+// Request NOI from parent when iframe loads
+if (window.parent !== window) {
+  try { window.parent.postMessage({ type: 'requestNOI' }, '*'); } catch(e) {}
+}
 
 async function loadBalanceSheet() {
   try {
