@@ -500,22 +500,22 @@
   .chat-fab { position:fixed; bottom:24px; right:24px; width:52px; height:52px; border-radius:50%; background:var(--accent); color:#fff; border:none; cursor:pointer; box-shadow:0 4px 16px rgba(0,176,212,.35); z-index:300; display:flex; align-items:center; justify-content:center; transition:all .2s; font-size:22px; }
   .chat-fab:hover { transform:scale(1.08); box-shadow:0 6px 24px rgba(0,176,212,.45); }
   .chat-fab.open { background:var(--text); }
-  .chat-panel { position:fixed; bottom:88px; right:24px; width:400px; max-height:520px; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 16px 48px rgba(0,0,0,.15); z-index:300; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel { position:fixed; bottom:88px; right:24px; width:420px; height:70vh; max-height:700px; background:var(--surface); border:1px solid var(--border); border-radius:14px; box-shadow:0 16px 48px rgba(0,0,0,.15); z-index:300; display:none; flex-direction:column; overflow:hidden; }
   .chat-panel.show { display:flex; }
   .chat-header { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; }
   .chat-header-icon { width:28px; height:28px; background:var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:14px; }
   .chat-header-text { font-size:13px; font-weight:600; }
   .chat-header-sub { font-size:10px; color:var(--text-dim); }
-  .chat-body { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; max-height:360px; }
+  .chat-body { flex:1; overflow-y:auto; padding:14px; display:flex; flex-direction:column; gap:10px; min-height:0; }
   .chat-msg { max-width:85%; padding:9px 13px; border-radius:12px; font-size:12.5px; line-height:1.5; word-wrap:break-word; }
   .chat-msg.user { align-self:flex-end; background:var(--accent); color:#fff; border-bottom-right-radius:4px; }
   .chat-msg.bot { align-self:flex-start; background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; }
   .chat-msg.bot .tool-call { font-size:10px; color:var(--accent); font-weight:600; margin-bottom:4px; display:flex; align-items:center; gap:4px; }
   .chat-msg.thinking { opacity:.6; font-style:italic; }
-  .chat-input-wrap { padding:10px 14px; border-top:1px solid var(--border); display:flex; gap:8px; }
-  .chat-input { flex:1; padding:9px 12px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; background:var(--surface2); color:var(--text); resize:none; font-family:inherit; }
+  .chat-input-wrap { padding:10px 14px; border-top:1px solid var(--border); display:flex; gap:8px; align-items:flex-end; }
+  .chat-input { flex:1; padding:10px 12px; border:1px solid var(--border); border-radius:10px; font-size:13px; background:var(--surface2); color:var(--text); resize:none; font-family:inherit; line-height:1.4; min-height:40px; max-height:120px; overflow-y:auto; }
   .chat-input:focus { outline:none; border-color:var(--accent); }
-  .chat-send { width:34px; height:34px; border-radius:8px; background:var(--accent); color:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:15px; transition:all .15s; flex-shrink:0; }
+  .chat-send { width:40px; height:40px; border-radius:10px; background:var(--accent); color:#fff; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; transition:all .15s; flex-shrink:0; }
   .chat-send:hover { background:#009bb8; }
   .chat-send:disabled { opacity:.4; cursor:default; }
 
@@ -902,7 +902,7 @@
     <div class="chat-msg bot">Hi Morris! I can help you query and update your Airtable data — properties, budgets, calendar tasks, and more. Try asking me something.</div>
   </div>
   <div class="chat-input-wrap">
-    <input class="chat-input" id="chatInput" placeholder="Ask about your data…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}">
+    <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask about your data…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';"></textarea>
     <button class="chat-send" id="chatSendBtn" onclick="chatSend()">→</button>
   </div>
 </div>
