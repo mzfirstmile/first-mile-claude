@@ -624,9 +624,11 @@
   .fb-nav-btn.active { background:var(--accent); color:#fff; }
 
   /* Detail tab: monthly table */
+  .fb-monthly-wrap { border-radius:10px; border:1px solid var(--border); overflow-x:auto; }
+  .fb-monthly-table thead tr { position:relative; }
   .fb-monthly-table { width:100%; border-collapse:collapse; font-size:11px; white-space:nowrap; table-layout:fixed; }
   .fb-monthly-table th, .fb-monthly-table td { padding:5px 6px; text-align:right; border-bottom:1px solid var(--border); overflow:hidden; text-overflow:ellipsis; }
-  .fb-monthly-table th { background:var(--surface2); font-weight:600; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:.3px; position:sticky; top:0; z-index:2; }
+  .fb-monthly-table th { background:var(--surface2); font-weight:600; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:.3px; z-index:2; }
   .fb-monthly-table td:first-child, .fb-monthly-table th:first-child { text-align:left; font-weight:500; min-width:180px; width:180px; position:sticky; left:0; background:var(--surface); z-index:1; white-space:normal; }
   .fb-monthly-table th:first-child { background:var(--surface2); z-index:3; }
   .fb-monthly-table .fb-cat-header td { background:var(--surface2); font-weight:700 !important; font-size:11px; color:var(--text); border-top:2px solid var(--border); cursor:pointer; user-select:none; }
@@ -753,7 +755,7 @@
     </a>
     <a class="sidebar-item" data-view="exec">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
-      <span>Executive Dashboard</span>
+      <span>Executive Financials</span>
     </a>
   </div>
 
@@ -1030,7 +1032,7 @@
     </div>
   </div>
 
-  <!-- Executive Dashboard (iframe) -->
+  <!-- Executive Financials (iframe) -->
   <div class="manage-view" id="view-exec" style="padding:0; height:calc(100vh - 65px);">
     <iframe id="execFrame" data-src="exec.html" style="width:100%; height:100%; border:none;"></iframe>
   </div>
@@ -1094,7 +1096,7 @@
         postLogoutRedirectUri: window.location.origin,
       },
       cache: {
-        cacheLocation: 'sessionStorage',
+        cacheLocation: 'localStorage',
         storeAuthStateInCookie: false,
       }
     };
@@ -1306,7 +1308,8 @@
 
   function msalLogout() {
     currentUser = null;
-    sessionStorage.clear();
+    localStorage.removeItem('fmc_auth_ts');
+    localStorage.clear();
     if (msalInstance) {
       msalInstance.logoutPopup().then(() => { window.location.reload(); }).catch(() => { window.location.reload(); });
     } else {
@@ -1337,7 +1340,7 @@
     forecasting: 'Strategic <span>Forecasting</span>',
     properties: 'Manage <span>Properties</span>',
     users: 'Manage <span>Users</span>',
-    exec: 'Executive <span>Dashboard</span>',
+    exec: 'Executive <span>Financials</span>',
   };
 
   function switchView(view) {
@@ -2794,6 +2797,32 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     fbRenderDetail();
   }
 
+  // Sticky monthly table header — uses JS transform since overflow-x on wrapper breaks CSS sticky
+  (function initStickyHeaders() {
+    const viewEl = document.getElementById('view-financials');
+    if (!viewEl) return;
+    viewEl.addEventListener('scroll', function() {
+      viewEl.querySelectorAll('.fb-monthly-wrap').forEach(wrap => {
+        const thead = wrap.querySelector('.fb-monthly-table thead');
+        if (!thead) return;
+        const wrapRect = wrap.getBoundingClientRect();
+        const viewRect = viewEl.getBoundingClientRect();
+        if (wrapRect.top < viewRect.top && wrapRect.bottom > viewRect.top + 40) {
+          const offset = viewRect.top - wrapRect.top;
+          thead.querySelectorAll('th').forEach(th => {
+            th.style.transform = `translateY(${offset}px)`;
+            th.style.boxShadow = '0 1px 3px rgba(0,0,0,.08)';
+          });
+        } else {
+          thead.querySelectorAll('th').forEach(th => {
+            th.style.transform = '';
+            th.style.boxShadow = '';
+          });
+        }
+      });
+    });
+  })();
+
   // Get property data for the currently selected year
   function fbGetPropForYear(p) {
     const yd = p.years && p.years[fbSelectedYear];
@@ -3142,7 +3171,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     // Build colgroup for fixed-layout columns
     const totalDataCols = months.length + 1; // 12 months + total
     const glColWidth = showGL ? 44 : 0;
-    html += `<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)"><table class="fb-monthly-table">`;
+    html += `<div class="fb-monthly-wrap"><table class="fb-monthly-table">`;
     html += `<colgroup><col style="width:180px">`;
     if (showGL) html += `<col style="width:44px">`;
     months.forEach(() => { html += `<col>`; }); // auto-distribute remaining
