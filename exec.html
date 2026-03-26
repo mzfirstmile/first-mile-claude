@@ -536,12 +536,13 @@ const CLAUDE_API_KEY_FALLBACK = '__CLAUDE_API_KEY__';
 function getClaudeKey() { return window.CLAUDE_API_KEY || CLAUDE_API_KEY_FALLBACK; }
 
 // Known payroll reimbursement splits within PM fee payments (Appfolio CORPTRDEXC)
-// These are portions of PM fee payments that are actually payroll reimbursements
-const KNOWN_PAYROLL_SPLITS = {
-  'recrFSigs3zqIwbRr': 115290.93,  // Jan 2026 CORPTRDEXC $176,771.00 → $115,290.93 is payroll
-  'recAEPWtWqgcxqgVY': 53305.93,   // Feb 2026 CORPTRDEXC $108,165.44 → $53,305.93 is payroll
-  'reckTlT5OGIOUDeN4': 54601.60    // Mar 2026 CORPTRDEXC $94,508.25 → $54,601.60 is payroll
-};
+// Matched by amount since record IDs changed after Supabase migration
+const KNOWN_PAYROLL_SPLITS_BY_AMOUNT = [
+  { txnAmount: 176771.00, splitAmount: 115290.93 },  // Jan 2026 CORPTRDEXC
+  { txnAmount: 108165.44, splitAmount: 53305.93 },    // Feb 2026 CORPTRDEXC
+  { txnAmount: 94508.25,  splitAmount: 54601.60 }     // Mar 2026 CORPTRDEXC
+];
+const KNOWN_PAYROLL_SPLITS = {}; // populated by matchPayrollSplits() after data loads
 
 // State
 let allRecords = [];
@@ -559,10 +560,8 @@ initDashboard();
 // ── Init ──
 function initDashboard() {
   // Category overrides loaded from Supabase in loadData()
-  // Load payroll splits (merge known defaults with any user overrides)
-  try { payrollSplits = JSON.parse(localStorage.getItem('_exec_payroll_splits') || '{}'); } catch(e) { payrollSplits = {}; }
-  Object.keys(KNOWN_PAYROLL_SPLITS).forEach(k => { if (!(k in payrollSplits)) payrollSplits[k] = KNOWN_PAYROLL_SPLITS[k]; });
-
+  // Payroll splits matched by amount after data loads (see matchPayrollSplits)
+  payrollSplits = {};
   loadData();
 }
 
@@ -604,6 +603,8 @@ async function loadData() {
       };
     });
     console.log(`Loaded ${raw.length} rows, filtered to ${allRecords.length} corporate accounts, ${Object.keys(categoryOverrides).length} overrides`);
+    // Match known payroll splits to actual Supabase record IDs by transaction amount
+    matchPayrollSplits();
     bar.className = 'loading-bar done';
     buildPeriods();
     selectedPeriodIndex = periods.length - 1;
@@ -613,6 +614,20 @@ async function loadData() {
     bar.className = 'loading-bar';
     console.error(e);
     alert('Failed to load data: ' + e.message);
+  }
+}
+
+function matchPayrollSplits() {
+  // Match CORPTRDEXC transactions by amount to assign payroll split portions
+  for (const rule of KNOWN_PAYROLL_SPLITS_BY_AMOUNT) {
+    const match = allRecords.find(r => {
+      const desc = (r.fields.Description || '').toUpperCase();
+      const amt = Math.abs(parseFloat(r.fields.Amount) || 0);
+      return desc.includes('CORPTRDEXC') && Math.abs(amt - rule.txnAmount) < 1;
+    });
+    if (match && !(match.id in payrollSplits)) {
+      payrollSplits[match.id] = rule.splitAmount;
+    }
   }
 }
 
