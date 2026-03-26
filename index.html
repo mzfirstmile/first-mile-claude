@@ -876,7 +876,7 @@
   <div class="manage-view" id="view-properties" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
     <div class="manage-header">
       <h2>Properties</h2>
-      <a class="btn accent" href="https://airtable.com/app27jUbqonTIiHXY/tbl63t0DN1HNhImZ6" target="_blank">✎ Edit in Airtable</a>
+      <!-- Properties managed via Supabase -->
     </div>
     <div class="data-table">
       <div class="loading-spinner" id="properties-loading">
@@ -1081,7 +1081,7 @@
     </div>
   </div>
   <div class="chat-body" id="chatBody">
-    <div class="chat-msg bot">Hi Morris! I can help you query and update your Airtable data — properties, budgets, calendar tasks, and more. Try asking me something.</div>
+    <div class="chat-msg bot">Hi Morris! I can help you query and manage your data — properties, budgets, calendar tasks, and more. Try asking me something.</div>
   </div>
   <div class="chat-input-wrap">
     <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask about your data…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';"></textarea>
@@ -1410,26 +1410,12 @@
     });
   });
 
-  // ── Airtable Config ──
-  // Properties and Users tables in First Mile Database base
-  const AIRTABLE_CONFIG = {
-    // To connect: set your Airtable PAT here or use environment config
-    apiKey: '',
-    baseId: 'app27jUbqonTIiHXY',
-    propertiesTableId: 'tbl63t0DN1HNhImZ6',
-    usersTableId: 'tblyZezYKlxEOW9M5',
-  };
-
-  // ── Shared Airtable token (injected by deploy) ──
-  const AT_TOKEN = '__AIRTABLE_TOKEN__';
-  const AT_BASE = 'app27jUbqonTIiHXY';
-
   // ── Supabase config (injected by deploy or config.js for local) ──
   const SUPABASE_URL = window.SUPABASE_URL || '__SUPABASE_URL__';
   const SUPABASE_KEY = window.SUPABASE_KEY || '__SUPABASE_KEY__';
 
   // ── Properties Data (shared across modules) ──
-  let propertiesData = [];  // Airtable records
+  let propertiesData = [];  // Supabase records
   let propertiesLoaded = false;
 
   // ── Supabase helper ──
@@ -1650,11 +1636,8 @@
   }
 
   // ══════════════════════════════════════
-  // ── ACCOUNTING CALENDAR (native) ──
+  // ── ACCOUNTING CALENDAR (Supabase) ──
   // ══════════════════════════════════════
-  const CAL_BASE = 'app27jUbqonTIiHXY';
-  const CAL_TABLE = 'Calendar Tasks';
-  const CAL_TOKEN = '__AIRTABLE_TOKEN__';
   const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const CAL_PALETTE = ['#00b0d4','#50dcb4','#ff8c5a','#dc78ff','#ffd250','#50c8ff','#ff6482','#a78bfa','#f472b6','#38bdf8','#4ade80','#fb923c'];
 
@@ -1667,25 +1650,21 @@
   }
   function calHexA(h, a) { h = h.replace('#',''); return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`; }
 
-  async function calFetchAT() {
+  async function calFetchData() {
     try {
-      const r = await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}?pageSize=100`, {
-        headers: { 'Authorization': `Bearer ${CAL_TOKEN}` }
-      });
-      if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
-      const d = await r.json();
-      calEvents = d.records.map((rec, i) => ({
+      const rows = await supaFetch('calendar_tasks', '?order=day_of_month.asc,property.asc');
+      calEvents = rows.map((rec, i) => ({
         idx: i,
-        airtableId: rec.id,
-        day: parseInt(String(rec.fields['Day of Month'] || '1').match(/(\d+)/)?.[1] || '1'),
-        cadence: rec.fields['Cadence']?.name || rec.fields['Cadence'] || 'Monthly',
-        property: rec.fields['Property']?.name || rec.fields['Property'] || '',
-        type: rec.fields['Payment Type']?.name || rec.fields['Payment Type'] || '',
-        task: rec.fields['Description'] || '',
-        owner: rec.fields['Owner']?.name || rec.fields['Owner'] || '',
-        status: rec.fields['Status']?.name || rec.fields['Status'] || '',
-        completedBy: rec.fields['Completed By'] || '',
-        completedDate: rec.fields['Completed Date'] || '',
+        supaId: rec.id,
+        day: rec.day_of_month,
+        cadence: rec.cadence || 'Monthly',
+        property: rec.property || '',
+        type: rec.payment_type || '',
+        task: rec.description || '',
+        owner: rec.owner || '',
+        status: rec.status || '',
+        completedBy: rec.completed_by || '',
+        completedDate: rec.completed_date || '',
       }));
       // Build color map
       calColorIdx = 0; calColors = {};
@@ -1792,20 +1771,20 @@
 
   async function calToggle(idx) {
     const ev = calEvents[idx];
-    if (!ev || !ev.airtableId) return;
+    if (!ev || !ev.supaId) return;
     const wasDone = ev.status === 'Done';
     ev.status = wasDone ? '' : 'Done';
     ev.completedDate = wasDone ? '' : new Date().toISOString();
     calRender();
-    // Write to Airtable
+    // Write to Supabase
     try {
-      const fields = wasDone
-        ? { Status: '', 'Completed By': '', 'Completed Date': null }
-        : { Status: 'Done', 'Completed By': 'Morris', 'Completed Date': new Date().toISOString() };
-      await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}`, {
+      const body = wasDone
+        ? { status: '', completed_by: '', completed_date: null }
+        : { status: 'Done', completed_by: 'Morris', completed_date: new Date().toISOString() };
+      await fetch(`${SUPABASE_URL}/rest/v1/calendar_tasks?id=eq.${ev.supaId}`, {
         method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${CAL_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: [{ id: ev.airtableId, fields }] })
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
       });
     } catch (e) { console.error('Toggle error:', e); }
   }
@@ -1822,7 +1801,7 @@
 
   async function calRefresh() {
     document.getElementById('calSyncText').textContent = 'Refreshing…';
-    await calFetchAT();
+    await calFetchData();
     calBuildFilters();
     calRender();
   }
@@ -1830,10 +1809,10 @@
   async function calInit() {
     if (calInited) return;
     calInited = true;
-    const ok = await calFetchAT();
+    const ok = await calFetchData();
     if (ok) { calBuildFilters(); calRender(); }
     else {
-      document.getElementById('calGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim);">Could not connect to Airtable. Check your API token.</div>';
+      document.getElementById('calGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim);">Could not load calendar data. Check Supabase connection.</div>';
     }
   }
 
@@ -1892,7 +1871,7 @@
     const ev = calEvents[idx];
     if (!ev) return;
     document.getElementById('crudModalTitle').textContent = 'Edit Task';
-    document.getElementById('crudId').value = ev.airtableId || '';
+    document.getElementById('crudId').value = ev.supaId || '';
     document.getElementById('crudDay').value = ev.day;
     document.getElementById('crudCadence').value = ev.cadence;
     document.getElementById('crudType').value = ev.type;
@@ -1914,34 +1893,34 @@
       prop = prompt('Enter new property name:');
       if (!prop) return;
     }
-    const fields = {
-      'Day of Month': document.getElementById('crudDay').value,
-      'Cadence': document.getElementById('crudCadence').value,
-      'Property': prop,
-      'Payment Type': document.getElementById('crudType').value,
-      'Description': document.getElementById('crudDesc').value,
-      'Owner': document.getElementById('crudOwner').value,
+    const body = {
+      day_of_month: parseInt(document.getElementById('crudDay').value) || 1,
+      cadence: document.getElementById('crudCadence').value,
+      property: prop,
+      payment_type: document.getElementById('crudType').value,
+      description: document.getElementById('crudDesc').value,
+      owner: document.getElementById('crudOwner').value,
     };
     const recordId = document.getElementById('crudId').value;
     try {
       if (recordId) {
         // Update existing
-        await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}`, {
+        await fetch(`${SUPABASE_URL}/rest/v1/calendar_tasks?id=eq.${recordId}`, {
           method: 'PATCH',
-          headers: { 'Authorization': `Bearer ${CAL_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ records: [{ id: recordId, fields }] })
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
         });
       } else {
         // Create new
-        await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}`, {
+        await fetch(`${SUPABASE_URL}/rest/v1/calendar_tasks`, {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${CAL_TOKEN}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ records: [{ fields }] })
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
         });
       }
       calCrudClose();
       // Refresh data
-      await calFetchAT();
+      await calFetchData();
       calBuildFilters();
       calCrudRender();
     } catch (e) {
@@ -1951,14 +1930,14 @@
 
   async function calCrudDelete(idx) {
     const ev = calEvents[idx];
-    if (!ev || !ev.airtableId) return;
+    if (!ev || !ev.supaId) return;
     if (!confirm(`Delete task: "${ev.task || ev.property + ' - ' + ev.type}"?`)) return;
     try {
-      await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}?records[]=${ev.airtableId}`, {
+      await fetch(`${SUPABASE_URL}/rest/v1/calendar_tasks?id=eq.${ev.supaId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${CAL_TOKEN}` }
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
       });
-      await calFetchAT();
+      await calFetchData();
       calBuildFilters();
       calCrudRender();
     } catch (e) {
@@ -1970,8 +1949,7 @@
   // ── CHAT WIDGET ──
   // ══════════════════════════════════════
   const CLAUDE_KEY = '__CLAUDE_API_KEY__';
-  const CHAT_AT_TOKEN = '__AIRTABLE_TOKEN__';
-  const CHAT_BASE = 'app27jUbqonTIiHXY';
+  // Chat uses Supabase for data queries
   let chatOpen = false, chatBusy = false;
   let chatHistory = [];
 
@@ -2022,40 +2000,15 @@
 
   const CHAT_TOOLS = [
     {
-      name: 'airtable_list_records',
-      description: 'List records from an Airtable table. Tables: Calendar Tasks (tblxLACz3bkSxnMyt) - accounting deadlines; Properties (tbl63t0DN1HNhImZ6) - property metadata; Users (tblyZezYKlxEOW9M5) - team members. All in base app27jUbqonTIiHXY.',
+      name: 'supabase_query',
+      description: 'Query data from Supabase tables. Tables: calendar_tasks (accounting deadlines - columns: day_of_month, cadence, property, payment_type, description, owner, status), properties (property metadata - columns: property_name, property_type, address, city, state, units, sqft, entity_name, acquisition_date, acquisition_price, current_valuation, status, notes), app_users (team members - columns: display_name, email, role, phone, status).',
       input_schema: {
         type: 'object',
         properties: {
-          tableId: { type: 'string', description: 'Table ID (tblxLACz3bkSxnMyt, tbl63t0DN1HNhImZ6, or tblyZezYKlxEOW9M5)' },
-          maxRecords: { type: 'number', description: 'Max records to return (default 50)' }
+          table: { type: 'string', description: 'Table name (calendar_tasks, properties, or app_users)' },
+          query: { type: 'string', description: 'PostgREST query string, e.g. ?property=eq.Paramus Plaza&order=day_of_month.asc' }
         },
-        required: ['tableId']
-      }
-    },
-    {
-      name: 'airtable_update_record',
-      description: 'Update a record in Airtable. Provide the table ID, record ID, and fields to update.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          tableId: { type: 'string', description: 'Table ID' },
-          recordId: { type: 'string', description: 'Record ID (starts with rec)' },
-          fields: { type: 'object', description: 'Fields to update as key-value pairs' }
-        },
-        required: ['tableId', 'recordId', 'fields']
-      }
-    },
-    {
-      name: 'airtable_create_record',
-      description: 'Create a new record in an Airtable table.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          tableId: { type: 'string', description: 'Table ID' },
-          fields: { type: 'object', description: 'Fields for the new record' }
-        },
-        required: ['tableId', 'fields']
+        required: ['table']
       }
     },
     {
@@ -2072,31 +2025,13 @@
   ];
 
   async function chatExecTool(name, input) {
-    if (name === 'airtable_list_records') {
-      const max = input.maxRecords || 50;
-      const r = await fetch(`https://api.airtable.com/v0/${CHAT_BASE}/${input.tableId}?pageSize=${max}`, {
-        headers: { 'Authorization': `Bearer ${CHAT_AT_TOKEN}` }
-      });
-      const data = await r.json();
-      return JSON.stringify(data.records?.map(rec => ({ id: rec.id, ...rec.fields })) || data);
-    }
-    if (name === 'airtable_update_record') {
-      const r = await fetch(`https://api.airtable.com/v0/${CHAT_BASE}/${input.tableId}`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${CHAT_AT_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: [{ id: input.recordId, fields: input.fields }] })
-      });
-      const data = await r.json();
-      return JSON.stringify(data);
-    }
-    if (name === 'airtable_create_record') {
-      const r = await fetch(`https://api.airtable.com/v0/${CHAT_BASE}/${input.tableId}`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${CHAT_AT_TOKEN}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ records: [{ fields: input.fields }] })
-      });
-      const data = await r.json();
-      return JSON.stringify(data);
+    if (name === 'supabase_query') {
+      try {
+        const rows = await supaFetch(input.table, input.query || '');
+        return JSON.stringify(rows);
+      } catch(e) {
+        return 'Query error: ' + e.message;
+      }
     }
     if (name === 'get_budget_summary') {
       if (!bgtData) { try { await fbInit(); } catch(e) { return 'Budget data not available'; } }
@@ -2115,11 +2050,11 @@
     depth = depth || 0;
     if (depth > 5) return 'Too many tool calls, stopping.';
 
-    const sysPrompt = `You are First Mile Capital's AI assistant embedded in the admin portal. You help Morris query and manage property data in Airtable. Be concise and helpful. When asked to look up data, use the tools. Format responses clearly. For dollar amounts use commas. The Airtable base has these tables:
-- Calendar Tasks (tblxLACz3bkSxnMyt): fields are Day of Month, Cadence, Property, Payment Type, Description, Owner, Status, Completed By, Completed Date
-- Properties (tbl63t0DN1HNhImZ6): fields are Property Name, Property Type, Address, City, State, Units, Square Footage, Entity Name, Acquisition Date, Acquisition Price, Current Valuation, Status, Notes
-- Users (tblyZezYKlxEOW9M5): fields are Full Name, Email, Role, Phone, Status
-Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), Paramus Plaza (153,494 SF), 575 Broadway (178,898 SF), 1700 East Putnam (183,190 SF), 340 Mount Kemble (423,261 SF).`;
+    const sysPrompt = `You are First Mile Capital's AI assistant embedded in the admin portal. You help Morris query and manage property data. Be concise and helpful. When asked to look up data, use the tools. Format responses clearly. For dollar amounts use commas. Supabase tables:
+- calendar_tasks: columns are day_of_month, cadence, property, payment_type, description, owner, status, completed_by, completed_date
+- properties: columns are property_name, property_type, address, city, state, units, sqft, entity_name, acquisition_date, acquisition_price, current_valuation, status, notes
+- app_users: columns are display_name, email, role, phone, status
+Use PostgREST query syntax (e.g. ?property=eq.Paramus Plaza). Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), Paramus Plaza (153,494 SF), 575 Broadway (178,898 SF), 1700 East Putnam (183,190 SF), 340 Mount Kemble (423,261 SF).`;
 
     const body = {
       model: 'claude-sonnet-4-20250514',
@@ -2252,6 +2187,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
 
   // Helper: build year data (summaryRows, detailRows, totals) from raw Supabase rows for one property+year
   let fbReserveDraws = {}; // { propertyId: [{ year, month, reserve_type, draw_amount }] }
+  let fbBsAccountNames = {}; // { propertyId: { bsCode: accountName } } — populated from balance_sheet_items
 
   function fbBuildYearData(rows, gl, glLookup, propertyId, year) {
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -2402,7 +2338,8 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         reserveDrawRows.push(drawHeader);
         let drawTotalMonths = {};
         MONTHS.forEach(m => { drawTotalMonths[m] = 0; });
-        const typeLabels = { 'ti_reserve': 'TI Reserve Draw', 'base_bldg_reserve': 'Base Bldg Reserve Draw', 'repair_reserve': 'Repair Reserve Draw', 'misc_reserve': 'Misc Reserve Draw' };
+        // Resolve account names from balance sheet data (bs_code → name)
+        const propBsNames = fbBsAccountNames[propertyId] || {};
         Object.keys(byType).forEach(type => {
           const drawMonths = {};
           let drawTotal = 0;
@@ -2411,7 +2348,9 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
             drawTotal += drawMonths[m];
             drawTotalMonths[m] += drawMonths[m];
           });
-          reserveDrawRows.push({ label: typeLabels[type] || type, months: drawMonths, budget26: drawTotal, _isReserveDraw: true });
+          const acctInfo = propBsNames[type];
+          const label = acctInfo ? `${acctInfo.name} Draw` : `Reserve Draw (${type})`;
+          reserveDrawRows.push({ label, months: drawMonths, budget26: drawTotal, _isReserveDraw: true });
         });
         const drawTotalAnnual = MONTHS.reduce((s, m) => s + drawTotalMonths[m], 0);
         reserveDrawRows.push({ label: 'TOTAL RESERVE DRAWS', isTotal: true, months: drawTotalMonths, budget26: drawTotalAnnual, _isReserveDraw: true });
@@ -2508,6 +2447,17 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
           });
           console.log('Reserve draws loaded:', draws.length);
         } catch(e) { console.warn('Reserve draws not loaded:', e); }
+
+        // Load balance sheet account names for reserve draw labels & balance display
+        try {
+          const bsItems = await supaFetch('balance_sheet_items', '?is_header=eq.false&is_total=eq.false&order=sort_order.asc');
+          fbBsAccountNames = {};
+          bsItems.forEach(item => {
+            if (!fbBsAccountNames[item.property_id]) fbBsAccountNames[item.property_id] = {};
+            fbBsAccountNames[item.property_id][item.bs_code] = { name: item.account_name, amount: item.amount, section: item.account_section };
+          });
+          console.log('Balance sheet items loaded for', Object.keys(fbBsAccountNames).length, 'properties');
+        } catch(e) { console.warn('Balance sheet items not loaded:', e); }
 
         // Combine both sources
         const allRows = [...budgetRows, ...actualsRows];
@@ -3219,6 +3169,89 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     });
 
     html += '</tbody></table></div>';
+
+    // ── Balance Sheet Summary (Cash & Reserve Accounts) ──
+    const propId = p.id || (bgtData[fbSelectedIdx] && bgtData[fbSelectedIdx].id);
+    const propBs = fbBsAccountNames[propId] || {};
+    const bsEntries = Object.entries(propBs);
+    if (bsEntries.length) {
+      // Cash accounts (section=cash) and Reserve/Escrow accounts (section=escrow)
+      const cashAccounts = bsEntries.filter(([code, info]) => info.section === 'cash' && info.amount);
+      const escrowAccounts = bsEntries.filter(([code, info]) => info.section === 'escrow' && info.amount);
+
+      // Compute expected draws per reserve account for the selected year
+      const propDraws = fbReserveDraws[propId] || [];
+      const yearDraws = propDraws.filter(d => d.year === yr);
+      const drawsByCode = {};
+      yearDraws.forEach(d => { drawsByCode[d.reserve_type] = (drawsByCode[d.reserve_type] || 0) + d.draw_amount; });
+
+      // Compute net distributable cash (distRow)
+      const distRowData = allRows.find(r => r.label === 'NET CASH AVAILABLE FOR DISTRIBUTION');
+      const distAnnual = distRowData ? annualOf(distRowData) : 0;
+
+      html += '<div style="margin-top:20px;border:1px solid var(--border);border-radius:12px;background:var(--surface);overflow:hidden">';
+      html += '<div style="padding:12px 16px;background:var(--surface2);font-weight:700;font-size:12px;border-bottom:1px solid var(--border)">Balance Sheet Summary</div>';
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+      html += '<thead><tr style="background:var(--surface2);font-size:10px;text-transform:uppercase;color:var(--text-dim)">';
+      html += '<th style="padding:8px 12px;text-align:left">Account</th>';
+      html += '<th style="padding:8px 12px;text-align:left;width:60px">GL</th>';
+      html += '<th style="padding:8px 12px;text-align:right">Beginning Balance</th>';
+      html += '<th style="padding:8px 12px;text-align:right">Draws / Changes</th>';
+      html += '<th style="padding:8px 12px;text-align:right">Expected Ending</th>';
+      html += '</tr></thead><tbody>';
+
+      // Cash section
+      if (cashAccounts.length) {
+        html += '<tr style="background:var(--surface2)"><td colspan="5" style="padding:8px 12px;font-weight:700;font-size:11px">Cash Accounts</td></tr>';
+        let cashTotal = 0;
+        cashAccounts.forEach(([code, info]) => {
+          const ending = info.amount + distAnnual / cashAccounts.length; // simplified: distribute among cash accounts
+          cashTotal += info.amount;
+          html += `<tr style="border-bottom:1px solid var(--border)">`;
+          html += `<td style="padding:6px 12px">${info.name}</td>`;
+          html += `<td style="padding:6px 12px;color:var(--text-dim);font-family:monospace;font-size:10px">${code}</td>`;
+          html += `<td style="padding:6px 12px;text-align:right;font-variant-numeric:tabular-nums">${fbFmtFull(info.amount)}</td>`;
+          html += `<td style="padding:6px 12px;text-align:right;color:var(--text-dim)">—</td>`;
+          html += `<td style="padding:6px 12px;text-align:right;font-variant-numeric:tabular-nums">—</td>`;
+          html += '</tr>';
+        });
+        // Cash total with distribution impact
+        html += `<tr style="border-bottom:2px solid var(--border);font-weight:600">`;
+        html += `<td style="padding:8px 12px" colspan="2">Total Cash</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums">${fbFmtFull(cashTotal)}</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;color:${distAnnual >= 0 ? 'var(--green)' : 'var(--red)'}">Net Dist: ${fbFmtFull(distAnnual)}</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700">${fbFmtFull(cashTotal + distAnnual)}</td>`;
+        html += '</tr>';
+      }
+
+      // Escrow / Reserve section
+      if (escrowAccounts.length) {
+        html += '<tr style="background:var(--surface2)"><td colspan="5" style="padding:8px 12px;font-weight:700;font-size:11px">Reserve / Escrow Accounts</td></tr>';
+        let reserveBeginning = 0, reserveDrawn = 0;
+        escrowAccounts.forEach(([code, info]) => {
+          const drawn = drawsByCode[code] || 0;
+          const ending = info.amount - drawn;
+          reserveBeginning += info.amount;
+          reserveDrawn += drawn;
+          html += `<tr style="border-bottom:1px solid var(--border)">`;
+          html += `<td style="padding:6px 12px">${info.name}</td>`;
+          html += `<td style="padding:6px 12px;color:var(--text-dim);font-family:monospace;font-size:10px">${code}</td>`;
+          html += `<td style="padding:6px 12px;text-align:right;font-variant-numeric:tabular-nums">${fbFmtFull(info.amount)}</td>`;
+          html += `<td style="padding:6px 12px;text-align:right;color:${drawn ? 'var(--red)' : 'var(--text-dim)'};font-variant-numeric:tabular-nums">${drawn ? '(' + fbFmtFull(drawn) + ')' : '—'}</td>`;
+          html += `<td style="padding:6px 12px;text-align:right;font-variant-numeric:tabular-nums">${fbFmtFull(ending)}</td>`;
+          html += '</tr>';
+        });
+        html += `<tr style="border-top:2px solid var(--border);font-weight:600">`;
+        html += `<td style="padding:8px 12px" colspan="2">Total Reserves</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums">${fbFmtFull(reserveBeginning)}</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;color:${reserveDrawn ? 'var(--red)' : 'var(--text-dim)'};font-variant-numeric:tabular-nums">${reserveDrawn ? '(' + fbFmtFull(reserveDrawn) + ')' : '—'}</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700">${fbFmtFull(reserveBeginning - reserveDrawn)}</td>`;
+        html += '</tr>';
+      }
+
+      html += '</tbody></table></div>';
+    }
+
     body.innerHTML = html;
   }
 
@@ -3426,40 +3459,9 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
 
     html += '</tbody></table></div>';
 
-    // Reserve Draws section (only for capital tab)
+    // Reserve Draws section (only for capital tab) — render async after main table
     if (sectionKey === 'capital') {
-      const propId = p.id || (bgtData[fbSelectedIdx] && bgtData[fbSelectedIdx].id);
-      const yr = fbSelectedYear;
-      const propDraws = (fbReserveDraws[propId] || []).filter(d => d.year === yr);
-
-      html += '<div style="margin-top:16px;border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden">';
-      html += '<div style="padding:12px 16px;background:var(--surface2);font-weight:700;font-size:12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)">';
-      html += '<span>Reserve Draws (Credits to Distributable Cash)</span>';
-      html += `<button onclick="fbShowAddDraw()" style="padding:4px 12px;background:var(--accent);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">+ Add Draw</button>`;
-      html += '</div>';
-
-      if (propDraws.length) {
-        html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
-        html += '<thead><tr style="background:var(--surface2);font-size:10px;text-transform:uppercase;color:var(--text-dim)">';
-        html += '<th style="padding:6px 12px;text-align:left">Reserve Type</th><th style="padding:6px 12px;text-align:left">Month</th><th style="padding:6px 12px;text-align:right">Amount</th><th style="padding:6px 12px;text-align:left">Description</th><th style="padding:6px 12px;width:40px"></th></tr></thead><tbody>';
-        const typeLabels = { ti_reserve: 'TI & Leasing Reserve', base_bldg_reserve: 'Base Bldg / Repair Reserve', repair_reserve: 'Repair Reserve', misc_reserve: 'Misc Reserve' };
-        let drawTotal = 0;
-        propDraws.forEach(d => {
-          drawTotal += d.draw_amount;
-          html += `<tr style="border-bottom:1px solid var(--border)">`;
-          html += `<td style="padding:6px 12px">${typeLabels[d.reserve_type] || d.reserve_type}</td>`;
-          html += `<td style="padding:6px 12px">${months[d.month - 1]} ${d.year}</td>`;
-          html += `<td style="padding:6px 12px;text-align:right;color:var(--green);font-weight:600">${fbFmtFull(d.draw_amount)}</td>`;
-          html += `<td style="padding:6px 12px;color:var(--text-dim);font-size:11px">${d.description || ''}</td>`;
-          html += `<td style="padding:6px 12px"><button onclick="fbDeleteDraw(${d.id})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px" title="Delete">&times;</button></td>`;
-          html += '</tr>';
-        });
-        html += `<tr style="border-top:2px solid var(--border);font-weight:700"><td style="padding:8px 12px">Total Draws</td><td></td><td style="padding:8px 12px;text-align:right;color:var(--green)">${fbFmtFull(drawTotal)}</td><td></td><td></td></tr>`;
-        html += '</tbody></table>';
-      } else {
-        html += '<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px">No reserve draws recorded for ' + yr + '. Click "Add Draw" to record a draw from reserves.</div>';
-      }
-      html += '</div>';
+      html += '<div id="fbReserveDrawsSection" style="margin-top:16px"><div style="text-align:center;padding:20px;color:var(--text-dim);font-size:12px">Loading reserve accounts...</div></div>';
     }
 
     body.innerHTML = html;
@@ -3474,10 +3476,120 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       }
       document.querySelectorAll(`[data-cat-group="${id}"]`).forEach(r => r.classList.add('fb-cat-row-hidden'));
     });
+
+    // Load reserve accounts async for capital tab
+    if (sectionKey === 'capital') {
+      fbRenderReserveDraws(p);
+    }
   }
 
   // ── Reserve Draw CRUD ──
-  function fbShowAddDraw() {
+  let fbReserveAccounts = []; // populated per-property from balance_sheet_items
+
+  async function fbRenderReserveDraws(p) {
+    const container = document.getElementById('fbReserveDrawsSection');
+    if (!container) return;
+    const propId = p.id || (bgtData[fbSelectedIdx] && bgtData[fbSelectedIdx].id);
+    const yr = fbSelectedYear;
+
+    // Fetch this property's escrow/reserve accounts from balance_sheet_items
+    try {
+      const bsItems = await supaFetch('balance_sheet_items', `?property_id=eq.${propId}&account_section=eq.escrow&is_header=eq.false&is_total=eq.false&order=sort_order.asc`);
+      fbReserveAccounts = bsItems.filter(a => a.amount > 0); // only accounts with a balance
+    } catch(e) {
+      console.warn('Could not load reserve accounts:', e);
+      fbReserveAccounts = [];
+    }
+
+    const propDraws = (fbReserveDraws[propId] || []).filter(d => d.year === yr);
+
+    // Determine if draws are allowed (only active/planning years, not historical)
+    const yrCfg = FB_YEARS.find(y => y.year === yr);
+    const drawsAllowed = yrCfg && yrCfg.status !== 'historical';
+
+    // Compute drawn amounts per reserve (by bs_code stored as reserve_type)
+    const drawnByAccount = {};
+    propDraws.forEach(d => {
+      drawnByAccount[d.reserve_type] = (drawnByAccount[d.reserve_type] || 0) + d.draw_amount;
+    });
+
+    let html = '<div style="border:1px solid var(--border);border-radius:10px;background:var(--surface);overflow:hidden">';
+    html += '<div style="padding:12px 16px;background:var(--surface2);font-weight:700;font-size:12px;border-bottom:1px solid var(--border)">Reserve Draws (Credits to Distributable Cash)</div>';
+
+    if (!fbReserveAccounts.length) {
+      html += '<div style="padding:20px;text-align:center;color:var(--text-dim);font-size:12px">No reserve accounts found on the balance sheet for this property.</div>';
+    } else {
+      html += '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+      html += '<thead><tr style="background:var(--surface2);font-size:10px;text-transform:uppercase;color:var(--text-dim)">';
+      html += '<th style="padding:8px 12px;text-align:left">Reserve Account</th>';
+      html += '<th style="padding:8px 12px;text-align:left;width:60px">GL</th>';
+      html += '<th style="padding:8px 12px;text-align:right">Beginning Balance</th>';
+      html += '<th style="padding:8px 12px;text-align:right">Drawn</th>';
+      html += '<th style="padding:8px 12px;text-align:right">Available</th>';
+      html += '<th style="padding:8px 12px;width:100px"></th>';
+      html += '</tr></thead><tbody>';
+
+      let totalBeginning = 0, totalDrawn = 0;
+      fbReserveAccounts.forEach(acct => {
+        const beginning = acct.amount;
+        const drawn = drawnByAccount[acct.bs_code] || 0;
+        const available = beginning - drawn;
+        totalBeginning += beginning;
+        totalDrawn += drawn;
+
+        html += `<tr style="border-bottom:1px solid var(--border)">`;
+        html += `<td style="padding:8px 12px;font-weight:500">${acct.account_name}</td>`;
+        html += `<td style="padding:8px 12px;color:var(--text-dim);font-family:monospace;font-size:10px">${acct.bs_code}</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums">${fbFmtFull(beginning)}</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;color:var(--green);font-weight:600;font-variant-numeric:tabular-nums">${drawn ? fbFmtFull(drawn) : '—'}</td>`;
+        html += `<td style="padding:8px 12px;text-align:right;font-variant-numeric:tabular-nums;color:${available <= 0 ? 'var(--text-dim)' : 'var(--text)'}">${fbFmtFull(available)}</td>`;
+        html += `<td style="padding:8px 12px;text-align:right">`;
+        if (!drawsAllowed) {
+          // Historical year — no draw actions
+        } else if (available > 0) {
+          html += `<button onclick="fbShowAddDraw('${acct.bs_code}', '${acct.account_name.replace(/'/g,"\\'")}', ${available})" style="padding:3px 10px;background:var(--accent);color:#fff;border:none;border-radius:5px;font-size:10px;font-weight:600;cursor:pointer">+ Draw</button>`;
+        } else {
+          html += '<span style="font-size:10px;color:var(--text-dim)">Fully drawn</span>';
+        }
+        html += `</td></tr>`;
+      });
+
+      // Total row
+      html += `<tr style="border-top:2px solid var(--border);font-weight:700">`;
+      html += `<td style="padding:10px 12px" colspan="2">Total</td>`;
+      html += `<td style="padding:10px 12px;text-align:right;font-variant-numeric:tabular-nums">${fbFmtFull(totalBeginning)}</td>`;
+      html += `<td style="padding:10px 12px;text-align:right;color:var(--green);font-variant-numeric:tabular-nums">${totalDrawn ? fbFmtFull(totalDrawn) : '—'}</td>`;
+      html += `<td style="padding:10px 12px;text-align:right;font-variant-numeric:tabular-nums">${fbFmtFull(totalBeginning - totalDrawn)}</td>`;
+      html += `<td></td></tr>`;
+      html += '</tbody></table>';
+    }
+
+    // Show individual draw entries if any
+    if (propDraws.length) {
+      html += '<div style="border-top:1px solid var(--border);padding:8px 12px;background:var(--surface2);font-size:11px;font-weight:600;color:var(--text-dim)">Draw History</div>';
+      html += '<table style="width:100%;border-collapse:collapse;font-size:11px">';
+      propDraws.forEach(d => {
+        const acct = fbReserveAccounts.find(a => a.bs_code === d.reserve_type);
+        html += `<tr style="border-bottom:1px solid rgba(0,0,0,.03)">`;
+        html += `<td style="padding:5px 12px">${acct ? acct.account_name : d.reserve_type}</td>`;
+        html += `<td style="padding:5px 12px">${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.month-1]} ${d.year}</td>`;
+        html += `<td style="padding:5px 12px;text-align:right;color:var(--green);font-weight:600">${fbFmtFull(d.draw_amount)}</td>`;
+        html += `<td style="padding:5px 12px;color:var(--text-dim)">${d.description || ''}</td>`;
+        if (drawsAllowed) {
+          html += `<td style="padding:5px 12px;width:30px"><button onclick="fbDeleteDraw(${d.id})" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:13px" title="Delete">&times;</button></td>`;
+        } else {
+          html += '<td></td>';
+        }
+        html += '</tr>';
+      });
+      html += '</table>';
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function fbShowAddDraw(bsCode, accountName, maxAmount) {
     const propId = bgtData[fbSelectedIdx] && bgtData[fbSelectedIdx].id;
     const yr = fbSelectedYear;
     let modal = document.getElementById('drawModal');
@@ -3487,38 +3599,48 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     modal.className = 'crud-overlay show';
     modal.innerHTML = `
       <div class="crud-modal" style="max-width:400px">
-        <h3 style="margin-bottom:16px;font-size:16px">Add Reserve Draw</h3>
-        <label style="display:block;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Reserve Type</label>
-        <select id="drawType" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:13px">
-          <option value="ti_reserve">TI & Leasing Reserve</option>
-          <option value="base_bldg_reserve">Base Bldg / Repair Reserve</option>
-          <option value="repair_reserve">Repair Reserve</option>
-          <option value="misc_reserve">Misc Reserve</option>
-        </select>
+        <h3 style="margin-bottom:4px;font-size:16px">Draw from Reserve</h3>
+        <p style="margin-bottom:16px;font-size:12px;color:var(--text-dim)">${accountName} — Available: <strong style="color:var(--green)">${fbFmtFull(maxAmount)}</strong></p>
         <label style="display:block;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Month</label>
         <select id="drawMonth" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:13px">
           ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((m,i) => '<option value="'+(i+1)+'">'+m+' '+yr+'</option>').join('')}
         </select>
         <label style="display:block;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Draw Amount ($)</label>
-        <input type="number" id="drawAmount" step="0.01" min="0" placeholder="0.00" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:12px;font-size:13px">
+        <input type="number" id="drawAmount" step="0.01" min="0" max="${maxAmount}" placeholder="0.00" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;font-size:13px">
+        <div id="drawAmountError" style="font-size:11px;color:var(--red);margin-bottom:8px;display:none">Amount exceeds available balance</div>
         <label style="display:block;font-size:11px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px">Description (optional)</label>
         <input type="text" id="drawDesc" placeholder="e.g. Suite 200 TI draw" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;margin-bottom:16px;font-size:13px">
         <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end">
           <button onclick="document.getElementById('drawModal').remove()" style="padding:8px 16px;border:1px solid var(--border);border-radius:6px;background:var(--surface);cursor:pointer;font-size:12px">Cancel</button>
-          <button onclick="fbSaveDraw()" style="padding:8px 16px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-weight:600">Save Draw</button>
+          <button id="drawSaveBtn" onclick="fbSaveDraw('${bsCode}', ${maxAmount})" style="padding:8px 16px;border:none;border-radius:6px;background:var(--accent);color:#fff;cursor:pointer;font-size:12px;font-weight:600">Save Draw</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
+
+    // Live validation on amount
+    document.getElementById('drawAmount').addEventListener('input', function() {
+      const v = parseFloat(this.value) || 0;
+      const err = document.getElementById('drawAmountError');
+      const btn = document.getElementById('drawSaveBtn');
+      if (v > maxAmount) {
+        err.style.display = 'block';
+        btn.disabled = true;
+        btn.style.opacity = '0.5';
+      } else {
+        err.style.display = 'none';
+        btn.disabled = false;
+        btn.style.opacity = '1';
+      }
+    });
   }
 
-  async function fbSaveDraw() {
+  async function fbSaveDraw(bsCode, maxAmount) {
     const propId = bgtData[fbSelectedIdx] && bgtData[fbSelectedIdx].id;
     const yr = fbSelectedYear;
-    const type = document.getElementById('drawType').value;
     const month = parseInt(document.getElementById('drawMonth').value);
     const amount = parseFloat(document.getElementById('drawAmount').value) || 0;
     const desc = document.getElementById('drawDesc').value.trim();
-    if (!amount) return;
+    if (!amount || amount > maxAmount) return;
 
     try {
       const resp = await fetch(`${SUPABASE_URL}/rest/v1/reserve_draws`, {
@@ -3529,15 +3651,13 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
           'Content-Type': 'application/json',
           'Prefer': 'return=representation'
         },
-        body: JSON.stringify({ property_id: propId, year: yr, month, reserve_type: type, draw_amount: amount, description: desc || null })
+        body: JSON.stringify({ property_id: propId, year: yr, month, reserve_type: bsCode, draw_amount: amount, description: desc || null })
       });
       if (!resp.ok) throw new Error(await resp.text());
       const [newDraw] = await resp.json();
-      // Update local cache
       if (!fbReserveDraws[propId]) fbReserveDraws[propId] = [];
       fbReserveDraws[propId].push(newDraw);
       document.getElementById('drawModal').remove();
-      // Re-render
       fbRenderDetail();
     } catch(e) {
       console.error('Save draw error:', e);
@@ -3556,7 +3676,6 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         }
       });
       if (!resp.ok) throw new Error(await resp.text());
-      // Remove from local cache
       for (const pid of Object.keys(fbReserveDraws)) {
         fbReserveDraws[pid] = fbReserveDraws[pid].filter(d => d.id !== id);
       }

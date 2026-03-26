@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head><title>Migrate Calendar: Airtable → Supabase</title></head>
+<body style="font-family:monospace;padding:20px;max-width:800px;margin:auto">
+<h2>Calendar Migration: Airtable → Supabase</h2>
+<p>This one-time tool fetches all Calendar Tasks from Airtable and inserts them into Supabase.</p>
+<label>Airtable PAT: <input id="atToken" style="width:400px" placeholder="pat..."></label><br><br>
+<label>Supabase URL: <input id="sbUrl" style="width:400px" placeholder="https://xxx.supabase.co"></label><br><br>
+<label>Supabase Key: <input id="sbKey" style="width:400px" placeholder="eyJ..."></label><br><br>
+<button onclick="runMigration()" style="padding:10px 20px;font-size:16px">Run Migration</button>
+<pre id="log" style="background:#111;color:#0f0;padding:16px;margin-top:16px;max-height:500px;overflow:auto"></pre>
+<script>
+const AT_BASE = 'app27jUbqonTIiHXY';
+const AT_TABLE = 'Calendar Tasks';
+
+function log(msg) { document.getElementById('log').textContent += msg + '\n'; }
+
+async function runMigration() {
+  const atToken = document.getElementById('atToken').value.trim();
+  const sbUrl = document.getElementById('sbUrl').value.trim();
+  const sbKey = document.getElementById('sbKey').value.trim();
+  if (!atToken || !sbUrl || !sbKey) { alert('Fill in all fields'); return; }
+
+  log('Fetching from Airtable...');
+  let allRecords = [];
+  let offset = null;
+  do {
+    const url = `https://api.airtable.com/v0/${AT_BASE}/${encodeURIComponent(AT_TABLE)}?pageSize=100${offset ? '&offset=' + offset : ''}`;
+    const r = await fetch(url, { headers: { 'Authorization': `Bearer ${atToken}` } });
+    const data = await r.json();
+    if (data.error) { log('Airtable error: ' + JSON.stringify(data.error)); return; }
+    allRecords.push(...data.records);
+    offset = data.offset || null;
+  } while (offset);
+  log(`Fetched ${allRecords.length} records from Airtable`);
+
+  // Transform to Supabase format
+  const rows = allRecords.map(rec => {
+    const f = rec.fields;
+    const dayStr = String(f['Day of Month'] || '1');
+    const dayMatch = dayStr.match(/(\d+)/);
+    return {
+      day_of_month: parseInt(dayMatch ? dayMatch[1] : '1'),
+      cadence: (f['Cadence']?.name || f['Cadence'] || 'Monthly'),
+      property: (f['Property']?.name || f['Property'] || ''),
+      payment_type: (f['Payment Type']?.name || f['Payment Type'] || ''),
+      description: (f['Description'] || ''),
+      owner: (f['Owner']?.name || f['Owner'] || ''),
+      status: (f['Status']?.name || f['Status'] || ''),
+      completed_by: (f['Completed By'] || ''),
+      completed_date: f['Completed Date'] || null,
+    };
+  });
+
+  log('Inserting into Supabase...');
+  // Insert in batches of 50
+  for (let i = 0; i < rows.length; i += 50) {
+    const batch = rows.slice(i, i + 50);
+    const r = await fetch(`${sbUrl}/rest/v1/calendar_tasks`, {
+      method: 'POST',
+      headers: {
+        'apikey': sbKey,
+        'Authorization': `Bearer ${sbKey}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=representation'
+      },
+      body: JSON.stringify(batch)
+    });
+    if (!r.ok) {
+      const err = await r.text();
+      log(`Error inserting batch ${i}: ${err}`);
+      return;
+    }
+    const inserted = await r.json();
+    log(`Inserted batch ${i}-${i + batch.length}: ${inserted.length} rows`);
+  }
+  log(`\nDone! ${rows.length} calendar tasks migrated to Supabase.`);
+}
+</script>
+</body>
+</html>
