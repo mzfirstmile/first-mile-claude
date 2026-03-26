@@ -1460,8 +1460,21 @@ function getInvField(r, key) { return r[key] !== undefined ? r[key] : null; }
 function getLiabField(r, key) { return r[key] !== undefined ? r[key] : null; }
 
 let bsProperties = []; // properties for linking to investments
-let propertyNOI = {};  // { propertyId -> annualNOI }
+let propertyNOI = {};  // { propertyId -> annualNOI } — received from parent via postMessage
 let propertyDebt = {}; // { propertyId -> totalDebt }
+
+// Listen for data from parent index.html
+window.addEventListener('message', function(e) {
+  if (!e.data || !e.data.type) return;
+  if (e.data.type === 'propertyNOI') {
+    propertyNOI = e.data.data;
+    console.log('Received NOI from parent:', propertyNOI);
+    if (bsInvestments.length) renderBalanceSheet();
+  }
+  if (e.data.type === 'refreshDashboard') {
+    loadData();
+  }
+});
 
 async function loadBalanceSheet() {
   try {
@@ -1477,39 +1490,6 @@ async function loadBalanceSheet() {
     // Build property lookup { id -> { name, valuation } }
     const propLookup = {};
     props.forEach(p => { propLookup[p.id] = { name: p.property_name, valuation: p.current_valuation }; });
-
-    // Fetch budget line items for 2026 with pagination (can be 6000+ rows)
-    let budgetItems = [];
-    let bOffset = 0;
-    const bPageSize = 1000;
-    while (true) {
-      const page = await supaFetch('budget_line_items', `?year=eq.2026&select=property_id,gl_code,amount&limit=${bPageSize}&offset=${bOffset}`);
-      budgetItems = budgetItems.concat(page);
-      if (page.length < bPageSize) break;
-      bOffset += bPageSize;
-    }
-    console.log('Balance sheet budget items loaded:', budgetItems.length);
-
-    // Compute NOI per property: Revenue (GL 4xxx) - |Expenses (GL 5xxx-6xxx)|
-    const propRevenue = {};
-    const propExpenses = {};
-    budgetItems.forEach(row => {
-      const gl = parseInt(row.gl_code) || 0;
-      const pid = row.property_id;
-      if (gl >= 4000 && gl < 5000) {
-        propRevenue[pid] = (propRevenue[pid] || 0) + (row.amount || 0);
-      } else if (gl >= 5000 && gl < 7000) {
-        propExpenses[pid] = (propExpenses[pid] || 0) + (row.amount || 0);
-      }
-    });
-    propertyNOI = {};
-    const allPropIds = new Set([...Object.keys(propRevenue), ...Object.keys(propExpenses)]);
-    allPropIds.forEach(pid => {
-      const rev = propRevenue[pid] || 0;
-      const exp = propExpenses[pid] || 0;
-      propertyNOI[pid] = rev - Math.abs(exp);
-    });
-    console.log('Property NOI:', Object.entries(propertyNOI).map(([k,v]) => `${k}: ${Math.round(v)}`));
 
     // Compute total debt (liabilities) per property from balance sheet items (bs_code 2xxx)
     propertyDebt = {};
@@ -1661,16 +1641,7 @@ function renderBalanceSheet() {
         ? `<span style="display:inline-block;font-size:9px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;">Linked</span>`
         : '';
       let valueNote = '';
-      if (inv.valueSource === 'caprate' && inv.valuationDetails) {
-        const d = inv.valuationDetails;
-        valueNote = `<div style="font-size:9px;color:var(--text-dim);margin-top:4px;line-height:1.5;">
-          NOI ${fmt(d.noi)} ÷ ${d.capRate}% = ${fmt(d.grossValue)}<br>
-          − Debt ${fmt(d.debt)} = ${fmt(d.netValue)}<br>
-          × ${ownershipDisplay} = <b>${fmt(d.equityValue)}</b>
-        </div>`;
-      } else if (inv.valueSource === 'property') {
-        valueNote = `<div style="font-size:9px;color:var(--text-dim);margin-top:2px;">${fmt(inv.propertyValuation)} × ${ownershipDisplay}</div>`;
-      } else if (inv.valueSource === 'equity') {
+      if (inv.valueSource === 'equity') {
         valueNote = `<div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Net equity (no valuation set)</div>`;
       }
       const editBtn = (inv.valueSource !== 'property' && inv.valueSource !== 'caprate')
@@ -1707,6 +1678,14 @@ function renderBalanceSheet() {
               </div>
             </div>
           </div>
+          <div class="bs-card-asset-row" style="margin-bottom:8px;">
+            <div>
+              <div class="bs-metric-label">Position Value</div>
+              <div class="bs-asset-value" id="av-${inv.id}">${fmt(inv.value)}</div>
+              ${valueNote}
+            </div>
+            ${editBtn}
+          </div>
           <div class="bs-card-metrics">
             <div class="bs-metric">
               <div class="bs-metric-label">Contributed</div>
@@ -1717,14 +1696,6 @@ function renderBalanceSheet() {
               <div class="bs-metric-value green">${fmt(inv.distributed)}</div>
             </div>
           </div>${capRateRow}
-          <div class="bs-card-asset-row">
-            <div>
-              <div class="bs-metric-label">Position Value</div>
-              <div class="bs-asset-value" id="av-${inv.id}">${fmt(inv.value)}</div>
-              ${valueNote}
-            </div>
-            ${editBtn}
-          </div>
         </div>`;
     }).join('');
   }
@@ -2098,12 +2069,7 @@ if (window.parent !== window) {
   const panel = document.getElementById('chatPanel');
   if (fab) fab.style.display = 'none';
   if (panel) panel.style.display = 'none';
-  // Listen for refresh from parent chat after recategorization
-  window.addEventListener('message', function(e) {
-    if (e.data && e.data.type === 'refreshDashboard' && typeof renderPeriodDashboard === 'function') {
-      loadData();
-    }
-  });
+  // refreshDashboard handled by global message listener above
 }
 </script>
 </body>

@@ -1407,7 +1407,22 @@
     if (view === 'financials') fbInit();
     if (view === 'exec') {
       const frame = document.getElementById('execFrame');
-      if (frame && !frame.src) frame.src = frame.dataset.src;
+      if (frame && !frame.src) {
+        frame.src = frame.dataset.src;
+        // Send NOI data once iframe loads
+        frame.onload = function() {
+          if (bgtData && bgtData.length) {
+            const noiMap = {};
+            bgtData.forEach(p => { noiMap[p.id] = p.noi; });
+            try { frame.contentWindow.postMessage({ type: 'propertyNOI', data: noiMap }, '*'); } catch(e) {}
+          }
+        };
+      } else if (frame && bgtData && bgtData.length) {
+        // Frame already loaded, send NOI now
+        const noiMap = {};
+        bgtData.forEach(p => { noiMap[p.id] = p.noi; });
+        try { frame.contentWindow.postMessage({ type: 'propertyNOI', data: noiMap }, '*'); } catch(e) {}
+      }
     }
   }
 
@@ -2588,6 +2603,14 @@ ACCOUNT CONTEXT:
         }
 
         bgtData.sort((a, b) => a.name.localeCompare(b.name));
+
+        // Send NOI data to exec iframe for investment valuations
+        const execFrame = document.getElementById('execFrame');
+        if (execFrame && execFrame.contentWindow) {
+          const noiMap = {};
+          bgtData.forEach(p => { noiMap[p.id] = p.noi; });
+          try { execFrame.contentWindow.postMessage({ type: 'propertyNOI', data: noiMap }, '*'); } catch(e) {}
+        }
       } catch (e) { console.error('Budget load error:', e); return; }
     }
     if (fbSelectedIdx < 0) fbRenderCards();
