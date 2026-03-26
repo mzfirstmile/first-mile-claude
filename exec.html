@@ -156,7 +156,7 @@
   .chat-fab:hover { transform:scale(1.08); }
   .chat-fab.hidden { display:none; }
 
-  .chat-panel { position:fixed; bottom:24px; right:24px; width:400px; height:520px; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.12); z-index:300; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel { position:fixed; bottom:24px; right:24px; width:480px; height:680px; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.12); z-index:300; display:none; flex-direction:column; overflow:hidden; }
   .chat-panel.open { display:flex; }
 
   .chat-panel-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
@@ -164,7 +164,7 @@
   .chat-close { background:none; border:none; font-size:18px; cursor:pointer; color:var(--text-dim); padding:4px; }
 
   .chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
-  .chat-msg { max-width:85%; padding:10px 14px; border-radius:12px; font-size:13px; line-height:1.5; word-wrap:break-word; }
+  .chat-msg { max-width:90%; padding:14px 18px; border-radius:14px; font-size:14px; line-height:1.6; word-wrap:break-word; }
   .chat-msg.user { align-self:flex-end; background:var(--text); color:#fff; border-bottom-right-radius:4px; }
   .chat-msg.assistant { align-self:flex-start; background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; }
   .chat-msg.system { align-self:center; background:var(--green-dim); color:var(--green-dark); font-size:12px; font-weight:500; text-align:center; }
@@ -177,7 +177,7 @@
   .chat-send:disabled { opacity:.4; cursor:default; }
 
   @media (max-width:500px) {
-    .chat-panel { width:calc(100vw - 16px); right:8px; bottom:8px; height:70vh; }
+    .chat-panel { width:calc(100vw - 16px); right:8px; bottom:8px; height:80vh; }
   }
 
   /* Save toast */
@@ -1867,6 +1867,11 @@ async function confirmDeleteLiability(recordId) {
 <script>
 if (window.parent !== window) {
   document.getElementById('mainHeader').style.display = 'none';
+  // Hide chat in iframe — parent site has its own chat widget
+  const fab = document.getElementById('chatFab');
+  const panel = document.getElementById('chatPanel');
+  if (fab) fab.style.display = 'none';
+  if (panel) panel.style.display = 'none';
 }
 </script>
 </body>
