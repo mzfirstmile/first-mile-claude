@@ -1486,7 +1486,7 @@ async function loadBalanceSheet() {
       supaFetch('exec_investments', '?order=name.asc'),
       supaFetch('exec_liabilities', '?order=maturity_date.asc.nullslast'),
       supaFetch('properties', '?order=property_name.asc&select=id,property_name,current_valuation'),
-      supaFetch('balance_sheet_items', '?is_header=eq.false&is_total=eq.false&select=property_id,bs_code,amount,account_section'),
+      supaFetch('balance_sheet_items', '?is_header=eq.false&is_total=eq.false&select=property_id,bs_code,amount,account_section,account_name'),
       fetchJpyRate()
     ]);
     bsProperties = props;
@@ -1495,11 +1495,15 @@ async function loadBalanceSheet() {
     const propLookup = {};
     props.forEach(p => { propLookup[p.id] = { name: p.property_name, valuation: p.current_valuation }; });
 
-    // Compute total debt (liabilities) per property from balance sheet items (bs_code 2xxx)
+    // Compute total mortgage debt per property from balance sheet items
+    // Only include mortgage/notes payable (typically BS 2100-2199), not AP or accrued expenses
     propertyDebt = {};
     bsItems.forEach(item => {
       const code = parseInt(item.bs_code) || 0;
-      if (code >= 2000 && code < 3000) { // Liabilities section
+      const name = (item.account_name || '').toLowerCase();
+      const isMortgage = (code >= 2100 && code < 2200) ||
+        name.includes('mortgage') || name.includes('note') || name.includes('loan');
+      if (isMortgage) {
         if (!propertyDebt[item.property_id]) propertyDebt[item.property_id] = 0;
         propertyDebt[item.property_id] += Math.abs(item.amount || 0);
       }
@@ -1662,7 +1666,7 @@ function renderBalanceSheet() {
               <div class="bs-metric-value">${inv.propertyNOI ? fmt(inv.propertyNOI) : '—'}</div>
             </div>
             <div class="bs-metric">
-              <div class="bs-metric-label">Property Debt</div>
+              <div class="bs-metric-label">Mortgage</div>
               <div class="bs-metric-value" style="color:var(--red-dark)">${inv.propertyDebt ? fmt(inv.propertyDebt) : '—'}</div>
             </div>
             <div class="bs-metric">
