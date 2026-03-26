@@ -1843,18 +1843,54 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
 
     const summaryRows = [];
     const allGlCodes = new Set(Object.keys(byGl));
+    // Add Head entries that have children with data
     gl.forEach(g => {
       if (g.type === 'Head') {
         const gCode = parseInt(g.code);
-        const hasChildren = [...allGlCodes].some(c => { const cc = parseInt(c); return cc > gCode && cc < gCode + 100; });
+        const hasChildren = [...allGlCodes].some(c => { const cc = parseInt(c); return cc > gCode && cc < gCode + 200; });
         if (hasChildren) allGlCodes.add(g.code);
       }
     });
+    // Add Tot entries whose section has data (so we can compute them)
     gl.forEach(g => {
+      if (g.type === 'Tot' && !allGlCodes.has(g.code)) {
+        const gCode = parseInt(g.code);
+        const hasRelated = Object.keys(byGl).some(c => { const cc = parseInt(c); return cc < gCode && cc > gCode - 1000; });
+        if (hasRelated) allGlCodes.add(g.code);
+      }
+    });
+    // Build summaryRows, computing Tot values from Reg children when missing
+    gl.forEach((g, idx) => {
       if (!allGlCodes.has(g.code)) return;
       const data = byGl[g.code];
       if (g.type === 'Head') {
         summaryRows.push({ label: g.name, isHeader: true, isTotal: false, budget26: 0 });
+      } else if (g.type === 'Tot' && !data) {
+        // Compute Tot from child Reg entries: find range [nearestHead, totCode)
+        const gCode = parseInt(g.code);
+        const months = {};
+        MONTHS.forEach(m => { months[m] = 0; });
+        // Find nearest Head before this Tot
+        let headCode = Math.floor(gCode / 1000) * 1000;
+        for (let i = idx - 1; i >= 0; i--) {
+          if (gl[i].type === 'Head') { headCode = parseInt(gl[i].code); break; }
+        }
+        // Check if there are sub-Tots between Head and this Tot (= aggregate total)
+        const hasSubTots = gl.some(gg => gg.type === 'Tot' && parseInt(gg.code) > headCode && parseInt(gg.code) < gCode);
+        if (hasSubTots) {
+          // Aggregate total: use section start to include all children
+          headCode = (gCode >= 5000 && gCode < 7000) ? 5000 : Math.floor(gCode / 1000) * 1000;
+        }
+        // Sum all Reg entries in range
+        for (const [c, d] of Object.entries(byGl)) {
+          const cc = parseInt(c);
+          const gi = glLookup[c];
+          if (gi && gi.type === 'Reg' && cc > headCode && cc < gCode) {
+            MONTHS.forEach(m => { months[m] += (d.months[m] || 0); });
+          }
+        }
+        const annual = MONTHS.reduce((s, m) => s + months[m], 0);
+        summaryRows.push({ label: g.name, isHeader: false, isTotal: true, budget26: annual, months });
       } else {
         const annual = data ? MONTHS.reduce((s, m) => s + (data.months[m] || 0), 0) : 0;
         summaryRows.push({ label: g.name, isHeader: false, isTotal: g.type === 'Tot', budget26: annual, months: data ? data.months : {} });
@@ -2267,42 +2303,81 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const sqft = p.sqft;
     const isPsf = fbMode === 'psf';
     const fmt = isPsf ? (v) => fbFmtPsf(v, sqft) : fbFmt;
-    const fmtFull = isPsf ? (v) => fbFmtPsf(v, sqft) : fbFmtFull;
     let isExpenseSection = false;
     const status = fbGetYearStatus();
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const yr = fbSelectedYear;
-    const prevYr = yr - 1;
-    const yy = String(yr).slice(-2);
-    const pyy = String(prevYr).slice(-2);
-
-    let html;
-    const colSpan = 5; // label + budget + actuals + var$ + var%
+    const colSpan = 8; // label + A + B + C + varAB$ + varAB% + varAC$ + varAC%
 
     // Helper: compute annual total from a summary row's months
     const annualOf = (row) => row && row.months ? MONTHS.reduce((s, m) => s + (row.months[m] || 0), 0) : (row ? (row.budget26 || 0) : 0);
 
-    // Build prior-year actuals lookup for variance columns
-    const prevYearData = baseProp && baseProp.years && baseProp.years[prevYr];
-    const prevRowsByLabel = {};
-    if (prevYearData) {
-      (prevYearData.summaryRows || []).forEach(r => {
-        if (!r.isHeader) prevRowsByLabel[r.label] = r;
-      });
+    // Determine column mapping based on year status
+    // Historical: A=This Year Actuals, B=This Year Budget, C=Last Year Actuals
+    // Active:     A=This Year Actuals, B=This Year Budget, C=Last Year Actuals
+    // Planning:   A=Next Year Budget,  B=This Year Actuals, C=This Year Budget
+    // Data type for each year: 2025=actuals, 2026=budget. No 2024 data, no 2026 actuals yet, no 2027 budget yet.
+    const yrs = baseProp && baseProp.years || {};
+    // Infer data type: years before active year have actuals, active year has budget
+    const activeYr = FB_YEARS.find(y => y.status === 'active');
+    const activeYear = activeYr ? activeYr.year : 2026;
+    const getYearData = (year, type) => {
+      const yd = yrs[year];
+      if (!yd) return null;
+      const inferredType = year < activeYear ? 'actuals' : 'budget';
+      return (type === inferredType) ? yd : null;
+    };
+
+    let colA_label, colB_label, colC_label;
+    let dataA, dataB, dataC;
+    const yy = String(yr).slice(-2);
+
+    if (status === 'planning') {
+      const py = yr - 1;
+      colA_label = `'${yy} Budget`;
+      colB_label = `'${String(py).slice(-2)} Actuals`;
+      colC_label = `'${String(py).slice(-2)} Budget`;
+      dataA = getYearData(yr, 'budget') || (yrs[yr] || null); // planning year zeros
+      dataB = getYearData(py, 'actuals');
+      dataC = getYearData(py, 'budget');
+    } else {
+      // Historical or Active: A=actuals, B=budget, C=last year actuals
+      const py = yr - 1;
+      colA_label = `'${yy} Actuals`;
+      colB_label = `'${yy} Budget`;
+      colC_label = `'${String(py).slice(-2)} Actuals`;
+      dataA = getYearData(yr, 'actuals');
+      dataB = getYearData(yr, 'budget');
+      dataC = getYearData(py, 'actuals');
     }
 
-    // Unified layout for all views: Budget | Actuals | Variance ($ + %)
-    html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
+    // Build label→row lookups for each data source
+    const buildLookup = (yd) => {
+      const map = {};
+      if (yd) (yd.summaryRows || []).forEach(r => { if (!r.isHeader) map[r.label] = r; });
+      return map;
+    };
+    const lookupA = buildLookup(dataA);
+    const lookupB = buildLookup(dataB);
+    const lookupC = buildLookup(dataC);
+
+    // Variance labels
+    const var1Label = `${colA_label} vs ${colB_label}`;
+    const var2Label = `${colA_label} vs ${colC_label}`;
+
+    let html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
       <th class="bgt-th-label" rowspan="2">Line Item</th>
-      <th rowspan="2" class="bgt-th-group a bgt-col-a">'${yy} Budget</th>
-      <th rowspan="2" class="bgt-th-group b bgt-col-b">'${pyy} Actuals</th>
-      <th colspan="2" class="bgt-th-group var1 bgt-col-v1">Variance</th>
+      <th rowspan="2" class="bgt-th-group a bgt-col-a">${colA_label}</th>
+      <th rowspan="2" class="bgt-th-group b bgt-col-b">${colB_label}</th>
+      <th rowspan="2" class="bgt-th-group c bgt-col-c">${colC_label}</th>
+      <th colspan="2" class="bgt-th-group var1 bgt-col-v1">Var A vs B</th>
+      <th colspan="2" class="bgt-th-group var2 bgt-col-v2">Var A vs C</th>
     </tr><tr>
       <th class="bgt-th-sub var1 bgt-col-v1">$</th><th class="bgt-th-sub var1">%</th>
+      <th class="bgt-th-sub var2 bgt-col-v2">$</th><th class="bgt-th-sub var2">%</th>
     </tr></thead><tbody>`;
 
-    // Pre-build: map sub-section header labels → matching total rows so we can merge them
-    // Only merge sub-sections (CLEANING, UTILITIES, etc.), NOT top-level sections (INCOME, OPERATING EXPENSES)
+    // Pre-build: merge sub-section headers with their total rows
     const allRows = p.summaryRows || p.rows || [];
     const topLevelPattern = /^(INCOME|REVENUE|OPERATING|EXPENSE|NET OPERATING|NOI|BELOW|CAPITAL|DEBT|G&A|GENERAL)/i;
     const headerLabels = new Set(allRows.filter(r => r.isHeader && !topLevelPattern.test(r.label)).map(r => r.label.toUpperCase()));
@@ -2310,27 +2385,41 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     allRows.forEach(row => {
       if (!row.isTotal) return;
       const stripped = row.label.replace(/^TOTAL\s+/i, '').toUpperCase();
-      if (headerLabels.has(stripped)) {
-        totalByHeader[stripped] = row;
-      }
+      if (headerLabels.has(stripped)) totalByHeader[stripped] = row;
     });
 
-    // Helper: render value cells for a row
+    // Helper: render the 7 value cells (A, B, C, varAB$, varAB%, varAC$, varAC%) for a row
     const renderValueCells = (row, fw) => {
-      const valA = annualOf(row);
-      const prevRow = prevRowsByLabel[row.label];
-      const valB = prevRow ? annualOf(prevRow) : 0;
-      const varDiff = valA - valB;
-      const varPct = valB !== 0 ? ((varDiff / Math.abs(valB)) * 100) : 0;
-      const vc = fbValClass(varDiff, isExpenseSection);
+      const rowA = lookupA[row.label];
+      const rowB = lookupB[row.label];
+      const rowC = lookupC[row.label];
+      const valA = rowA ? annualOf(rowA) : 0;
+      const valB = rowB ? annualOf(rowB) : 0;
+      const valC = rowC ? annualOf(rowC) : 0;
+
+      const varAB = valA - valB;
+      const varABpct = valB !== 0 ? ((varAB / Math.abs(valB)) * 100) : 0;
+      const varAC = valA - valC;
+      const varACpct = valC !== 0 ? ((varAC / Math.abs(valC)) * 100) : 0;
+      const vcAB = fbValClass(varAB, isExpenseSection);
+      const vcAC = fbValClass(varAC, isExpenseSection);
+
       let cells = '';
       cells += `<td class="bgt-col-a" style="text-align:right;font-weight:${fw}">${valA ? fmt(valA) : '—'}</td>`;
       cells += `<td class="bgt-col-b" style="text-align:right">${valB ? fmt(valB) : '—'}</td>`;
+      cells += `<td class="bgt-col-c" style="text-align:right">${valC ? fmt(valC) : '—'}</td>`;
       if (valA && valB) {
-        cells += `<td class="bgt-col-v1 ${vc}" style="text-align:right">${fmt(varDiff)}</td>`;
-        cells += `<td class="${vc}" style="text-align:right">${fbFmtPct(varPct)}</td>`;
+        cells += `<td class="bgt-col-v1 ${vcAB}" style="text-align:right">${fmt(varAB)}</td>`;
+        cells += `<td class="${vcAB}" style="text-align:right">${fbFmtPct(varABpct)}</td>`;
       } else {
         cells += `<td class="bgt-col-v1" style="text-align:right;color:var(--text-dim)">—</td>`;
+        cells += `<td style="text-align:right;color:var(--text-dim)">—</td>`;
+      }
+      if (valA && valC) {
+        cells += `<td class="bgt-col-v2 ${vcAC}" style="text-align:right">${fmt(varAC)}</td>`;
+        cells += `<td class="${vcAC}" style="text-align:right">${fbFmtPct(varACpct)}</td>`;
+      } else {
+        cells += `<td class="bgt-col-v2" style="text-align:right;color:var(--text-dim)">—</td>`;
         cells += `<td style="text-align:right;color:var(--text-dim)">—</td>`;
       }
       return cells;
@@ -2348,25 +2437,22 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         else if (label.includes('EXPENSE') || label.includes('OPERATING')) sectionCls = 'bgt-section-expense';
         else if (label.includes('NOI') || label.includes('NET OPERATING')) sectionCls = 'bgt-section-noi';
 
-        // Check if there's a matching total row to merge into this header
         const matchTotal = totalByHeader[label.toUpperCase()];
         if (matchTotal) {
-          // Render header with inline totals (no colspan)
           html += `<tr class="bgt-row-header collapsed ${sectionCls}" data-section="${sectionIdx}" onclick="fbToggleSection(this)">`;
           html += `<td><span class="bgt-chevron">&#9654;</span>${label}</td>`;
           html += renderValueCells(matchTotal, '700');
           html += `</tr>`;
         } else {
-          // Major section header without a matching sub-total — full-width
           html += `<tr class="bgt-row-header collapsed ${sectionCls}" data-section="${sectionIdx}" onclick="fbToggleSection(this)"><td colspan="${colSpan}"><span class="bgt-chevron">&#9654;</span>${label}</td></tr>`;
         }
         return;
       }
 
-      // Skip total rows that were already merged into their header
+      // Skip total rows already merged into headers
       if (row.isTotal) {
         const stripped = row.label.replace(/^TOTAL\s+/i, '').toUpperCase();
-        if (totalByHeader[stripped] === row) return; // already shown in header
+        if (totalByHeader[stripped] === row) return;
       }
 
       let totalCls = '';
@@ -2374,7 +2460,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         const lbl = row.label.toLowerCase();
         if (lbl.includes('net operating income') || lbl.includes('net income')) totalCls = 'bgt-row-total bgt-total-noi';
         else if (lbl === 'total income' || lbl === 'total revenue') totalCls = 'bgt-row-total bgt-total-income';
-        else if (lbl.includes('total recoverable') || lbl.includes('total operating') || lbl === 'total expenses') totalCls = 'bgt-row-total bgt-total-expense';
+        else if (lbl.includes('expenses') || lbl.includes('total operating')) totalCls = 'bgt-row-total bgt-total-expense';
         else totalCls = 'bgt-row-total';
       }
       const detailHide = !row.isTotal ? ' bgt-detail-row bgt-hidden' : '';

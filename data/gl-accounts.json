@@ -546,8 +546,8 @@
   },
   {
     "code": "5650",
-    "name": "ADMINISTRATIVE EXPENSES- RECOVORABLE",
-    "type": "Reg"
+    "name": "ADMINISTRATIVE EXPENSES - RECOVERABLE",
+    "type": "Head"
   },
   {
     "code": "5652",
