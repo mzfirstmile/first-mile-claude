@@ -751,6 +751,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       <span>Strategic Forecasting</span>
     </a>
+    <a class="sidebar-item" data-view="exec">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
+      <span>Executive Dashboard</span>
+    </a>
   </div>
 
   <div class="sidebar-section">
@@ -819,7 +823,7 @@
       </div>
 
       <!-- Executive Financials -->
-      <div class="module-card" data-module="exec" onclick="window.open('exec.html','_blank')" style="cursor:pointer">
+      <div class="module-card" data-module="exec" onclick="switchView('exec')" style="cursor:pointer">
         <div class="module-card-icon" style="background:linear-gradient(135deg,#283d55,#1e2d44)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
         </div>
@@ -1028,7 +1032,7 @@
 
   <!-- Executive Dashboard (iframe) -->
   <div class="manage-view" id="view-exec" style="padding:0; height:calc(100vh - 65px);">
-    <iframe src="exec.html" style="width:100%; height:100%; border:none;"></iframe>
+    <iframe id="execFrame" data-src="exec.html" style="width:100%; height:100%; border:none;"></iframe>
   </div>
 
   <!-- budgeting view removed - merged into financials -->
@@ -1367,6 +1371,10 @@
     if (view === 'users') loadUsers();
     if (view === 'calendar') calInit();
     if (view === 'financials') fbInit();
+    if (view === 'exec') {
+      const frame = document.getElementById('execFrame');
+      if (frame && !frame.src) frame.src = frame.dataset.src;
+    }
   }
 
   // ── Sidebar click handlers ──
