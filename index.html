@@ -759,7 +759,7 @@
   const CAL_PALETTE = ['#00b0d4','#50dcb4','#ff8c5a','#dc78ff','#ffd250','#50c8ff','#ff6482','#a78bfa','#f472b6','#38bdf8','#4ade80','#fb923c'];
 
   let calEvents = [], calColors = {}, calColorIdx = 0, calMonth = new Date().getMonth();
-  let calFiltersActive = new Set(), calInited = false;
+  let calFiltersActive = new Set(), calInited = false, calSelectedProp = null;
 
   function calGetColor(p) {
     if (!calColors[p]) { calColors[p] = CAL_PALETTE[calColorIdx % CAL_PALETTE.length]; calColorIdx++; }
@@ -805,15 +805,27 @@
   function calBuildFilters() {
     const el = document.getElementById('calFilters');
     const props = [...new Set(calEvents.map(e => e.property))].sort();
-    el.innerHTML = props.map(p => {
+    const allOn = calSelectedProp === null;
+    let html = `<div class="cal-chip${allOn ? ' on' : ''}" style="${allOn ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calSelectProp(null)">All</div>`;
+    html += props.map(p => {
       const c = calGetColor(p);
-      const on = calFiltersActive.has(p);
-      return `<div class="cal-chip${on ? ' on' : ''}" style="${on ? `background:${c};border-color:${c};` : ''}" onclick="calToggleFilter('${p.replace(/'/g,"\\'")}')">${p}</div>`;
+      const on = calSelectedProp === p;
+      return `<div class="cal-chip${on ? ' on' : ''}" style="${on ? `background:${c};border-color:${c};` : ''}" onclick="calSelectProp('${p.replace(/'/g,"\\'")}')">${p}</div>`;
     }).join('');
+    el.innerHTML = html;
   }
 
-  function calToggleFilter(p) {
-    if (calFiltersActive.has(p)) calFiltersActive.delete(p); else calFiltersActive.add(p);
+  function calSelectProp(p) {
+    const allProps = [...new Set(calEvents.map(e => e.property))];
+    if (p === null || calSelectedProp === p) {
+      // Click "All" or click the already-selected prop → show all
+      calSelectedProp = null;
+      calFiltersActive = new Set(allProps);
+    } else {
+      // Click a specific property → isolate it
+      calSelectedProp = p;
+      calFiltersActive = new Set([p]);
+    }
     calBuildFilters();
     calRender();
   }
