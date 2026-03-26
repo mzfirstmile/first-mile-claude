@@ -519,14 +519,6 @@
   .bgt-row-total.bgt-total-noi td:first-child { color:var(--accent); font-size:14px; }
   .bgt-neg { color:#e5534b !important; }
   .bgt-pos { color:#1a9a6b !important; }
-  /* Planning comparison table */
-  .bgt-table .bgt-plan-hdr { font-size:9px; text-transform:uppercase; letter-spacing:.4px; }
-  .bgt-table .bgt-plan-hdr.a { background:rgba(0,176,212,.08); color:var(--accent); }
-  .bgt-table .bgt-plan-hdr.b { background:rgba(26,154,107,.06); color:#1a9a6b; }
-  .bgt-table .bgt-plan-hdr.c { background:rgba(167,139,250,.06); color:#7c6cc4; }
-  .bgt-table .bgt-plan-hdr.v1 { background:rgba(255,140,90,.06); color:#d47a3a; }
-  .bgt-table .bgt-plan-hdr.v2 { background:rgba(220,120,255,.06); color:#a855c4; }
-  .bgt-var-pct { font-size:10px; color:var(--text-dim); margin-left:2px; }
   .bgt-pos { color:var(--green) !important; }
   .bgt-empty { text-align:center; padding:60px 20px; color:var(--text-dim); }
   .bgt-empty svg { margin-bottom:12px; opacity:.4; }
@@ -2279,69 +2271,35 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     let isExpenseSection = false;
     const status = fbGetYearStatus();
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const yr = fbSelectedYear;
+    const prevYr = yr - 1;
+    const yy = String(yr).slice(-2);
+    const pyy = String(prevYr).slice(-2);
 
-    let colSpan, html;
+    let html;
+    const colSpan = 5; // label + budget + actuals + var$ + var%
 
     // Helper: compute annual total from a summary row's months
     const annualOf = (row) => row && row.months ? MONTHS.reduce((s, m) => s + (row.months[m] || 0), 0) : (row ? (row.budget26 || 0) : 0);
 
-    // Helper: format variance with $ and %
-    const fmtVar = (a, b) => {
-      const diff = a - b;
-      const pct = b !== 0 ? ((diff / Math.abs(b)) * 100) : (a !== 0 ? 100 : 0);
-      const sign = diff > 0 ? '+' : '';
-      const cls = diff > 0 ? 'bgt-pos' : diff < 0 ? 'bgt-neg' : '';
-      return `<span class="${cls}">${fmt(diff)}</span><span class="bgt-var-pct ${cls}">${sign}${pct.toFixed(1)}%</span>`;
-    };
-
-    if (status === 'planning') {
-      // PLANNING MODE: 2027 Budget (A) | 2026 Actuals (B) | 2026 Budget (C) | Var A-B | Var A-C
-      colSpan = 6; // label + A + B + C + var1 + var2
-
-      // Get 2026 actuals and 2026 budget data for comparison
-      // 2026 "actuals" = what we have as 2026 data (which is the budget for now, until actuals are uploaded)
-      // For now, 2026 data serves as both actuals and budget reference
-      const y2026 = baseProp && baseProp.years && baseProp.years[2026];
-      const y2025 = baseProp && baseProp.years && baseProp.years[2025];
-
-      // Build a lookup: gl_code → { summaryLabel → annual } for 2026
-      const bgt26Lookup = {};
-      if (y2026) {
-        (y2026.summaryRows || []).forEach(r => {
-          if (!r.isHeader) bgt26Lookup[r.label] = annualOf(r);
-        });
-      }
-      // For "2026 Actuals" — since we don't have separate 2026 actuals yet, we'll use 2025 actuals as "prior year actuals"
-      // Actually the user said "2026 Actuals (B)" — they want actual 2026 numbers when available
-      // For now these will show as dashes until 2026 actuals are uploaded
-      const act26Lookup = {}; // placeholder — will be populated when 2026 actuals exist
-
-      html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead>
-        <tr>
-          <th class="bgt-th-label" rowspan="1">Line Item</th>
-          <th class="bgt-plan-hdr a bgt-col-a" style="text-align:right">2027 Budget</th>
-          <th class="bgt-plan-hdr b bgt-col-b" style="text-align:right">2026 Actuals</th>
-          <th class="bgt-plan-hdr c bgt-col-c" style="text-align:right">2026 Budget</th>
-          <th class="bgt-plan-hdr v1 bgt-col-v1" style="text-align:right">Var (Bgt vs Act)</th>
-          <th class="bgt-plan-hdr v2 bgt-col-v2" style="text-align:right">Var (Bgt vs Bgt)</th>
-        </tr>
-      </thead><tbody>`;
-    } else if (status === 'active' || status === 'historical') {
-      colSpan = MONTHS.length + 2;
-      html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
-        <th class="bgt-th-label">Line Item</th>`;
-      MONTHS.forEach(m => { html += `<th class="bgt-th-group a">${m}</th>`; });
-      html += `<th class="bgt-th-group a" style="font-weight:700;color:var(--accent)">Annual</th>
-      </tr></thead><tbody>`;
-    }
-
-    // For planning mode, build lookup of 2026 budget summary rows by label
-    let bgt26Rows = {};
-    if (status === 'planning' && baseProp && baseProp.years && baseProp.years[2026]) {
-      (baseProp.years[2026].summaryRows || []).forEach(r => {
-        if (!r.isHeader) bgt26Rows[r.label] = r;
+    // Build prior-year actuals lookup for variance columns
+    const prevYearData = baseProp && baseProp.years && baseProp.years[prevYr];
+    const prevRowsByLabel = {};
+    if (prevYearData) {
+      (prevYearData.summaryRows || []).forEach(r => {
+        if (!r.isHeader) prevRowsByLabel[r.label] = r;
       });
     }
+
+    // Unified layout for all views: Budget | Actuals | Variance ($ + %)
+    html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
+      <th class="bgt-th-label" rowspan="2">Line Item</th>
+      <th rowspan="2" class="bgt-th-group a bgt-col-a">'${yy} Budget</th>
+      <th rowspan="2" class="bgt-th-group b bgt-col-b">'${pyy} Actuals</th>
+      <th colspan="2" class="bgt-th-group var1 bgt-col-v1">Variance</th>
+    </tr><tr>
+      <th class="bgt-th-sub var1 bgt-col-v1">$</th><th class="bgt-th-sub var1">%</th>
+    </tr></thead><tbody>`;
 
     let sectionIdx = 0;
     (p.summaryRows || p.rows || []).forEach(row => {
@@ -2368,45 +2326,32 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       const detailHide = !row.isTotal ? ' bgt-detail-row bgt-hidden' : '';
       const cls = row.isTotal ? ` class="${totalCls}" data-section="${sectionIdx}"` : ` class="${detailHide.trim()}" data-section="${sectionIdx}"`;
 
-      if (status === 'planning') {
-        // 2027 Budget value (A) — starts at 0 / blank for user input
-        const valA = annualOf(row); // will be 0 for new planning year
-        // 2026 Actuals (B) — not yet available, show dash
-        const valB = 0; // placeholder until 2026 actuals uploaded
-        // 2026 Budget (C) — from the 2026 year data
-        const row26 = bgt26Rows[row.label];
-        const valC = row26 ? annualOf(row26) : 0;
+      // Column A: current year budget (annual)
+      const valA = annualOf(row);
+      // Column B: prior year actuals (annual)
+      const prevRow = prevRowsByLabel[row.label];
+      const valB = prevRow ? annualOf(prevRow) : 0;
 
-        html += `<tr${cls}>`;
-        html += `<td>${row.label}</td>`;
-        html += `<td class="bgt-col-a" style="text-align:right;font-weight:${row.isTotal ? '700' : '500'}">${valA ? fmt(valA) : '—'}</td>`;
-        html += `<td class="bgt-col-b" style="text-align:right;color:var(--text-dim)">${valB ? fmt(valB) : '—'}</td>`;
-        html += `<td class="bgt-col-c" style="text-align:right">${valC ? fmt(valC) : '—'}</td>`;
-        // Var A vs B (budget vs actuals)
-        if (valA && valB) {
-          html += `<td class="bgt-col-v1" style="text-align:right">${fmtVar(valA, valB)}</td>`;
-        } else {
-          html += `<td class="bgt-col-v1" style="text-align:right;color:var(--text-dim)">—</td>`;
-        }
-        // Var A vs C (2027 budget vs 2026 budget)
-        if (valA && valC) {
-          html += `<td class="bgt-col-v2" style="text-align:right">${fmtVar(valA, valC)}</td>`;
-        } else {
-          html += `<td class="bgt-col-v2" style="text-align:right;color:var(--text-dim)">—</td>`;
-        }
-        html += '</tr>';
+      // Variance: budget minus actuals
+      const varDiff = valA - valB;
+      const varPct = valB !== 0 ? ((varDiff / Math.abs(valB)) * 100) : 0;
+      const vc = fbValClass(varDiff, isExpenseSection);
+
+      const fw = row.isTotal ? '700' : '500';
+      const hasData = valA || valB; // at least one side has data
+
+      html += `<tr${cls}>`;
+      html += `<td>${row.label}</td>`;
+      html += `<td class="bgt-col-a" style="text-align:right;font-weight:${fw}">${valA ? fmt(valA) : '—'}</td>`;
+      html += `<td class="bgt-col-b" style="text-align:right">${valB ? fmt(valB) : '—'}</td>`;
+      if (valA && valB) {
+        html += `<td class="bgt-col-v1 ${vc}" style="text-align:right">${fmt(varDiff)}</td>`;
+        html += `<td class="${vc}" style="text-align:right">${fbFmtPct(varPct)}</td>`;
       } else {
-        // Active/Historical: show monthly columns + annual total
-        html += `<tr${cls}><td>${row.label}</td>`;
-        let rowAnnual = 0;
-        MONTHS.forEach(m => {
-          const v = (row.months && row.months[m]) || 0;
-          rowAnnual += v;
-          html += `<td>${fmt(v)}</td>`;
-        });
-        html += `<td style="font-weight:${row.isTotal ? '700' : '600'}">${fmt(rowAnnual || row.budget26)}</td>`;
-        html += '</tr>';
+        html += `<td class="bgt-col-v1" style="text-align:right;color:var(--text-dim)">—</td>`;
+        html += `<td style="text-align:right;color:var(--text-dim)">—</td>`;
       }
+      html += '</tr>';
     });
 
     html += '</tbody></table></div>';
