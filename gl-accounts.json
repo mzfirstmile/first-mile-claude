@@ -1,0 +1,812 @@
+[
+  {
+    "code": "4000",
+    "name": "INCOME",
+    "type": "Head"
+  },
+  {
+    "code": "4001",
+    "name": "COMMERCIAL RENT INCOME",
+    "type": "Head"
+  },
+  {
+    "code": "4010",
+    "name": "Base Rent - Contractual",
+    "type": "Reg"
+  },
+  {
+    "code": "4011",
+    "name": "Base Rent - Speculative",
+    "type": "Reg"
+  },
+  {
+    "code": "4060",
+    "name": "Less : Rent concessions (lease)",
+    "type": "Reg"
+  },
+  {
+    "code": "4090",
+    "name": "TOTAL COMMERCIAL RENT INCOME",
+    "type": "Tot"
+  },
+  {
+    "code": "4100",
+    "name": "RENTAL INCOME/RECOVERABLE",
+    "type": "Head"
+  },
+  {
+    "code": "4110",
+    "name": "Estimated CAM Charges",
+    "type": "Reg"
+  },
+  {
+    "code": "4111",
+    "name": "CAM reconciliation",
+    "type": "Reg"
+  },
+  {
+    "code": "4112",
+    "name": "Estimated Insurance",
+    "type": "Reg"
+  },
+  {
+    "code": "4113",
+    "name": "Estimated Insurance Reconciliation",
+    "type": "Reg"
+  },
+  {
+    "code": "4114",
+    "name": "Estimated Property Tax",
+    "type": "Reg"
+  },
+  {
+    "code": "4116",
+    "name": "Tenant Electricity Recovery",
+    "type": "Reg"
+  },
+  {
+    "code": "4117",
+    "name": "Tenant Water & Sewer Recovery",
+    "type": "Reg"
+  },
+  {
+    "code": "4118",
+    "name": "HVAC Recovery",
+    "type": "Reg"
+  },
+  {
+    "code": "4119",
+    "name": "Tenant Electric Reconciliation",
+    "type": "Reg"
+  },
+  {
+    "code": "4126",
+    "name": "Estimated Property Tax Reconciliation",
+    "type": "Reg"
+  },
+  {
+    "code": "4132",
+    "name": "CPI Recovery",
+    "type": "Reg"
+  },
+  {
+    "code": "4133",
+    "name": "Porter wages Recovery",
+    "type": "Reg"
+  },
+  {
+    "code": "4134",
+    "name": "Trash Removal - Recoverey",
+    "type": "Reg"
+  },
+  {
+    "code": "4190",
+    "name": "TOTAL RENTAL INCOME/RECOVERABLE",
+    "type": "Tot"
+  },
+  {
+    "code": "4510",
+    "name": "OTHER INCOME",
+    "type": "Head"
+  },
+  {
+    "code": "4511",
+    "name": "EV Charges",
+    "type": "Reg"
+  },
+  {
+    "code": "4512",
+    "name": "Parking",
+    "type": "Reg"
+  },
+  {
+    "code": "4700",
+    "name": "Miscellaneous Income",
+    "type": "Reg"
+  },
+  {
+    "code": "4702",
+    "name": "Admin fee",
+    "type": "Reg"
+  },
+  {
+    "code": "4703",
+    "name": "Tenant Work order Income",
+    "type": "Reg"
+  },
+  {
+    "code": "4800",
+    "name": "Late Fee",
+    "type": "Reg"
+  },
+  {
+    "code": "4820",
+    "name": "Bank Interest",
+    "type": "Reg"
+  },
+  {
+    "code": "4831",
+    "name": "TOTAL OTHER INCOME",
+    "type": "Tot"
+  },
+  {
+    "code": "4990",
+    "name": "TOTAL INCOME",
+    "type": "Tot"
+  },
+  {
+    "code": "5000",
+    "name": "EXPENSES",
+    "type": "Head"
+  },
+  {
+    "code": "5450",
+    "name": "CLEANING",
+    "type": "Head"
+  },
+  {
+    "code": "5451",
+    "name": "Cleaning Contract",
+    "type": "Reg"
+  },
+  {
+    "code": "5452",
+    "name": "Additional Cleaning",
+    "type": "Reg"
+  },
+  {
+    "code": "5453",
+    "name": "Window Cleaning",
+    "type": "Reg"
+  },
+  {
+    "code": "5454",
+    "name": "Janitorial Supplies",
+    "type": "Reg"
+  },
+  {
+    "code": "5455",
+    "name": "Trash Removal",
+    "type": "Reg"
+  },
+  {
+    "code": "5456",
+    "name": "Tenant Reimbursement Expense",
+    "type": "Reg"
+  },
+  {
+    "code": "5460",
+    "name": "TOTAL CLEANING",
+    "type": "Tot"
+  },
+  {
+    "code": "5475",
+    "name": "REPAIRS & MAINTENANCE",
+    "type": "Head"
+  },
+  {
+    "code": "5476",
+    "name": "Engineers Payroll + Bonus",
+    "type": "Reg"
+  },
+  {
+    "code": "5477",
+    "name": "Exterminating Contract",
+    "type": "Reg"
+  },
+  {
+    "code": "5478",
+    "name": "Service for cluster flies",
+    "type": "Reg"
+  },
+  {
+    "code": "5479",
+    "name": "Geese Control",
+    "type": "Reg"
+  },
+  {
+    "code": "5480",
+    "name": "HVAC Contract",
+    "type": "Reg"
+  },
+  {
+    "code": "5481",
+    "name": "HVAC Repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5482",
+    "name": "HVAC Supplies & Materials",
+    "type": "Reg"
+  },
+  {
+    "code": "5483",
+    "name": "Elevator Contract",
+    "type": "Reg"
+  },
+  {
+    "code": "5484",
+    "name": "Elevator Phone Lines",
+    "type": "Reg"
+  },
+  {
+    "code": "5485",
+    "name": "Elevator/Escalator Inspection Fee",
+    "type": "Reg"
+  },
+  {
+    "code": "5486",
+    "name": "Elevator repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5487",
+    "name": "Kitchen Hood Cleaning",
+    "type": "Reg"
+  },
+  {
+    "code": "5488",
+    "name": "Grease Trap Cleaning",
+    "type": "Reg"
+  },
+  {
+    "code": "5489",
+    "name": "Shuttle Bus Service",
+    "type": "Reg"
+  },
+  {
+    "code": "5490",
+    "name": "Shuttle Software Subscription",
+    "type": "Reg"
+  },
+  {
+    "code": "5491",
+    "name": "Cafeteria Subsidy",
+    "type": "Reg"
+  },
+  {
+    "code": "5492",
+    "name": "Cafeteria Equipment",
+    "type": "Reg"
+  },
+  {
+    "code": "5493",
+    "name": "Interior landscape contract",
+    "type": "Reg"
+  },
+  {
+    "code": "5494",
+    "name": "Holiday D\u00e9cor",
+    "type": "Reg"
+  },
+  {
+    "code": "5495",
+    "name": "Office Equipment Leasing",
+    "type": "Reg"
+  },
+  {
+    "code": "5496",
+    "name": "Fitness Center Leasing",
+    "type": "Reg"
+  },
+  {
+    "code": "5497",
+    "name": "Interior R&M",
+    "type": "Reg"
+  },
+  {
+    "code": "5498",
+    "name": "Generator Diesel Fuel",
+    "type": "Reg"
+  },
+  {
+    "code": "5499",
+    "name": "Generator Repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5500",
+    "name": "Generator Annual Inspection",
+    "type": "Reg"
+  },
+  {
+    "code": "5501",
+    "name": "Security Camera Repair",
+    "type": "Reg"
+  },
+  {
+    "code": "5502",
+    "name": "Security Camera Supplies & Materials",
+    "type": "Reg"
+  },
+  {
+    "code": "5503",
+    "name": "Electronic Directory",
+    "type": "Reg"
+  },
+  {
+    "code": "5504",
+    "name": "Security Contract",
+    "type": "Reg"
+  },
+  {
+    "code": "5505",
+    "name": "Fire System Contract",
+    "type": "Reg"
+  },
+  {
+    "code": "5506",
+    "name": "Fire Extinguisher Annual Inspection",
+    "type": "Reg"
+  },
+  {
+    "code": "5507",
+    "name": "Fire System Repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5508",
+    "name": "Annual Subscription",
+    "type": "Reg"
+  },
+  {
+    "code": "5509",
+    "name": "Roof Repair",
+    "type": "Reg"
+  },
+  {
+    "code": "5510",
+    "name": "Signage",
+    "type": "Reg"
+  },
+  {
+    "code": "5511",
+    "name": "Tools & Equipment",
+    "type": "Reg"
+  },
+  {
+    "code": "5512",
+    "name": "Window Glass Replacement",
+    "type": "Reg"
+  },
+  {
+    "code": "5513",
+    "name": "Parking Lot Stenciling",
+    "type": "Reg"
+  },
+  {
+    "code": "5514",
+    "name": "Key/Locks",
+    "type": "Reg"
+  },
+  {
+    "code": "5515",
+    "name": "Painting Supplies",
+    "type": "Reg"
+  },
+  {
+    "code": "5516",
+    "name": "Plumbing Supplies",
+    "type": "Reg"
+  },
+  {
+    "code": "5517",
+    "name": "Electrical Supplies",
+    "type": "Reg"
+  },
+  {
+    "code": "5518",
+    "name": "Plumbing Repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5519",
+    "name": "Lighting Repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5520",
+    "name": "Electrical Repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5521",
+    "name": "Ground lease",
+    "type": "Reg"
+  },
+  {
+    "code": "5522",
+    "name": "Association Dues",
+    "type": "Reg"
+  },
+  {
+    "code": "5523",
+    "name": "Fines-Subscriptions",
+    "type": "Reg"
+  },
+  {
+    "code": "5524",
+    "name": "EV Car Charger Subscription",
+    "type": "Reg"
+  },
+  {
+    "code": "5525",
+    "name": "Landscape Contract",
+    "type": "Reg"
+  },
+  {
+    "code": "5526",
+    "name": "Seasonal Flowers",
+    "type": "Reg"
+  },
+  {
+    "code": "5527",
+    "name": "Annual Pruning",
+    "type": "Reg"
+  },
+  {
+    "code": "5528",
+    "name": "Misc. landscape clean-up/tree removal",
+    "type": "Reg"
+  },
+  {
+    "code": "5529",
+    "name": "Irrigation Contract & Repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5530",
+    "name": "Snow Removal",
+    "type": "Reg"
+  },
+  {
+    "code": "5531",
+    "name": "Winter Cold Patch Repairs",
+    "type": "Reg"
+  },
+  {
+    "code": "5532",
+    "name": "Uniforms",
+    "type": "Reg"
+  },
+  {
+    "code": "5550",
+    "name": "TOTAL REPAIRS & MAINTENANCE",
+    "type": "Tot"
+  },
+  {
+    "code": "5601",
+    "name": "UTILITIES",
+    "type": "Head"
+  },
+  {
+    "code": "5602",
+    "name": "Electricity",
+    "type": "Reg"
+  },
+  {
+    "code": "5603",
+    "name": "Passthru Electric & Gas",
+    "type": "Reg"
+  },
+  {
+    "code": "5604",
+    "name": "Electric Consultant Fee",
+    "type": "Reg"
+  },
+  {
+    "code": "5605",
+    "name": "Electrical Materials",
+    "type": "Reg"
+  },
+  {
+    "code": "5606",
+    "name": "Gas/Oil",
+    "type": "Reg"
+  },
+  {
+    "code": "5607",
+    "name": "Water & Sewer",
+    "type": "Reg"
+  },
+  {
+    "code": "5608",
+    "name": "Passthru Water & Sewer",
+    "type": "Reg"
+  },
+  {
+    "code": "5609",
+    "name": "Unused Sewer Allocation",
+    "type": "Reg"
+  },
+  {
+    "code": "5610",
+    "name": "TOTAL UTILITIES",
+    "type": "Tot"
+  },
+  {
+    "code": "5650",
+    "name": "ADMINISTRATIVE EXPENSES- RECOVORABLE",
+    "type": "Reg"
+  },
+  {
+    "code": "5652",
+    "name": "Senior Property Manager + Property Admin Salary + Bonus",
+    "type": "Reg"
+  },
+  {
+    "code": "5653",
+    "name": "Tenant Events",
+    "type": "Reg"
+  },
+  {
+    "code": "5654",
+    "name": "Office Supplies",
+    "type": "Reg"
+  },
+  {
+    "code": "5655",
+    "name": "Telephone/Cell Phone",
+    "type": "Reg"
+  },
+  {
+    "code": "5656",
+    "name": "Computer Hardware/Software",
+    "type": "Reg"
+  },
+  {
+    "code": "5657",
+    "name": "Cable/Internet",
+    "type": "Reg"
+  },
+  {
+    "code": "5660",
+    "name": "TOTAL ADMINISTRATIVE EXPENSES - RECOVERABLE",
+    "type": "Tot"
+  },
+  {
+    "code": "6500",
+    "name": "MANAGEMENT FEE",
+    "type": "Head"
+  },
+  {
+    "code": "6501",
+    "name": "Management Fee",
+    "type": "Reg"
+  },
+  {
+    "code": "6510",
+    "name": "TOTAL MANAGEMENT FEE",
+    "type": "Tot"
+  },
+  {
+    "code": "6511",
+    "name": "REAL ESTATE TAXES",
+    "type": "Head"
+  },
+  {
+    "code": "6512",
+    "name": "Real Estate Tax",
+    "type": "Reg"
+  },
+  {
+    "code": "6513",
+    "name": "BID Tax",
+    "type": "Reg"
+  },
+  {
+    "code": "6520",
+    "name": "TOTAL REAL ESTATE TAXES",
+    "type": "Tot"
+  },
+  {
+    "code": "6521",
+    "name": "INSURANCE",
+    "type": "Head"
+  },
+  {
+    "code": "6522",
+    "name": "General Liability Insurance",
+    "type": "Reg"
+  },
+  {
+    "code": "6523",
+    "name": "Property Insurance",
+    "type": "Reg"
+  },
+  {
+    "code": "6524",
+    "name": "Umbrella Insurance",
+    "type": "Reg"
+  },
+  {
+    "code": "6525",
+    "name": "Other Insurance",
+    "type": "Reg"
+  },
+  {
+    "code": "6530",
+    "name": "TOTAL INSURANCE",
+    "type": "Tot"
+  },
+  {
+    "code": "6550",
+    "name": "TOTAL BUILDING EXPENSES",
+    "type": "Tot"
+  },
+  {
+    "code": "6998",
+    "name": "TOTAL OPERATING EXPENSES",
+    "type": "Tot"
+  },
+  {
+    "code": "6999",
+    "name": "NET OPERATING INCOME",
+    "type": "Tot"
+  },
+  {
+    "code": "7061",
+    "name": "NON-RECOVERABLE EXPENESES - G&A",
+    "type": "Head"
+  },
+  {
+    "code": "7062",
+    "name": "State Filing Fees",
+    "type": "Reg"
+  },
+  {
+    "code": "7063",
+    "name": "Taxes & Licence",
+    "type": "Reg"
+  },
+  {
+    "code": "7064",
+    "name": "Professional Fees",
+    "type": "Reg"
+  },
+  {
+    "code": "7065",
+    "name": "Test-fits",
+    "type": "Reg"
+  },
+  {
+    "code": "7066",
+    "name": "Office Supplies",
+    "type": "Reg"
+  },
+  {
+    "code": "7067",
+    "name": "Advertising and Promotions",
+    "type": "Reg"
+  },
+  {
+    "code": "7068",
+    "name": "Leasing Legal Fees",
+    "type": "Reg"
+  },
+  {
+    "code": "7069",
+    "name": "Bank Fees",
+    "type": "Reg"
+  },
+  {
+    "code": "7070",
+    "name": "Yardi Subscription",
+    "type": "Reg"
+  },
+  {
+    "code": "7071",
+    "name": "Accounting/Audit",
+    "type": "Reg"
+  },
+  {
+    "code": "7099",
+    "name": "TOTAL NON-RECOVERABLE EXPENESES - G&A",
+    "type": "Tot"
+  },
+  {
+    "code": "7100",
+    "name": "CAPITAL EXPENSES",
+    "type": "Head"
+  },
+  {
+    "code": "7101",
+    "name": "Owner Capital Reserve Expense",
+    "type": "Reg"
+  },
+  {
+    "code": "7105",
+    "name": "Tenant Improvements",
+    "type": "Reg"
+  },
+  {
+    "code": "7106",
+    "name": "Base Bldg Costs",
+    "type": "Reg"
+  },
+  {
+    "code": "7107",
+    "name": "Brokerage Commissions",
+    "type": "Reg"
+  },
+  {
+    "code": "7149",
+    "name": "TOTAL CAPITAL EXPENSES",
+    "type": "Tot"
+  },
+  {
+    "code": "7150",
+    "name": "DEBT SERVICE",
+    "type": "Head"
+  },
+  {
+    "code": "7151",
+    "name": "Mortgage Interest",
+    "type": "Reg"
+  },
+  {
+    "code": "7152",
+    "name": "1st Mortgage Interest",
+    "type": "Reg"
+  },
+  {
+    "code": "7153",
+    "name": "2nd Mortgage Interest",
+    "type": "Reg"
+  },
+  {
+    "code": "7199",
+    "name": "TOTAL DEBT SERVICE",
+    "type": "Tot"
+  },
+  {
+    "code": "7200",
+    "name": "DEPRECIATION & AMORTIZATION",
+    "type": "Head"
+  },
+  {
+    "code": "7210",
+    "name": "Depreciation Expense",
+    "type": "Reg"
+  },
+  {
+    "code": "7220",
+    "name": "Amortization Expense",
+    "type": "Reg"
+  },
+  {
+    "code": "7299",
+    "name": "TOTAL DEPRECIATION & AMORTIZATION EXPENSE",
+    "type": "Tot"
+  },
+  {
+    "code": "8000",
+    "name": "CONSTRUCTION COSTS",
+    "type": "Head"
+  },
+  {
+    "code": "8099",
+    "name": "TOTAL CONSTRUCTION COSTS",
+    "type": "Tot"
+  }
+]

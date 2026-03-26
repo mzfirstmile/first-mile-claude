@@ -496,6 +496,82 @@
   .bgt-empty p { font-size:14px; font-weight:600; margin-bottom:4px; }
   .bgt-empty .sub { font-size:12px; font-weight:400; }
 
+  /* ── Financials & Budgeting: Property Cards Grid ── */
+  .fb-cards-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:20px; }
+  .fb-card {
+    background:var(--surface); border-radius:14px; border:1px solid var(--border);
+    overflow:hidden; cursor:pointer; transition:all .2s;
+    display:flex; flex-direction:column;
+  }
+  .fb-card:hover { border-color:var(--accent); box-shadow:0 4px 20px rgba(0,176,212,.12); transform:translateY(-2px); }
+  .fb-card-img {
+    height:160px; background-size:cover; background-position:center; position:relative;
+  }
+  .fb-card-img::after {
+    content:''; position:absolute; bottom:0; left:0; right:0; height:60px;
+    background:linear-gradient(transparent, rgba(30,45,68,.7));
+  }
+  .fb-card-name {
+    position:absolute; bottom:10px; left:16px; right:16px; z-index:1;
+    font-size:18px; font-weight:700; color:#fff; text-shadow:0 1px 4px rgba(0,0,0,.4);
+  }
+  .fb-card-body { padding:16px; flex:1; }
+  .fb-card-meta { font-size:11px; color:var(--text-dim); margin-bottom:12px; }
+  .fb-card-metrics { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .fb-card-metric { text-align:center; }
+  .fb-card-metric-label { font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); margin-bottom:2px; font-weight:600; }
+  .fb-card-metric-val { font-size:16px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .fb-card-metric-val.revenue { color:var(--green); }
+  .fb-card-metric-val.expense { color:#e5534b; }
+  .fb-card-metric-val.noi { color:var(--accent); }
+
+  /* ── Financials & Budgeting: Tabs + Detail ── */
+  .fb-tabs {
+    display:flex; gap:6px; margin-bottom:16px; flex-wrap:wrap;
+  }
+  .fb-tab {
+    padding:8px 16px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface); font-size:12px; font-weight:600; color:var(--text-dim);
+    cursor:pointer; transition:all .15s; display:flex; align-items:center; gap:8px;
+  }
+  .fb-tab:hover { border-color:var(--accent); color:var(--text); }
+  .fb-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .fb-tab-img { width:24px; height:24px; border-radius:4px; object-fit:cover; }
+  .fb-tab .fb-back-arrow { display:none; }
+  .fb-tab:first-child .fb-back-arrow { display:inline; margin-right:2px; }
+
+  .fb-detail-header {
+    display:flex; align-items:center; gap:20px; margin-bottom:16px; padding:16px 20px;
+    background:var(--surface); border-radius:12px; border:1px solid var(--border);
+  }
+  .fb-detail-header-img { width:80px; height:56px; border-radius:8px; object-fit:cover; }
+  .fb-detail-header-info h2 { font-size:20px; font-weight:700; margin-bottom:2px; }
+  .fb-detail-header-info p { font-size:12px; color:var(--text-dim); }
+
+  .fb-detail-nav {
+    display:flex; gap:4px; margin-bottom:16px; background:var(--surface); border-radius:10px;
+    border:1px solid var(--border); padding:4px; overflow-x:auto;
+  }
+  .fb-nav-btn {
+    padding:8px 18px; border-radius:7px; border:none; background:none;
+    font-size:12px; font-weight:600; color:var(--text-dim); cursor:pointer; transition:all .15s;
+    white-space:nowrap;
+  }
+  .fb-nav-btn:hover { color:var(--text); background:var(--surface2); }
+  .fb-nav-btn.active { background:var(--accent); color:#fff; }
+
+  /* Detail tab: monthly table */
+  .fb-monthly-table { width:100%; border-collapse:collapse; font-size:11px; white-space:nowrap; }
+  .fb-monthly-table th, .fb-monthly-table td { padding:6px 8px; text-align:right; border-bottom:1px solid var(--border); }
+  .fb-monthly-table th { background:var(--surface2); font-weight:600; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:.3px; position:sticky; top:0; z-index:2; }
+  .fb-monthly-table td:first-child, .fb-monthly-table th:first-child { text-align:left; font-weight:500; min-width:200px; position:sticky; left:0; background:var(--surface); z-index:1; }
+  .fb-monthly-table th:first-child { background:var(--surface2); z-index:3; }
+  .fb-monthly-table .fb-cat-header td { background:var(--surface2); font-weight:700 !important; font-size:11px; color:var(--text); border-top:2px solid var(--border); }
+  .fb-monthly-table .fb-cat-total td { background:rgba(0,176,212,.03); font-weight:700 !important; border-top:1.5px solid var(--border); }
+  .fb-monthly-table .fb-cat-total td:first-child { color:var(--accent); }
+  .fb-monthly-table .gl-code { color:var(--text-dim); font-size:10px; font-weight:400; margin-left:4px; }
+  .fb-monthly-table .vendor-name { color:var(--text-dim); font-size:10px; display:block; font-weight:400; }
+
   /* ── Chat Widget ── */
   .chat-fab { position:fixed; bottom:24px; right:24px; width:52px; height:52px; border-radius:50%; background:var(--accent); color:#fff; border:none; cursor:pointer; box-shadow:0 4px 16px rgba(0,176,212,.35); z-index:300; display:flex; align-items:center; justify-content:center; transition:all .2s; font-size:22px; }
   .chat-fab:hover { transform:scale(1.08); box-shadow:0 6px 24px rgba(0,176,212,.45); }
@@ -553,11 +629,7 @@
     </a>
     <a class="sidebar-item" data-view="financials">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-      <span>Property Financials</span>
-    </a>
-    <a class="sidebar-item" data-view="budgeting">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      <span>Property Budgeting</span>
+      <span>Property Financials &amp; Budgeting</span>
     </a>
     <a class="sidebar-item" data-view="forecasting">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
@@ -617,30 +689,17 @@
         <div class="module-card-status live"><span class="dot"></span> Live</div>
       </div>
 
-      <!-- Property Financials -->
-      <div class="module-card" onclick="switchView('financials')">
+      <!-- Property Financials & Budgeting -->
+      <div class="module-card" onclick="switchView('financials')" style="cursor:pointer">
         <div class="module-card-icon financials">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
         </div>
         <div class="module-card-arrow">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </div>
-        <h3>Property Financials</h3>
-        <p>View income, expenses, and cash flow across your portfolio with real-time bank data.</p>
-        <div class="module-card-status coming"><span class="dot"></span> Coming Soon</div>
-      </div>
-
-      <!-- Property Budgeting -->
-      <div class="module-card" onclick="switchView('budgeting')">
-        <div class="module-card-icon budgeting">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-        </div>
-        <div class="module-card-arrow">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </div>
-        <h3>Property Budgeting</h3>
-        <p>Build and track annual budgets per property. Compare actuals vs. budget in real time.</p>
-        <div class="module-card-status coming"><span class="dot"></span> Coming Soon</div>
+        <h3>Property Financials &amp; Budgeting</h3>
+        <p>View financials, build annual budgets, and compare actuals vs. budget across your portfolio.</p>
+        <div class="module-card-status live"><span class="dot"></span> Live</div>
       </div>
 
       <div class="module-card" onclick="switchView('forecasting')" style="cursor:pointer">
@@ -713,11 +772,20 @@
   </div>
 
   <!-- Placeholder views for future modules -->
-  <div class="manage-view" id="view-financials">
-    <div class="empty-state">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
-      <p>Property Financials</p>
-      <p class="sub">This module is under development.</p>
+  <div class="manage-view" id="view-financials" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
+    <!-- Property Cards Grid (home state) -->
+    <div id="fbCards" class="fb-cards-grid"></div>
+    <!-- Property Tabs + Detail View (active state) -->
+    <div id="fbDetail" class="fb-detail" style="display:none">
+      <div class="fb-tabs" id="fbTabs"></div>
+      <div class="fb-detail-header" id="fbDetailHeader"></div>
+      <div class="fb-detail-nav">
+        <button class="fb-nav-btn active" onclick="fbShowTab('summary')">Summary</button>
+        <button class="fb-nav-btn" onclick="fbShowTab('opex')">Operating Expenses</button>
+        <button class="fb-nav-btn" onclick="fbShowTab('revenue')">Revenue</button>
+        <button class="fb-nav-btn" onclick="fbShowTab('capital')">Capital &amp; Debt</button>
+      </div>
+      <div class="fb-detail-body" id="fbDetailBody"></div>
     </div>
   </div>
 
@@ -822,63 +890,7 @@
     <iframe src="exec.html" style="width:100%; height:100%; border:none;"></iframe>
   </div>
 
-  <div class="manage-view" id="view-budgeting" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
-    <!-- Controls bar -->
-    <div class="bgt-controls">
-      <div class="bgt-left">
-        <select id="bgtPropSelect" class="bgt-select" onchange="bgtSelectProp()">
-          <option value="">Select Property…</option>
-        </select>
-        <div class="bgt-meta" id="bgtMeta"></div>
-      </div>
-      <div class="bgt-right">
-        <div class="bgt-toggle" id="bgtToggle">
-          <button class="bgt-tog-btn active" onclick="bgtSetMode('nominal')">$</button>
-          <button class="bgt-tog-btn" onclick="bgtSetMode('psf')">PSF</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Variance legend -->
-    <div class="bgt-legend" id="bgtLegend" style="display:none">
-      <div class="bgt-legend-item"><span class="bgt-dot" style="background:var(--accent)"></span> <b>A</b> = 2026 Budget</div>
-      <div class="bgt-legend-item"><span class="bgt-dot" style="background:var(--green)"></span> <b>B</b> = 2025 Actuals</div>
-      <div class="bgt-legend-item"><span class="bgt-dot" style="background:#a78bfa"></span> <b>C</b> = 2025 Budget</div>
-    </div>
-
-    <!-- Summary table -->
-    <div class="bgt-table-wrap" id="bgtTableWrap" style="display:none">
-      <table class="bgt-table">
-        <thead>
-          <tr>
-            <th class="bgt-th-label" rowspan="2">Line Item</th>
-            <th colspan="2" class="bgt-th-group a">2026 Budget (A)</th>
-            <th colspan="2" class="bgt-th-group b">2025 Actuals (B)</th>
-            <th colspan="2" class="bgt-th-group c">2025 Budget (C)</th>
-            <th colspan="2" class="bgt-th-group var1">A vs B</th>
-            <th colspan="2" class="bgt-th-group var2">A vs C</th>
-            <th colspan="2" class="bgt-th-group var3">B vs C</th>
-          </tr>
-          <tr>
-            <th class="bgt-th-sub a">Amount</th><th class="bgt-th-sub a">PSF</th>
-            <th class="bgt-th-sub b">Amount</th><th class="bgt-th-sub b">PSF</th>
-            <th class="bgt-th-sub c">Amount</th><th class="bgt-th-sub c">PSF</th>
-            <th class="bgt-th-sub var1">$</th><th class="bgt-th-sub var1">%</th>
-            <th class="bgt-th-sub var2">$</th><th class="bgt-th-sub var2">%</th>
-            <th class="bgt-th-sub var3">$</th><th class="bgt-th-sub var3">%</th>
-          </tr>
-        </thead>
-        <tbody id="bgtBody"></tbody>
-      </table>
-    </div>
-
-    <!-- Empty state -->
-    <div class="bgt-empty" id="bgtEmpty">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-      <p>Select a property to view its budget summary</p>
-      <p class="sub">Includes 2026 Budget vs 2025 Actuals and Budget with variance analysis</p>
-    </div>
-  </div>
+  <!-- budgeting view removed - merged into financials -->
 
   <div class="manage-view" id="view-forecasting">
     <div class="empty-state">
@@ -914,8 +926,7 @@
   const VIEW_TITLES = {
     home: '',
     calendar: 'Accounting <span>Calendar</span>',
-    financials: 'Property <span>Financials</span>',
-    budgeting: 'Property <span>Budgeting</span>',
+    financials: 'Property <span>Financials & Budgeting</span>',
     forecasting: 'Strategic <span>Forecasting</span>',
     properties: 'Manage <span>Properties</span>',
     users: 'Manage <span>Users</span>',
@@ -952,7 +963,7 @@
     if (view === 'properties') loadProperties();
     if (view === 'users') loadUsers();
     if (view === 'calendar') calInit();
-    if (view === 'budgeting') bgtInit();
+    if (view === 'financials') fbInit();
   }
 
   // ── Sidebar click handlers ──
@@ -1035,15 +1046,11 @@
   }
 
   function propGoToBudget(name) {
-    switchView('budgeting');
-    // Wait for bgtInit, then select the property
-    bgtInit().then(() => {
+    switchView('financials');
+    fbInit().then(() => {
       if (!bgtData) return;
       const idx = bgtData.findIndex(b => b.name.toLowerCase() === name.toLowerCase());
-      if (idx >= 0) {
-        document.getElementById('bgtPropSelect').value = idx;
-        bgtSelectProp();
-      }
+      if (idx >= 0) fbSelectProp(idx);
     });
   }
 
@@ -1619,97 +1626,198 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
   // ══════════════════════════════════════
   // ── PROPERTY BUDGETING MODULE ──
   // ══════════════════════════════════════
-  let bgtData = null, bgtSelected = null, bgtMode = 'nominal', bgtLoaded = false;
+  // ── Property Financials & Budgeting Module ──
+  let bgtData = null, bgtLoaded = false;
+  let fbSelectedIdx = -1, fbActiveTab = 'summary', fbMode = 'nominal';
 
-  async function bgtInit() {
-    if (bgtLoaded) return;
-    bgtLoaded = true;
-    try {
-      const r = await fetch('budget-data.json');
-      bgtData = await r.json();
-      const sel = document.getElementById('bgtPropSelect');
-      bgtData.forEach((p, i) => {
-        const opt = document.createElement('option');
-        opt.value = i;
-        opt.textContent = p.name;
-        sel.appendChild(opt);
-      });
-    } catch (e) {
-      console.error('Budget data load error:', e);
+  // Photo map: property name → image path
+  const FB_PHOTOS = {
+    '61 S Paramus': 'Property Photos/61south.png',
+    'Paramus Plaza': 'Property Photos/paramusplaza.png',
+    '575 Broadway': 'Property Photos/575broadway.jpg',
+    '1700 East Putnam': 'Property Photos/1700eastputnam.png',
+    '340 Mount Kemble': 'Property Photos/340mk.jpg',
+  };
+
+  async function fbInit() {
+    if (!bgtLoaded) {
+      bgtLoaded = true;
+      try {
+        const r = await fetch('budget-data.json');
+        bgtData = await r.json();
+      } catch (e) { console.error('Budget load error:', e); return; }
     }
+    // If no property selected, show cards
+    if (fbSelectedIdx < 0) fbRenderCards();
   }
 
-  function bgtSelectProp() {
-    const idx = document.getElementById('bgtPropSelect').value;
-    if (idx === '') {
-      bgtSelected = null;
-      document.getElementById('bgtTableWrap').style.display = 'none';
-      document.getElementById('bgtLegend').style.display = 'none';
-      document.getElementById('bgtEmpty').style.display = '';
-      document.getElementById('bgtMeta').innerHTML = '';
-      return;
-    }
-    bgtSelected = bgtData[parseInt(idx)];
-    document.getElementById('bgtEmpty').style.display = 'none';
-    document.getElementById('bgtTableWrap').style.display = '';
-    document.getElementById('bgtLegend').style.display = 'flex';
-    document.getElementById('bgtMeta').innerHTML = `<b>${bgtSelected.entity}</b> · ${bgtSelected.sqft.toLocaleString()} SF`;
-    bgtRender();
-  }
-
-  function bgtSetMode(mode) {
-    bgtMode = mode;
-    document.querySelectorAll('.bgt-tog-btn').forEach(b => b.classList.remove('active'));
-    document.querySelector(`.bgt-tog-btn[onclick*="${mode}"]`).classList.add('active');
-    if (bgtSelected) bgtRender();
-  }
-
-  function bgtFmt(v) {
-    if (v === 0) return '—';
-    const neg = v < 0;
-    const abs = Math.abs(v);
+  function fbFmt(v) {
+    if (!v || v === 0) return '—';
+    const neg = v < 0; const abs = Math.abs(v);
     let str;
     if (abs >= 1000000) str = '$' + (abs/1000000).toFixed(2) + 'M';
     else if (abs >= 1000) str = '$' + (abs/1000).toFixed(1) + 'K';
     else str = '$' + abs.toFixed(0);
     return neg ? '(' + str + ')' : str;
   }
-
-  function bgtFmtPsf(v, sqft) {
-    if (!sqft || v === 0) return '—';
-    const psf = v / sqft;
-    const neg = psf < 0;
-    const abs = Math.abs(psf);
-    let str = '$' + abs.toFixed(2);
+  function fbFmtFull(v) {
+    if (!v || v === 0) return '—';
+    const neg = v < 0; const abs = Math.abs(v);
+    const str = '$' + abs.toLocaleString(undefined, {minimumFractionDigits:0, maximumFractionDigits:0});
     return neg ? '(' + str + ')' : str;
   }
-
-  function bgtFmtPct(v) {
-    if (v === 0) return '—';
+  function fbFmtPsf(v, sqft) {
+    if (!sqft || !v || v === 0) return '—';
+    const psf = v / sqft; const neg = psf < 0;
+    return (neg ? '(' : '') + '$' + Math.abs(psf).toFixed(2) + (neg ? ')' : '');
+  }
+  function fbFmtPct(v) {
+    if (!v || v === 0) return '—';
     const neg = v < 0;
     return (neg ? '(' : '') + Math.abs(v).toFixed(1) + '%' + (neg ? ')' : '');
   }
-
-  function bgtValClass(v, isExpense) {
-    if (v === 0) return '';
-    // For income: positive variance = good, negative = bad
-    // For expenses: negative variance = good (saving), positive = bad
+  function fbValClass(v, isExpense) {
+    if (!v || v === 0) return '';
     if (isExpense) return v < 0 ? 'bgt-pos' : 'bgt-neg';
     return v > 0 ? 'bgt-pos' : 'bgt-neg';
   }
 
-  function bgtRender() {
-    const p = bgtSelected;
+  function fbRenderCards() {
+    const grid = document.getElementById('fbCards');
+    document.getElementById('fbCards').style.display = '';
+    document.getElementById('fbDetail').style.display = 'none';
+    fbSelectedIdx = -1;
+
+    grid.innerHTML = bgtData.map((p, i) => {
+      const photo = FB_PHOTOS[p.name] || '';
+      const imgStyle = photo ? `background-image:url('${photo}')` : `background:linear-gradient(135deg,var(--navy),var(--accent))`;
+      return `<div class="fb-card" onclick="fbSelectProp(${i})">
+        <div class="fb-card-img" style="${imgStyle}">
+          <div class="fb-card-name">${p.name}</div>
+        </div>
+        <div class="fb-card-body">
+          <div class="fb-card-meta">${p.sqft ? p.sqft.toLocaleString() + ' SF' : ''} · ${p.budgetYear} Budget</div>
+          <div class="fb-card-metrics">
+            <div class="fb-card-metric">
+              <div class="fb-card-metric-label">Revenue</div>
+              <div class="fb-card-metric-val revenue">${fbFmt(p.totalIncome)}</div>
+            </div>
+            <div class="fb-card-metric">
+              <div class="fb-card-metric-label">Expenses</div>
+              <div class="fb-card-metric-val expense">${fbFmt(p.totalExpenses)}</div>
+            </div>
+            <div class="fb-card-metric">
+              <div class="fb-card-metric-label">NOI</div>
+              <div class="fb-card-metric-val noi">${fbFmt(p.noi)}</div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function fbSelectProp(idx) {
+    fbSelectedIdx = idx;
+    fbActiveTab = 'summary';
+    document.getElementById('fbCards').style.display = 'none';
+    document.getElementById('fbDetail').style.display = '';
+    fbRenderTabs();
+    fbRenderDetailHeader();
+    fbRenderDetail();
+  }
+
+  function fbBackToCards() {
+    fbSelectedIdx = -1;
+    fbRenderCards();
+  }
+
+  function fbRenderTabs() {
+    const tabs = document.getElementById('fbTabs');
+    tabs.innerHTML = `<div class="fb-tab" onclick="fbBackToCards()" title="Back to all properties"><span class="fb-back-arrow">←</span> All</div>` +
+      bgtData.map((p, i) => {
+        const photo = FB_PHOTOS[p.name] || '';
+        const imgHtml = photo ? `<img class="fb-tab-img" src="${photo}" alt="">` : '';
+        return `<div class="fb-tab${i === fbSelectedIdx ? ' active' : ''}" onclick="fbSelectProp(${i})">
+          ${imgHtml}<span>${p.name}</span>
+        </div>`;
+      }).join('');
+  }
+
+  function fbRenderDetailHeader() {
+    const p = bgtData[fbSelectedIdx];
+    const photo = FB_PHOTOS[p.name] || '';
+    const imgHtml = photo ? `<img class="fb-detail-header-img" src="${photo}" alt="">` : '';
+    document.getElementById('fbDetailHeader').innerHTML = `
+      ${imgHtml}
+      <div class="fb-detail-header-info">
+        <h2>${p.name}</h2>
+        <p>${p.sqft ? p.sqft.toLocaleString() + ' SF' : ''} · ${p.budgetYear} Budget · Revenue ${fbFmt(p.totalIncome)} · Expenses ${fbFmt(p.totalExpenses)} · NOI ${fbFmt(p.noi)}</p>
+      </div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+        <div class="bgt-toggle">
+          <button class="bgt-tog-btn${fbMode==='nominal'?' active':''}" onclick="fbSetMode('nominal')">$</button>
+          <button class="bgt-tog-btn${fbMode==='psf'?' active':''}" onclick="fbSetMode('psf')">PSF</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function fbSetMode(m) {
+    fbMode = m;
+    fbRenderDetailHeader();
+    fbRenderDetail();
+  }
+
+  function fbShowTab(tab) {
+    fbActiveTab = tab;
+    document.querySelectorAll('.fb-nav-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.fb-nav-btn').forEach(b => {
+      if (b.textContent.trim().toLowerCase().includes(tab === 'opex' ? 'operating' : tab === 'capital' ? 'capital' : tab)) b.classList.add('active');
+    });
+    fbRenderDetail();
+  }
+
+  function fbRenderDetail() {
+    const body = document.getElementById('fbDetailBody');
+    const p = bgtData[fbSelectedIdx];
     if (!p) return;
+
+    if (fbActiveTab === 'summary') {
+      fbRenderSummary(body, p);
+    } else {
+      fbRenderMonthlyDetail(body, p, fbActiveTab);
+    }
+  }
+
+  function fbRenderSummary(body, p) {
     const sqft = p.sqft;
-    const tbody = document.getElementById('bgtBody');
-    const isPsf = bgtMode === 'psf';
+    const isPsf = fbMode === 'psf';
+    const fmt = isPsf ? (v) => fbFmtPsf(v, sqft) : fbFmt;
     let isExpenseSection = false;
 
-    const fmt = isPsf ? (v) => bgtFmtPsf(v, sqft) : bgtFmt;
+    let html = `<div class="bgt-legend" style="display:flex;margin-bottom:14px">
+      <div class="bgt-legend-item"><span class="bgt-dot" style="background:var(--accent)"></span> <b>A</b> = 2026 Budget</div>
+      <div class="bgt-legend-item"><span class="bgt-dot" style="background:var(--green)"></span> <b>B</b> = 2025 Actuals</div>
+      <div class="bgt-legend-item"><span class="bgt-dot" style="background:#a78bfa"></span> <b>C</b> = 2025 Budget</div>
+    </div>
+    <div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
+      <th class="bgt-th-label" rowspan="2">Line Item</th>
+      <th colspan="2" class="bgt-th-group a">2026 Budget (A)</th>
+      <th colspan="2" class="bgt-th-group b">2025 Actuals (B)</th>
+      <th colspan="2" class="bgt-th-group c">2025 Budget (C)</th>
+      <th colspan="2" class="bgt-th-group var1">A vs B</th>
+      <th colspan="2" class="bgt-th-group var2">A vs C</th>
+      <th colspan="2" class="bgt-th-group var3">B vs C</th>
+    </tr><tr>
+      <th class="bgt-th-sub a">Amount</th><th class="bgt-th-sub a">PSF</th>
+      <th class="bgt-th-sub b">Amount</th><th class="bgt-th-sub b">PSF</th>
+      <th class="bgt-th-sub c">Amount</th><th class="bgt-th-sub c">PSF</th>
+      <th class="bgt-th-sub var1">$</th><th class="bgt-th-sub var1">%</th>
+      <th class="bgt-th-sub var2">$</th><th class="bgt-th-sub var2">%</th>
+      <th class="bgt-th-sub var3">$</th><th class="bgt-th-sub var3">%</th>
+    </tr></thead><tbody>`;
 
-    let html = '';
-    p.rows.forEach(row => {
+    (p.summaryRows || p.rows || []).forEach(row => {
       if (row.isHeader) {
         const label = row.label;
         if (label.includes('EXPENSE') || label.includes('OPERATING')) isExpenseSection = true;
@@ -1717,29 +1825,102 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         html += `<tr class="bgt-row-header"><td colspan="13">${label}</td></tr>`;
         return;
       }
-
       const cls = row.isTotal ? ' class="bgt-row-total"' : '';
-      const vc1 = bgtValClass(row.varBudgetVsActual, isExpenseSection);
-      const vc2 = bgtValClass(row.varBudgetVsBudget, isExpenseSection);
-      const vc3 = bgtValClass(row.varActualVsBudget, isExpenseSection);
+      const vc1 = fbValClass(row.varBudgetVsActual, isExpenseSection);
+      const vc2 = fbValClass(row.varBudgetVsBudget, isExpenseSection);
+      const vc3 = fbValClass(row.varActualVsBudget, isExpenseSection);
 
       html += `<tr${cls}>
         <td>${row.label}</td>
-        <td>${fmt(row.budget26)}</td>
-        <td>${bgtFmtPsf(row.budget26, sqft)}</td>
-        <td>${fmt(row.actuals25)}</td>
-        <td>${bgtFmtPsf(row.actuals25, sqft)}</td>
-        <td>${fmt(row.budget25)}</td>
-        <td>${bgtFmtPsf(row.budget25, sqft)}</td>
-        <td class="${vc1}">${fmt(row.varBudgetVsActual)}</td>
-        <td class="${vc1}">${bgtFmtPct(row.varBudgetVsActualPct)}</td>
-        <td class="${vc2}">${fmt(row.varBudgetVsBudget)}</td>
-        <td class="${vc2}">${bgtFmtPct(row.varBudgetVsBudgetPct)}</td>
-        <td class="${vc3}">${fmt(row.varActualVsBudget)}</td>
-        <td class="${vc3}">${bgtFmtPct(row.varActualVsBudgetPct)}</td>
+        <td>${fmt(row.budget26)}</td><td>${fbFmtPsf(row.budget26, sqft)}</td>
+        <td>${fmt(row.actuals25)}</td><td>${fbFmtPsf(row.actuals25, sqft)}</td>
+        <td>${fmt(row.budget25)}</td><td>${fbFmtPsf(row.budget25, sqft)}</td>
+        <td class="${vc1}">${fmt(row.varBudgetVsActual)}</td><td class="${vc1}">${fbFmtPct(row.varBudgetVsActualPct)}</td>
+        <td class="${vc2}">${fmt(row.varBudgetVsBudget)}</td><td class="${vc2}">${fbFmtPct(row.varBudgetVsBudgetPct)}</td>
+        <td class="${vc3}">${fmt(row.varActualVsBudget)}</td><td class="${vc3}">${fbFmtPct(row.varActualVsBudgetPct)}</td>
       </tr>`;
     });
-    tbody.innerHTML = html;
+
+    html += '</tbody></table></div>';
+    body.innerHTML = html;
+  }
+
+  function fbRenderMonthlyDetail(body, p, section) {
+    const sqft = p.sqft;
+    const isPsf = fbMode === 'psf';
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const sectionMap = { opex:'opex', revenue:'revenue', capital:'capital' };
+    const sectionKey = sectionMap[section] || section;
+
+    // Filter detail rows for this section
+    const rows = (p.detailRows || []).filter(r => r.section === sectionKey);
+    if (!rows.length) {
+      body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim)">No ${section} detail data available for this property.</div>`;
+      return;
+    }
+
+    // Group by category
+    const categories = {};
+    rows.forEach(r => {
+      const cat = r.category || 'Other';
+      if (!categories[cat]) categories[cat] = [];
+      categories[cat].push(r);
+    });
+
+    let html = `<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)"><table class="fb-monthly-table"><thead><tr>
+      <th>Line Item</th>`;
+    months.forEach(m => { html += `<th>${m}</th>`; });
+    html += `<th style="font-weight:700;color:var(--accent)">Total</th></tr></thead><tbody>`;
+
+    let grandTotal = {};
+    months.forEach(m => grandTotal[m] = 0);
+    let grandTotalAmt = 0;
+
+    Object.keys(categories).sort().forEach(cat => {
+      html += `<tr class="fb-cat-header"><td colspan="${months.length + 2}" style="text-align:left">${cat}</td></tr>`;
+      let catTotals = {};
+      months.forEach(m => catTotals[m] = 0);
+      let catTotal = 0;
+
+      categories[cat].forEach(row => {
+        const glBadge = row.gl ? `<span class="gl-code">[${row.gl}]</span>` : '';
+        const vendorLine = row.vendor ? `<span class="vendor-name">${row.vendor}</span>` : '';
+        html += '<tr>';
+        html += `<td>${row.name}${glBadge}${vendorLine}</td>`;
+        months.forEach(m => {
+          const v = (row.months && row.months[m]) || 0;
+          catTotals[m] += v;
+          grandTotal[m] += v;
+          html += `<td>${isPsf ? fbFmtPsf(v, sqft) : fbFmtFull(v)}</td>`;
+        });
+        const t = row.total || Object.values(row.months || {}).reduce((a,b) => a + (b||0), 0);
+        catTotal += t;
+        grandTotalAmt += t;
+        html += `<td style="font-weight:600">${isPsf ? fbFmtPsf(t, sqft) : fbFmtFull(t)}</td>`;
+        html += '</tr>';
+      });
+
+      // Category total row
+      html += '<tr class="fb-cat-total">';
+      html += `<td>Total ${cat}</td>`;
+      months.forEach(m => {
+        html += `<td>${isPsf ? fbFmtPsf(catTotals[m], sqft) : fbFmtFull(catTotals[m])}</td>`;
+      });
+      html += `<td>${isPsf ? fbFmtPsf(catTotal, sqft) : fbFmtFull(catTotal)}</td>`;
+      html += '</tr>';
+    });
+
+    // Grand total
+    html += '<tr class="fb-cat-total" style="border-top:3px solid var(--accent)">';
+    html += `<td style="font-size:12px">GRAND TOTAL</td>`;
+    months.forEach(m => {
+      html += `<td style="font-size:12px">${isPsf ? fbFmtPsf(grandTotal[m], sqft) : fbFmtFull(grandTotal[m])}</td>`;
+    });
+    html += `<td style="font-size:12px;color:var(--accent)">${isPsf ? fbFmtPsf(grandTotalAmt, sqft) : fbFmtFull(grandTotalAmt)}</td>`;
+    html += '</tr>';
+
+    html += '</tbody></table></div>';
+    body.innerHTML = html;
   }
 </script>
 
