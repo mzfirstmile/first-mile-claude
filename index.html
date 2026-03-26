@@ -593,9 +593,18 @@
     display:flex; align-items:center; gap:20px; margin-bottom:16px; padding:16px 20px;
     background:var(--surface); border-radius:12px; border:1px solid var(--border);
   }
-  .fb-detail-header-img { width:80px; height:56px; border-radius:8px; object-fit:cover; }
-  .fb-detail-header-info h2 { font-size:20px; font-weight:700; margin-bottom:2px; }
-  .fb-detail-header-info p { font-size:12px; color:var(--text-dim); }
+  .fb-detail-header-left { flex:0 0 auto; display:flex; align-items:center; gap:14px; }
+  .fb-detail-header-img { width:60px; height:42px; border-radius:6px; object-fit:cover; }
+  .fb-detail-header-info h2 { font-size:16px; font-weight:700; margin-bottom:2px; }
+  .fb-detail-header-info p { font-size:11px; color:var(--text-dim); }
+  .fb-detail-header-chart { flex:1; display:flex; align-items:flex-end; gap:16px; justify-content:center; height:70px; }
+  .fb-year-col { display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .fb-year-col-label { font-size:9px; color:var(--text-dim); font-weight:600; }
+  .fb-year-col-bars { display:flex; align-items:flex-end; gap:3px; height:50px; }
+  .fb-bar { width:14px; border-radius:3px 3px 0 0; min-height:2px; transition:height .3s; }
+  .fb-bar.rev { background:var(--green); }
+  .fb-bar.exp { background:#e05a4d; }
+  .fb-bar.noi { background:var(--accent); }
 
   .fb-detail-nav {
     display:flex; gap:4px; margin-bottom:16px; background:var(--surface); border-radius:10px;
@@ -1877,13 +1886,47 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const yearLabel = status === 'active' ? `${fbSelectedYear} Budget vs Actuals`
       : status === 'planning' ? `${fbSelectedYear} Budget Planning`
       : `${fbSelectedYear} (Historical)`;
-    document.getElementById('fbDetailHeader').innerHTML = `
-      ${imgHtml}
-      <div class="fb-detail-header-info">
-        <h2>${p.name}</h2>
-        <p>${p.sqft ? p.sqft.toLocaleString() + ' SF' : ''} · ${yearLabel} · Revenue ${fbFmt(p.totalIncome)} · Expenses ${fbFmt(p.totalExpenses)} · NOI ${fbFmt(p.noi)}</p>
+
+    // Build mini bar chart for Rev/Exp/NOI across years
+    // For now use same data for all years (will pull from year-specific data later)
+    const yearData = FB_YEARS.map(y => ({
+      year: y.year,
+      label: y.label,
+      rev: Math.abs(p.totalIncome || 0),
+      exp: Math.abs(p.totalExpenses || 0),
+      noi: Math.abs(p.noi || 0),
+    }));
+    const maxVal = Math.max(...yearData.flatMap(d => [d.rev, d.exp, d.noi]), 1);
+    const barH = (v) => Math.max(2, (v / maxVal) * 50);
+
+    let chartHtml = yearData.map(d => `
+      <div class="fb-year-col">
+        <div class="fb-year-col-bars">
+          <div class="fb-bar rev" style="height:${barH(d.rev)}px" title="Revenue: ${fbFmt(d.rev)}"></div>
+          <div class="fb-bar exp" style="height:${barH(d.exp)}px" title="Expenses: ${fbFmt(d.exp)}"></div>
+          <div class="fb-bar noi" style="height:${barH(d.noi)}px" title="NOI: ${fbFmt(d.noi)}"></div>
+        </div>
+        <div class="fb-year-col-label">${d.year}</div>
       </div>
-      <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+    `).join('');
+
+    // Legend
+    chartHtml += `<div style="display:flex;flex-direction:column;gap:3px;font-size:9px;color:var(--text-dim);margin-left:8px">
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--green)"></span>Rev</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:#e05a4d"></span>Exp</div>
+      <div style="display:flex;align-items:center;gap:4px"><span style="width:8px;height:8px;border-radius:2px;background:var(--accent)"></span>NOI</div>
+    </div>`;
+
+    document.getElementById('fbDetailHeader').innerHTML = `
+      <div class="fb-detail-header-left">
+        ${imgHtml}
+        <div class="fb-detail-header-info">
+          <h2>${p.name}</h2>
+          <p>${p.sqft ? p.sqft.toLocaleString() + ' SF' : ''} · ${yearLabel}</p>
+        </div>
+      </div>
+      <div class="fb-detail-header-chart">${chartHtml}</div>
+      <div style="display:flex;align-items:center;gap:8px">
         <div class="bgt-toggle">
           <button class="bgt-tog-btn${fbMode==='nominal'?' active':''}" onclick="fbSetMode('nominal')">$</button>
           <button class="bgt-tog-btn${fbMode==='psf'?' active':''}" onclick="fbSetMode('psf')">PSF</button>
@@ -2075,10 +2118,8 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const sectionMap = { opex:'opex', revenue:'revenue', capital:'capital' };
     const sectionKey = sectionMap[section] || section;
     const status = fbGetYearStatus();
-    // Planning mode: all sections editable. Active: opex/capital editable. Historical: nothing editable.
-    const editable = status === 'planning' ? true
-      : status === 'active' ? (sectionKey === 'opex' || sectionKey === 'capital')
-      : false;
+    // Only Planning year is editable. Active and Historical are read-only.
+    const editable = status === 'planning';
 
     // Filter detail rows for this section
     const rows = (p.detailRows || []).filter(r => r.section === sectionKey);
@@ -2090,7 +2131,9 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     // Group by category, preserving row indices into the full detailRows array
     // For opex, use GL-based grouping into standard categories
     const categories = {};
-    const opexGroupOrder = ['Tenant Reimbursable','Cleaning','Repairs & Maintenance','Administrative Payroll','Utilities','Management Fees','Taxes','Insurance'];
+    const opexGroupOrder = ['Tenant Reimbursable','Cleaning','Repairs & Maintenance','Administrative Payroll','Utilities','Management Fees','Taxes','Insurance','Non-Recoverable G&A'];
+    const revenueGroupOrder = ['Base Rent','Expense Recoveries','Miscellaneous Income'];
+    const capitalGroupOrder = ['Capital Expenses','Debt Service','Depreciation & Amortization'];
 
     function fbGlToOpexGroup(gl, name) {
       const g = parseInt(gl) || 0;
@@ -2155,9 +2198,11 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     let grandTotalAmt = 0;
     let catCounter = 0;
 
-    // Use fixed order for opex, alphabetical for others
-    const catKeys = (sectionKey === 'opex')
-      ? opexGroupOrder.filter(k => categories[k] && categories[k].length)
+    // Use fixed order for all sections
+    const orderMap = { opex: opexGroupOrder, revenue: revenueGroupOrder, capital: capitalGroupOrder };
+    const order = orderMap[sectionKey];
+    const catKeys = order
+      ? order.filter(k => categories[k] && categories[k].length)
       : Object.keys(categories).sort();
 
     catKeys.forEach(cat => {
