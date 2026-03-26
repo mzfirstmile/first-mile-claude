@@ -2301,13 +2301,14 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       <th class="bgt-th-sub var1 bgt-col-v1">$</th><th class="bgt-th-sub var1">%</th>
     </tr></thead><tbody>`;
 
-    // Pre-build: map header labels → matching total rows so we can merge them
+    // Pre-build: map sub-section header labels → matching total rows so we can merge them
+    // Only merge sub-sections (CLEANING, UTILITIES, etc.), NOT top-level sections (INCOME, OPERATING EXPENSES)
     const allRows = p.summaryRows || p.rows || [];
-    const headerLabels = new Set(allRows.filter(r => r.isHeader).map(r => r.label.toUpperCase()));
+    const topLevelPattern = /^(INCOME|REVENUE|OPERATING|EXPENSE|NET OPERATING|NOI|BELOW|CAPITAL|DEBT|G&A|GENERAL)/i;
+    const headerLabels = new Set(allRows.filter(r => r.isHeader && !topLevelPattern.test(r.label)).map(r => r.label.toUpperCase()));
     const totalByHeader = {};
     allRows.forEach(row => {
       if (!row.isTotal) return;
-      // Match "TOTAL CLEANING" → "CLEANING", "TOTAL UTILITIES" → "UTILITIES", etc.
       const stripped = row.label.replace(/^TOTAL\s+/i, '').toUpperCase();
       if (headerLabels.has(stripped)) {
         totalByHeader[stripped] = row;
