@@ -747,6 +747,8 @@ function categorize(record) {
   // Main operating account logic
   if (acctNum === MAIN_ACCT) {
     if (desc.includes('JUSTWORK')) return { category: 'expense', type: 'Payroll' };
+    if (desc.includes('X SHORE') || desc.includes('XSHORE')) return { category: 'expense', type: 'Payroll' };
+    if (desc.includes('LEVINE') && desc.includes('JACOBS')) return { category: 'expense', type: 'Legal/Corp Services' };
 
     if (isTransfer && amount > 0) {
       const isPayrollReimb = PAYROLL_REIMB_AMOUNTS.some(a => Math.abs(amount - a) < PAYROLL_REIMB_TOLERANCE);
