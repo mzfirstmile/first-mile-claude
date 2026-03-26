@@ -470,13 +470,13 @@
   .bgt-table th, .bgt-table td { padding:7px 10px; text-align:right; border-bottom:1px solid var(--border); }
   .bgt-table th { background:var(--surface2); font-weight:600; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:.3px; position:sticky; top:0; z-index:2; }
   .bgt-th-label { text-align:left !important; min-width:220px; }
-  .bgt-th-group { border-bottom:2px solid var(--border); }
-  .bgt-th-group.a { color:var(--accent); }
-  .bgt-th-group.b { color:var(--green); }
-  .bgt-th-group.c { color:#a78bfa; }
-  .bgt-th-group.var1 { color:#ff8c5a; }
-  .bgt-th-group.var2 { color:#dc78ff; }
-  .bgt-th-group.var3 { color:#50c8ff; }
+  .bgt-th-group { border-bottom:2px solid var(--border); font-size:10px; letter-spacing:.4px; }
+  .bgt-th-group.a { color:var(--accent); background:rgba(0,176,212,.06); }
+  .bgt-th-group.b { color:var(--green); background:rgba(26,154,107,.06); }
+  .bgt-th-group.c { color:#a78bfa; background:rgba(167,139,250,.06); }
+  .bgt-th-group.var1 { color:#ff8c5a; background:rgba(255,140,90,.06); }
+  .bgt-th-group.var2 { color:#dc78ff; background:rgba(220,120,255,.06); }
+  .bgt-th-group.var3 { color:#50c8ff; background:rgba(80,200,255,.06); }
   .bgt-th-sub { font-size:9px; }
   .bgt-th-sub.a { background:rgba(0,176,212,.04); }
   .bgt-th-sub.b { background:rgba(26,154,107,.04); }
@@ -484,11 +484,32 @@
   .bgt-th-sub.var1 { background:rgba(255,140,90,.04); }
   .bgt-th-sub.var2 { background:rgba(220,120,255,.04); }
   .bgt-th-sub.var3 { background:rgba(80,200,255,.04); }
+  /* Column group dividers */
+  .bgt-table td.bgt-col-a, .bgt-table th.bgt-col-a { border-left:2px solid rgba(0,176,212,.18); }
+  .bgt-table td.bgt-col-b, .bgt-table th.bgt-col-b { border-left:2px solid rgba(26,154,107,.18); }
+  .bgt-table td.bgt-col-c, .bgt-table th.bgt-col-c { border-left:2px solid rgba(167,139,250,.18); }
+  .bgt-table td.bgt-col-v1, .bgt-table th.bgt-col-v1 { border-left:2px solid rgba(255,140,90,.22); }
+  .bgt-table td.bgt-col-v2, .bgt-table th.bgt-col-v2 { border-left:2px solid rgba(220,120,255,.22); }
+  .bgt-table td.bgt-col-v3, .bgt-table th.bgt-col-v3 { border-left:2px solid rgba(80,200,255,.22); }
   .bgt-table td { color:var(--text); font-variant-numeric:tabular-nums; }
   .bgt-table td:first-child { text-align:left; font-weight:500; }
-  .bgt-row-header td { background:var(--surface2); font-weight:700 !important; font-size:11px; color:var(--text); border-top:2px solid var(--border); }
+  .bgt-row-header td {
+    font-weight:700 !important; font-size:11px; letter-spacing:.5px; text-transform:uppercase;
+    border-top:2px solid var(--border); padding:9px 12px;
+  }
+  .bgt-row-header.bgt-section-income td { background:rgba(20,168,142,.08); color:#0e7c6b; border-top:2.5px solid rgba(20,168,142,.35); }
+  .bgt-row-header.bgt-section-expense td { background:rgba(229,83,75,.08); color:#c0392b; border-top:2.5px solid rgba(229,83,75,.35); }
+  .bgt-row-header.bgt-section-noi td { background:rgba(0,176,212,.08); color:var(--accent); border-top:2.5px solid rgba(0,176,212,.35); }
+  .bgt-row-header.bgt-section-other td { background:var(--surface2); color:var(--text); }
   .bgt-row-total td { background:rgba(0,176,212,.03); font-weight:700 !important; border-top:1.5px solid var(--border); }
   .bgt-row-total td:first-child { color:var(--accent); }
+  /* Key totals that should POP */
+  .bgt-row-total.bgt-total-income td { background:rgba(20,168,142,.10); border-top:2.5px solid #14a88e; font-size:13px; padding:10px 10px; }
+  .bgt-row-total.bgt-total-income td:first-child { color:#0e7c6b; font-size:13px; }
+  .bgt-row-total.bgt-total-expense td { background:rgba(229,83,75,.10); border-top:2.5px solid #e05a4d; font-size:13px; padding:10px 10px; }
+  .bgt-row-total.bgt-total-expense td:first-child { color:#c0392b; font-size:13px; }
+  .bgt-row-total.bgt-total-noi td { background:rgba(0,176,212,.12); border-top:3px solid var(--accent); font-size:14px; padding:12px 10px; letter-spacing:.3px; }
+  .bgt-row-total.bgt-total-noi td:first-child { color:var(--accent); font-size:14px; }
   .bgt-neg { color:#e5534b !important; }
   .bgt-pos { color:var(--green) !important; }
   .bgt-empty { text-align:center; padding:60px 20px; color:var(--text-dim); }
@@ -566,11 +587,23 @@
   .fb-monthly-table th { background:var(--surface2); font-weight:600; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:.3px; position:sticky; top:0; z-index:2; }
   .fb-monthly-table td:first-child, .fb-monthly-table th:first-child { text-align:left; font-weight:500; min-width:200px; position:sticky; left:0; background:var(--surface); z-index:1; }
   .fb-monthly-table th:first-child { background:var(--surface2); z-index:3; }
-  .fb-monthly-table .fb-cat-header td { background:var(--surface2); font-weight:700 !important; font-size:11px; color:var(--text); border-top:2px solid var(--border); }
+  .fb-monthly-table .fb-cat-header td { background:var(--surface2); font-weight:700 !important; font-size:11px; color:var(--text); border-top:2px solid var(--border); cursor:pointer; user-select:none; }
+  .fb-monthly-table .fb-cat-header:hover td { background:rgba(0,176,212,.06); }
+  .fb-monthly-table .fb-cat-header .fb-chevron { display:inline-block; transition:transform .2s; margin-right:6px; font-size:10px; color:var(--text-dim); }
+  .fb-monthly-table .fb-cat-header.collapsed .fb-chevron { transform:rotate(-90deg); }
+  .fb-monthly-table .fb-cat-row-hidden { display:none; }
   .fb-monthly-table .fb-cat-total td { background:rgba(0,176,212,.03); font-weight:700 !important; border-top:1.5px solid var(--border); }
   .fb-monthly-table .fb-cat-total td:first-child { color:var(--accent); }
   .fb-monthly-table .gl-code { color:var(--text-dim); font-size:10px; font-weight:400; margin-left:4px; }
   .fb-monthly-table .vendor-name { color:var(--text-dim); font-size:10px; display:block; font-weight:400; }
+  .fb-monthly-table td.fb-gl-cell { text-align:center; color:var(--text-dim); font-size:10px; font-family:monospace; min-width:50px; }
+  .fb-monthly-table td.fb-editable { cursor:pointer; position:relative; }
+  .fb-monthly-table td.fb-editable:hover { background:rgba(0,176,212,.08); }
+  .fb-monthly-table td.fb-editing { padding:2px; }
+  .fb-monthly-table td.fb-editing input { width:100%; border:1.5px solid var(--accent); border-radius:4px; padding:4px 6px; font-size:11px; text-align:right; background:var(--surface); color:var(--text); outline:none; font-variant-numeric:tabular-nums; }
+  .fb-monthly-table td.fb-dirty { background:rgba(0,176,212,.12) !important; }
+  .fb-autosave-toast { position:fixed; bottom:24px; right:24px; background:var(--green); color:#fff; padding:8px 16px; border-radius:8px; font-size:12px; font-weight:600; z-index:9999; opacity:0; transition:opacity .3s; pointer-events:none; }
+  .fb-autosave-toast.show { opacity:1; }
 
   /* ── Chat Widget ── */
   .chat-fab { position:fixed; bottom:24px; right:24px; width:52px; height:52px; border-radius:50%; background:var(--accent); color:#fff; border:none; cursor:pointer; box-shadow:0 4px 16px rgba(0,176,212,.35); z-index:300; display:flex; align-items:center; justify-content:center; transition:all .2s; font-size:22px; }
@@ -781,8 +814,8 @@
       <div class="fb-detail-header" id="fbDetailHeader"></div>
       <div class="fb-detail-nav">
         <button class="fb-nav-btn active" onclick="fbShowTab('summary')">Summary</button>
-        <button class="fb-nav-btn" onclick="fbShowTab('opex')">Operating Expenses</button>
         <button class="fb-nav-btn" onclick="fbShowTab('revenue')">Revenue</button>
+        <button class="fb-nav-btn" onclick="fbShowTab('opex')">Operating Expenses</button>
         <button class="fb-nav-btn" onclick="fbShowTab('capital')">Capital &amp; Debt</button>
       </div>
       <div class="fb-detail-body" id="fbDetailBody"></div>
@@ -1795,26 +1828,21 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const fmt = isPsf ? (v) => fbFmtPsf(v, sqft) : fbFmt;
     let isExpenseSection = false;
 
-    let html = `<div class="bgt-legend" style="display:flex;margin-bottom:14px">
-      <div class="bgt-legend-item"><span class="bgt-dot" style="background:var(--accent)"></span> <b>A</b> = 2026 Budget</div>
-      <div class="bgt-legend-item"><span class="bgt-dot" style="background:var(--green)"></span> <b>B</b> = 2025 Actuals</div>
-      <div class="bgt-legend-item"><span class="bgt-dot" style="background:#a78bfa"></span> <b>C</b> = 2025 Budget</div>
-    </div>
-    <div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
+    let html = `<div class="bgt-table-wrap"><table class="bgt-table"><thead><tr>
       <th class="bgt-th-label" rowspan="2">Line Item</th>
-      <th colspan="2" class="bgt-th-group a">2026 Budget (A)</th>
-      <th colspan="2" class="bgt-th-group b">2025 Actuals (B)</th>
-      <th colspan="2" class="bgt-th-group c">2025 Budget (C)</th>
-      <th colspan="2" class="bgt-th-group var1">A vs B</th>
-      <th colspan="2" class="bgt-th-group var2">A vs C</th>
-      <th colspan="2" class="bgt-th-group var3">B vs C</th>
+      <th colspan="2" class="bgt-th-group a bgt-col-a">'26 Budget</th>
+      <th colspan="2" class="bgt-th-group b bgt-col-b">'25 Actuals</th>
+      <th colspan="2" class="bgt-th-group c bgt-col-c">'25 Budget</th>
+      <th colspan="2" class="bgt-th-group var1 bgt-col-v1">'26 Bgt vs '25 Act</th>
+      <th colspan="2" class="bgt-th-group var2 bgt-col-v2">'26 Bgt vs '25 Bgt</th>
+      <th colspan="2" class="bgt-th-group var3 bgt-col-v3">'25 Act vs '25 Bgt</th>
     </tr><tr>
-      <th class="bgt-th-sub a">Amount</th><th class="bgt-th-sub a">PSF</th>
-      <th class="bgt-th-sub b">Amount</th><th class="bgt-th-sub b">PSF</th>
-      <th class="bgt-th-sub c">Amount</th><th class="bgt-th-sub c">PSF</th>
-      <th class="bgt-th-sub var1">$</th><th class="bgt-th-sub var1">%</th>
-      <th class="bgt-th-sub var2">$</th><th class="bgt-th-sub var2">%</th>
-      <th class="bgt-th-sub var3">$</th><th class="bgt-th-sub var3">%</th>
+      <th class="bgt-th-sub a bgt-col-a">Amount</th><th class="bgt-th-sub a">PSF</th>
+      <th class="bgt-th-sub b bgt-col-b">Amount</th><th class="bgt-th-sub b">PSF</th>
+      <th class="bgt-th-sub c bgt-col-c">Amount</th><th class="bgt-th-sub c">PSF</th>
+      <th class="bgt-th-sub var1 bgt-col-v1">$</th><th class="bgt-th-sub var1">%</th>
+      <th class="bgt-th-sub var2 bgt-col-v2">$</th><th class="bgt-th-sub var2">%</th>
+      <th class="bgt-th-sub var3 bgt-col-v3">$</th><th class="bgt-th-sub var3">%</th>
     </tr></thead><tbody>`;
 
     (p.summaryRows || p.rows || []).forEach(row => {
@@ -1822,22 +1850,34 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
         const label = row.label;
         if (label.includes('EXPENSE') || label.includes('OPERATING')) isExpenseSection = true;
         if (label === 'INCOME') isExpenseSection = false;
-        html += `<tr class="bgt-row-header"><td colspan="13">${label}</td></tr>`;
+        let sectionCls = 'bgt-section-other';
+        if (label === 'INCOME' || label.includes('REVENUE')) sectionCls = 'bgt-section-income';
+        else if (label.includes('EXPENSE') || label.includes('OPERATING')) sectionCls = 'bgt-section-expense';
+        else if (label.includes('NOI') || label.includes('NET OPERATING')) sectionCls = 'bgt-section-noi';
+        html += `<tr class="bgt-row-header ${sectionCls}"><td colspan="13">${label}</td></tr>`;
         return;
       }
-      const cls = row.isTotal ? ' class="bgt-row-total"' : '';
+      let totalCls = '';
+      if (row.isTotal) {
+        const lbl = row.label.toLowerCase();
+        if (lbl.includes('net operating income') || lbl.includes('net income')) totalCls = 'bgt-row-total bgt-total-noi';
+        else if (lbl === 'total income' || lbl === 'total revenue') totalCls = 'bgt-row-total bgt-total-income';
+        else if (lbl.includes('total recoverable') || lbl.includes('total operating') || lbl === 'total expenses') totalCls = 'bgt-row-total bgt-total-expense';
+        else totalCls = 'bgt-row-total';
+      }
+      const cls = row.isTotal ? ` class="${totalCls}"` : '';
       const vc1 = fbValClass(row.varBudgetVsActual, isExpenseSection);
       const vc2 = fbValClass(row.varBudgetVsBudget, isExpenseSection);
       const vc3 = fbValClass(row.varActualVsBudget, isExpenseSection);
 
       html += `<tr${cls}>
         <td>${row.label}</td>
-        <td>${fmt(row.budget26)}</td><td>${fbFmtPsf(row.budget26, sqft)}</td>
-        <td>${fmt(row.actuals25)}</td><td>${fbFmtPsf(row.actuals25, sqft)}</td>
-        <td>${fmt(row.budget25)}</td><td>${fbFmtPsf(row.budget25, sqft)}</td>
-        <td class="${vc1}">${fmt(row.varBudgetVsActual)}</td><td class="${vc1}">${fbFmtPct(row.varBudgetVsActualPct)}</td>
-        <td class="${vc2}">${fmt(row.varBudgetVsBudget)}</td><td class="${vc2}">${fbFmtPct(row.varBudgetVsBudgetPct)}</td>
-        <td class="${vc3}">${fmt(row.varActualVsBudget)}</td><td class="${vc3}">${fbFmtPct(row.varActualVsBudgetPct)}</td>
+        <td class="bgt-col-a">${fmt(row.budget26)}</td><td>${fbFmtPsf(row.budget26, sqft)}</td>
+        <td class="bgt-col-b">${fmt(row.actuals25)}</td><td>${fbFmtPsf(row.actuals25, sqft)}</td>
+        <td class="bgt-col-c">${fmt(row.budget25)}</td><td>${fbFmtPsf(row.budget25, sqft)}</td>
+        <td class="bgt-col-v1 ${vc1}">${fmt(row.varBudgetVsActual)}</td><td class="${vc1}">${fbFmtPct(row.varBudgetVsActualPct)}</td>
+        <td class="bgt-col-v2 ${vc2}">${fmt(row.varBudgetVsBudget)}</td><td class="${vc2}">${fbFmtPct(row.varBudgetVsBudgetPct)}</td>
+        <td class="bgt-col-v3 ${vc3}">${fmt(row.varActualVsBudget)}</td><td class="${vc3}">${fbFmtPct(row.varActualVsBudgetPct)}</td>
       </tr>`;
     });
 
@@ -1851,6 +1891,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const sectionMap = { opex:'opex', revenue:'revenue', capital:'capital' };
     const sectionKey = sectionMap[section] || section;
+    const editable = (sectionKey === 'opex' || sectionKey === 'capital');
 
     // Filter detail rows for this section
     const rows = (p.detailRows || []).filter(r => r.section === sectionKey);
@@ -1859,41 +1900,103 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       return;
     }
 
-    // Group by category
+    // Group by category, preserving row indices into the full detailRows array
+    // For opex, use GL-based grouping into standard categories
     const categories = {};
+    const opexGroupOrder = ['Tenant Reimbursable','Cleaning','Repairs & Maintenance','Administrative Payroll','Utilities','Management Fees','Taxes','Insurance'];
+
+    function fbGlToOpexGroup(gl, name) {
+      const g = parseInt(gl) || 0;
+      const n = (name || '').toLowerCase();
+      // New COA ranges (5xxx-6xxx)
+      if (g >= 5451 && g <= 5456) return 'Cleaning';
+      if (g >= 5475 && g <= 5550) return 'Repairs & Maintenance';
+      if (g >= 5601 && g <= 5610) return 'Utilities';
+      if (g >= 5650 && g <= 5660) return 'Administrative Payroll';
+      if (g >= 6500 && g <= 6510) return 'Management Fees';
+      if (g >= 6511 && g <= 6520) return 'Taxes';
+      if (g >= 6521 && g <= 6530) return 'Insurance';
+      // Old COA ranges (from Excel extracts)
+      if (g >= 5002 && g <= 5006) return 'Cleaning';
+      if (g === 5011 || g === 5012) return 'Tenant Reimbursable';
+      if (g >= 5017 && g <= 5018) return 'Administrative Payroll';
+      if (g >= 5021 && g <= 5096) return 'Repairs & Maintenance';
+      if (g >= 5200 && g <= 5210) return 'Insurance'; // old insurance/tax
+      if (g >= 5300 && g <= 5510) return 'Repairs & Maintenance';
+      if (g >= 6000 && g <= 6036) return 'Repairs & Maintenance';
+      if (g >= 6050 && g <= 6056) return 'Utilities';
+      if (g === 6070 || g === 6071 || g === 6088 || g === 6089) return 'Insurance';
+      if (g === 6078) return 'Management Fees';
+      if (g === 6083) return 'Taxes';
+      if (g === 6352) return 'Repairs & Maintenance';
+      // Fallback by name
+      if (n.includes('clean') || n.includes('janitor') || n.includes('trash') || n.includes('window clean')) return 'Cleaning';
+      if (n.includes('tax')) return 'Taxes';
+      if (n.includes('insurance')) return 'Insurance';
+      if (n.includes('management fee')) return 'Management Fees';
+      if (n.includes('utilit') || n.includes('electric') || n.includes('gas') || n.includes('water') || n.includes('sewer')) return 'Utilities';
+      if (n.includes('payroll') || n.includes('salary') || n.includes('admin')) return 'Administrative Payroll';
+      if (n.includes('tenant reimburse')) return 'Tenant Reimbursable';
+      return 'Repairs & Maintenance';
+    }
+
     rows.forEach(r => {
-      const cat = r.category || 'Other';
+      const cat = (sectionKey === 'opex') ? fbGlToOpexGroup(r.gl, r.name) : (r.category || 'Other');
       if (!categories[cat]) categories[cat] = [];
-      categories[cat].push(r);
+      const rowIdx = (p.detailRows || []).indexOf(r);
+      categories[cat].push({ ...r, _rowIdx: rowIdx });
     });
 
-    let html = `<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)"><table class="fb-monthly-table"><thead><tr>
+    const showGL = (sectionKey === 'opex' || sectionKey === 'capital');
+    const colCount = months.length + 2 + (showGL ? 1 : 0); // line item + GL? + 12 months + total
+
+    let html = '';
+    if (editable) {
+      html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;color:var(--text-dim);font-size:12px">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Click any value to edit · autosaved on change · click category headers to collapse
+      </div>`;
+    }
+    html += `<div style="overflow-x:auto;border-radius:10px;border:1px solid var(--border)"><table class="fb-monthly-table"><thead><tr>
       <th>Line Item</th>`;
+    if (showGL) html += `<th style="text-align:center;min-width:50px">GL</th>`;
     months.forEach(m => { html += `<th>${m}</th>`; });
     html += `<th style="font-weight:700;color:var(--accent)">Total</th></tr></thead><tbody>`;
 
     let grandTotal = {};
     months.forEach(m => grandTotal[m] = 0);
     let grandTotalAmt = 0;
+    let catCounter = 0;
 
-    Object.keys(categories).sort().forEach(cat => {
-      html += `<tr class="fb-cat-header"><td colspan="${months.length + 2}" style="text-align:left">${cat}</td></tr>`;
+    // Use fixed order for opex, alphabetical for others
+    const catKeys = (sectionKey === 'opex')
+      ? opexGroupOrder.filter(k => categories[k] && categories[k].length)
+      : Object.keys(categories).sort();
+
+    catKeys.forEach(cat => {
+      const catId = `fbCat-${sectionKey}-${catCounter++}`;
+      html += `<tr class="fb-cat-header" data-cat-id="${catId}" onclick="fbToggleCat('${catId}')"><td colspan="${colCount}" style="text-align:left"><span class="fb-chevron">&#9660;</span>${cat}</td></tr>`;
       let catTotals = {};
       months.forEach(m => catTotals[m] = 0);
       let catTotal = 0;
 
       categories[cat].forEach(row => {
-        const glBadge = row.gl ? `<span class="gl-code">[${row.gl}]</span>` : '';
         const vendorLine = row.vendor ? `<span class="vendor-name">${row.vendor}</span>` : '';
-        html += '<tr>';
-        html += `<td>${row.name}${glBadge}${vendorLine}</td>`;
+        html += `<tr class="fb-cat-child" data-cat-group="${catId}">`;
+        html += `<td>${row.name}${vendorLine}</td>`;
+        if (showGL) html += `<td class="fb-gl-cell">${row.gl || '—'}</td>`;
         months.forEach(m => {
           const v = (row.months && row.months[m]) || 0;
           catTotals[m] += v;
           grandTotal[m] += v;
-          html += `<td>${isPsf ? fbFmtPsf(v, sqft) : fbFmtFull(v)}</td>`;
+          const editKey = `${fbSelectedIdx}-${sectionKey}-${row._rowIdx}-${m}`;
+          if (editable) {
+            html += `<td class="fb-editable" data-key="${editKey}" data-raw="${v}" onclick="fbStartEdit(this)">${isPsf ? fbFmtPsf(v, sqft) : fbFmtFull(v)}</td>`;
+          } else {
+            html += `<td>${isPsf ? fbFmtPsf(v, sqft) : fbFmtFull(v)}</td>`;
+          }
         });
-        const t = row.total || Object.values(row.months || {}).reduce((a,b) => a + (b||0), 0);
+        const t = months.reduce((sum, m) => sum + ((row.months && row.months[m]) || 0), 0);
         catTotal += t;
         grandTotalAmt += t;
         html += `<td style="font-weight:600">${isPsf ? fbFmtPsf(t, sqft) : fbFmtFull(t)}</td>`;
@@ -1901,8 +2004,9 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       });
 
       // Category total row
-      html += '<tr class="fb-cat-total">';
+      html += `<tr class="fb-cat-total" data-cat-group="${catId}">`;
       html += `<td>Total ${cat}</td>`;
+      if (showGL) html += `<td></td>`;
       months.forEach(m => {
         html += `<td>${isPsf ? fbFmtPsf(catTotals[m], sqft) : fbFmtFull(catTotals[m])}</td>`;
       });
@@ -1913,6 +2017,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     // Grand total
     html += '<tr class="fb-cat-total" style="border-top:3px solid var(--accent)">';
     html += `<td style="font-size:12px">GRAND TOTAL</td>`;
+    if (showGL) html += `<td></td>`;
     months.forEach(m => {
       html += `<td style="font-size:12px">${isPsf ? fbFmtPsf(grandTotal[m], sqft) : fbFmtFull(grandTotal[m])}</td>`;
     });
@@ -1920,7 +2025,104 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     html += '</tr>';
 
     html += '</tbody></table></div>';
+
     body.innerHTML = html;
+
+    // Restore collapsed state
+    (fbCollapsedCats || []).forEach(id => {
+      const hdr = document.querySelector(`[data-cat-id="${id}"]`);
+      if (hdr) { hdr.classList.add('collapsed'); }
+      document.querySelectorAll(`[data-cat-group="${id}"]`).forEach(r => r.classList.add('fb-cat-row-hidden'));
+    });
+  }
+
+  // Track collapsed categories across re-renders
+  let fbCollapsedCats = [];
+
+  function fbToggleCat(catId) {
+    const hdr = document.querySelector(`[data-cat-id="${catId}"]`);
+    const rows = document.querySelectorAll(`[data-cat-group="${catId}"]`);
+    const isCollapsed = hdr.classList.contains('collapsed');
+    if (isCollapsed) {
+      hdr.classList.remove('collapsed');
+      rows.forEach(r => r.classList.remove('fb-cat-row-hidden'));
+      fbCollapsedCats = fbCollapsedCats.filter(id => id !== catId);
+    } else {
+      hdr.classList.add('collapsed');
+      rows.forEach(r => r.classList.add('fb-cat-row-hidden'));
+      fbCollapsedCats.push(catId);
+    }
+  }
+
+  function fbStartEdit(td) {
+    if (td.classList.contains('fb-editing')) return;
+    const raw = parseFloat(td.dataset.raw) || 0;
+    td.classList.add('fb-editing');
+    td.innerHTML = `<input type="number" value="${raw}" step="0.01" onblur="fbFinishEdit(this)" onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){this.dataset.cancel='1';this.blur();}" autofocus>`;
+    const inp = td.querySelector('input');
+    inp.focus();
+    inp.select();
+  }
+
+  function fbFinishEdit(inp) {
+    const td = inp.parentElement;
+    const key = td.dataset.key;
+    if (inp.dataset.cancel === '1') {
+      fbRenderDetail();
+      return;
+    }
+    const newVal = parseFloat(inp.value) || 0;
+    const oldRaw = parseFloat(td.dataset.raw) || 0;
+    if (Math.abs(newVal - oldRaw) < 0.001) {
+      fbRenderDetail();
+      return;
+    }
+
+    // Apply edit immediately to local data
+    const parts = key.split('-');
+    const propIdx = parseInt(parts[0]);
+    const rowIdx = parseInt(parts[2]);
+    const month = parts[3];
+    const p = bgtData[propIdx];
+
+    if (p && p.detailRows && p.detailRows[rowIdx]) {
+      if (!p.detailRows[rowIdx].months) p.detailRows[rowIdx].months = {};
+      p.detailRows[rowIdx].months[month] = newVal;
+      const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      p.detailRows[rowIdx].total = months.reduce((s, m) => s + ((p.detailRows[rowIdx].months[m]) || 0), 0);
+
+      // Recalc property totals
+      let totInc = 0, totExp = 0;
+      (p.detailRows || []).forEach(r => {
+        const t = months.reduce((s, m) => s + ((r.months && r.months[m]) || 0), 0);
+        if (r.section === 'revenue') totInc += t;
+        else totExp += t;
+      });
+      p.totalIncome = totInc;
+      p.totalExpenses = totExp;
+      p.noi = totInc - totExp;
+    }
+
+    // Show autosave toast
+    fbShowAutoSaveToast();
+
+    // Re-render with updated data
+    fbRenderDetail();
+    fbRenderDetailHeader();
+  }
+
+  function fbShowAutoSaveToast() {
+    let toast = document.getElementById('fbAutoSaveToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'fbAutoSaveToast';
+      toast.className = 'fb-autosave-toast';
+      toast.textContent = '✓ Saved';
+      document.body.appendChild(toast);
+    }
+    toast.classList.add('show');
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => toast.classList.remove('show'), 1200);
   }
 </script>
 
