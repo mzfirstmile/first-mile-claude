@@ -2197,7 +2197,6 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const g = parseInt(glCode) || 0;
     if (g < 5000) return 'revenue';
     if (g < 7000) return 'opex';
-    if (g >= 7061 && g <= 7099) return 'opex'; // Non-Recoverable G&A shows under Operating Expenses
     return 'capital';
   }
 
@@ -3091,7 +3090,7 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
     const categories = {};
     const opexGroupOrder = ['Tenant Reimbursable','Cleaning','Repairs & Maintenance','Administrative Payroll','Utilities','Management Fees','Taxes','Insurance','Non-Recoverable G&A'];
     const revenueGroupOrder = ['Base Rent','Expense Recoveries','Miscellaneous Income'];
-    const capitalGroupOrder = ['Base Building Costs','Tenant Improvements','Leasing & Commissions','Debt Service','Depreciation & Amortization'];
+    const capitalGroupOrder = ['Non-Recoverable G&A','Base Building Costs','Tenant Improvements','Leasing & Commissions','Debt Service','Depreciation & Amortization'];
 
     function fbGlToOpexGroup(gl, name) {
       const g = parseInt(gl) || 0;
@@ -3125,14 +3124,13 @@ Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), 
       if (n.includes('utilit') || n.includes('electric') || n.includes('gas') || n.includes('water') || n.includes('sewer')) return 'Utilities';
       if (n.includes('payroll') || n.includes('salary') || n.includes('admin')) return 'Administrative Payroll';
       if (n.includes('tenant reimburse')) return 'Tenant Reimbursable';
-      // Non-Recoverable G&A (7061-7099)
-      if (g >= 7061 && g <= 7099) return 'Non-Recoverable G&A';
       return 'Repairs & Maintenance';
     }
 
     function fbGlToCapitalGroup(gl, name) {
       const g = parseInt(gl) || 0;
       const n = (name || '').toLowerCase();
+      if (g >= 7061 && g <= 7099) return 'Non-Recoverable G&A';
       if (g === 7105) return 'Tenant Improvements';
       if (g === 7106) return 'Base Building Costs';
       if (g === 7107) return 'Leasing & Commissions';
