@@ -1,0 +1,592 @@
+<!-- test push -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>First Mile Accounting Calendar — 2026</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<style>
+  .logo-icon { height: 28px; width: auto; margin-right: 10px; vertical-align: middle; }
+  :root {
+    --bg: #e2e6ef;
+    --surface: #ffffff;
+    --surface2: #dde2ec;
+    --border: #d4dbe8;
+    --text: #1e2d44;
+    --text-dim: #6b7d96;
+    --accent: #00b0d4;
+    --accent-dim: rgba(0,176,212,0.08);
+    --green: #1a9a6b;
+    --green-dim: rgba(26,154,107,0.08);
+    --red: #e5534b;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .loading-bar { height:3px; background:var(--accent); position:fixed; top:0; left:0; width:0; transition:width .3s; z-index:500; }
+  .loading-bar.active { width:60%; }
+  .loading-bar.done { width:100%; opacity:0; transition:width .2s, opacity .5s .3s; }
+
+  /* ── Setup Screen ── */
+  .setup-overlay { position:fixed; inset:0; background:var(--bg); z-index:400; display:flex; align-items:center; justify-content:center; }
+  .setup-overlay.hidden { display:none; }
+  .setup-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px; max-width:520px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.5); }
+  .setup-card h2 { font-size:20px; margin-bottom:6px; }
+  .setup-card h2 span { color:var(--accent); }
+  .setup-card .sub { font-size:13px; color:var(--text-dim); margin-bottom:24px; line-height:1.6; }
+  .setup-card label { display:block; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
+  .setup-card input { width:100%; padding:11px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; font-family:monospace; margin-bottom:16px; }
+  .setup-card input:focus { outline:none; border-color:var(--accent); }
+  .setup-card .steps { font-size:12px; color:var(--text-dim); line-height:1.8; margin-bottom:20px; }
+  .setup-card .steps strong { color:var(--text); }
+  .setup-card .steps code { background:var(--surface2); padding:1px 6px; border-radius:3px; font-size:11px; color:var(--accent); }
+  .setup-actions { display:flex; gap:10px; }
+  .setup-btn { flex:1; padding:10px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--accent); background:var(--accent-dim); color:var(--accent); transition:all .2s; text-align:center; }
+  .setup-btn:hover { background:rgba(0,176,212,.25); }
+  .setup-btn.secondary { border-color:var(--border); background:var(--surface); color:var(--text-dim); }
+  .setup-error { color:var(--red); font-size:12px; margin-bottom:12px; display:none; }
+  .setup-error.show { display:block; }
+
+  /* ── Header ── */
+  header { padding:28px 40px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
+  header h1 { font-size:20px; font-weight:600; }
+  header h1 span { color:var(--accent); }
+  .header-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .sync-pill { font-size:11px; padding:4px 10px; border-radius:12px; display:inline-flex; align-items:center; gap:5px; }
+  .sync-dot { width:6px; height:6px; border-radius:50%; }
+  .sync-pill.live { color:var(--green); } .sync-pill.live .sync-dot { background:var(--green); }
+  .sync-pill.error { color:var(--red); } .sync-pill.error .sync-dot { background:var(--red); }
+  .btn { padding:7px 14px; border-radius:7px; font-size:12px; font-weight:600; text-decoration:none; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .2s; }
+  .btn:hover { background:var(--surface2); color:var(--text); }
+  .btn.accent { color:var(--accent); border-color:rgba(0,176,212,.3); background:var(--accent-dim); }
+  .view-toggle { display:flex; background:var(--surface); border-radius:8px; overflow:hidden; border:1px solid var(--border); }
+  .view-toggle button { padding:7px 16px; background:none; border:none; color:var(--text-dim); font-size:12px; cursor:pointer; transition:all .2s; }
+  .view-toggle button.active { background:var(--accent-dim); color:var(--accent); font-weight:600; }
+
+  /* ── Progress ── */
+  .progress-section { padding:0 40px 16px; }
+  .progress-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+  .progress-label { font-size:13px; font-weight:600; }
+  .progress-label .dn { color:var(--green); }
+  .progress-label .tt { color:var(--text-dim); }
+  .progress-actions { display:flex; gap:6px; }
+  .btn-sm { padding:4px 10px; border-radius:5px; font-size:10px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .15s; }
+  .btn-sm:hover { background:var(--surface2); color:var(--text); }
+  .btn-sm.danger:hover { border-color:var(--red); color:var(--red); }
+  .btn-sm.success { border-color:var(--green); color:var(--green); background:var(--green-dim); }
+  .progress-track { width:100%; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
+  .progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:3px; transition:width .4s cubic-bezier(.4,0,.2,1); }
+  .all-done { margin-top:8px; padding:8px 14px; background:var(--green-dim); border:1px solid rgba(26,154,107,.3); border-radius:7px; font-size:12px; color:var(--green); font-weight:600; text-align:center; display:none; }
+  .all-done.show { display:block; }
+
+  /* ── Filters ── */
+  .filters { padding:0 40px 20px; display:flex; flex-wrap:wrap; gap:6px; }
+  .chip { padding:5px 12px; border-radius:18px; font-size:11px; font-weight:500; cursor:pointer; border:1.5px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .2s; user-select:none; }
+  .chip.active { border-color:var(--chip-c,var(--accent)); background:var(--chip-bg,var(--accent-dim)); color:var(--chip-c,var(--accent)); }
+
+  /* ── Calendar ── */
+  .cal-nav { display:flex; align-items:center; justify-content:center; gap:16px; padding:0 40px 16px; }
+  .cal-nav button { background:var(--surface); border:1px solid var(--border); color:var(--text); width:32px; height:32px; border-radius:7px; cursor:pointer; font-size:15px; transition:background .15s; }
+  .cal-nav button:hover { background:var(--surface2); }
+  .cal-nav .mlabel { font-size:17px; font-weight:600; min-width:170px; text-align:center; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:var(--border); margin:0 40px 32px; border-radius:10px; overflow:hidden; border:1px solid var(--border); }
+  .cal-hdr { background:var(--surface); padding:8px; text-align:center; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; }
+  .cal-cell { background:var(--surface); min-height:100px; padding:6px; position:relative; transition:background .15s; }
+  .cal-cell:hover { background:var(--surface2); }
+  .cal-cell.empty { background:var(--bg); opacity:.35; }
+  .cal-cell.today { box-shadow:inset 0 0 0 2px var(--accent); }
+  .cal-cell .dnum { font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:4px; }
+  .ev { padding:2px 5px; border-radius:3px; font-size:10px; margin-bottom:2px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:all .15s; border-left:3px solid; display:flex; align-items:center; gap:3px; }
+  .ev:hover { filter:brightness(1.2); }
+  .ev.done { opacity:.4; }
+  .ev.done .ev-txt { text-decoration:line-through; }
+  .ev .ev-lbl { font-weight:600; }
+  .ev-cb { width:10px; height:10px; border-radius:2px; border:1.5px solid; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:7px; transition:all .15s; }
+  .ev-cb.on { background:var(--green); border-color:var(--green); color:#fff; }
+
+  /* ── List / Checklist ── */
+  .list-view { padding:0 40px 32px; display:none; }
+  .grp { margin-bottom:24px; }
+  .grp-hdr { display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
+  .grp-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .grp-hdr h3 { font-size:14px; font-weight:600; }
+  .grp-hdr .cnt { font-size:11px; color:var(--text-dim); margin-left:auto; }
+  .row { display:grid; grid-template-columns:32px 70px 90px 1fr 100px; gap:10px; align-items:center; padding:8px 10px; background:var(--surface); border-radius:7px; margin-bottom:3px; font-size:12px; transition:all .15s; }
+  .row:hover { background:var(--surface2); }
+  .row.done { opacity:.45; }
+  .row.done .task { text-decoration:line-through; }
+  .row .day { font-weight:600; color:var(--accent); }
+  .row .tag { padding:2px 7px; border-radius:3px; font-size:10px; font-weight:600; text-align:center; }
+  .row .task { color:var(--text); }
+  .row .owner { color:var(--text-dim); text-align:right; font-size:11px; }
+  .tag-m { background:rgba(0,176,212,.15); color:#00b0d4; }
+  .tag-q { background:rgba(255,170,80,.15); color:#ffaa50; }
+  .cb-wrap { display:flex; align-items:center; justify-content:center; }
+  .cb { width:18px; height:18px; border-radius:4px; border:2px solid var(--border); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; background:transparent; flex-shrink:0; }
+  .cb:hover { border-color:var(--accent); background:var(--accent-dim); }
+  .cb.on { background:var(--green); border-color:var(--green); }
+  .cb.on::after { content:'✓'; color:#fff; font-size:12px; font-weight:700; }
+
+  /* ── Tooltip ── */
+  .tip { position:fixed; background:var(--surface2); border:1px solid var(--border); border-radius:9px; padding:12px 14px; font-size:12px; max-width:320px; z-index:100; box-shadow:0 10px 28px rgba(0,0,0,.5); pointer-events:none; opacity:0; transition:opacity .15s; line-height:1.5; }
+  .tip.show { opacity:1; }
+  .tip .tp { font-weight:700; margin-bottom:3px; }
+  .tip .ty { font-size:10px; font-weight:600; margin-bottom:5px; opacity:.7; }
+  .tip .tk { margin-bottom:5px; }
+  .tip .to { font-size:10px; color:var(--text-dim); }
+  .tip .ts { font-size:10px; margin-top:5px; padding-top:5px; border-top:1px solid var(--border); font-weight:600; }
+
+  /* ── Modal ── */
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:200; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .modal-bg.show { opacity:1; pointer-events:all; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px 28px; max-width:360px; text-align:center; box-shadow:0 16px 40px rgba(0,0,0,.5); }
+  .modal h3 { font-size:15px; margin-bottom:6px; }
+  .modal p { font-size:12px; color:var(--text-dim); margin-bottom:16px; line-height:1.5; }
+  .modal-btns { display:flex; gap:8px; justify-content:center; }
+  .mbtn { padding:7px 18px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface2); color:var(--text); transition:all .2s; }
+  .mbtn:hover { background:var(--border); }
+  .mbtn.danger { background:rgba(229,83,75,.15); border-color:var(--red); color:var(--red); }
+
+  @media(max-width:800px) {
+    header,.filters,.cal-nav,.list-view,.progress-section { padding-left:14px; padding-right:14px; }
+    .cal-grid { margin:0 14px 20px; }
+    .cal-cell { min-height:70px; padding:3px; }
+    .ev { font-size:8px; }
+    .row { grid-template-columns:28px 55px 70px 1fr 70px; font-size:11px; }
+  }
+
+  /* ── Chat Widget ── */
+  .chat-fab { position:fixed; bottom:24px; right:24px; width:52px; height:52px; border-radius:50%; background:var(--text); color:#fff; border:none; cursor:pointer; font-size:22px; box-shadow:0 4px 16px rgba(0,0,0,.15); z-index:200; display:flex; align-items:center; justify-content:center; transition:transform .2s; }
+  .chat-fab:hover { transform:scale(1.08); }
+  .chat-fab.hidden { display:none; }
+  .chat-panel { position:fixed; bottom:24px; right:24px; width:400px; height:520px; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.12); z-index:300; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel.open { display:flex; }
+  .chat-panel-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .chat-panel-header h4 { font-size:14px; font-weight:700; }
+  .chat-close { background:none; border:none; font-size:18px; cursor:pointer; color:var(--text-dim); padding:4px; }
+  .chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .chat-msg { max-width:85%; padding:10px 14px; border-radius:12px; font-size:13px; line-height:1.5; word-wrap:break-word; }
+  .chat-msg.user { align-self:flex-end; background:var(--text); color:#fff; border-bottom-right-radius:4px; }
+  .chat-msg.assistant { align-self:flex-start; background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; }
+  .chat-input-row { padding:12px; border-top:1px solid var(--border); display:flex; gap:8px; }
+  .chat-input { flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--surface2); font-size:13px; color:var(--text); resize:none; font-family:inherit; }
+  .chat-input:focus { outline:none; border-color:var(--accent); }
+  .chat-send { padding:10px 16px; border-radius:10px; border:none; background:var(--text); color:#fff; font-size:13px; font-weight:600; cursor:pointer; transition:background .15s; }
+  .chat-send:hover { background:#0a1a2e; }
+  .chat-send:disabled { opacity:.4; cursor:default; }
+  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(10px); padding:10px 20px; background:var(--text); color:#fff; border-radius:8px; font-size:13px; font-weight:500; opacity:0; transition:all .3s; z-index:600; pointer-events:none; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  @media(max-width:500px) { .chat-panel { width:calc(100vw - 16px); right:8px; bottom:8px; height:70vh; } }
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loadBar"></div>
+
+
+<!-- Main App -->
+<header>
+  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo_RGB.png" style="height:44px;width:auto" alt="First Mile Capital"><span style="color:var(--text-dim);font-weight:400;font-size:14px">Accounting Calendar — 2026</span></h1>
+  <div class="header-right">
+    <div class="sync-pill live" id="syncPill" style="display:none"><div class="sync-dot"></div><span>Live</span></div>
+    <button class="btn accent" onclick="refreshData()" style="display:none" id="refreshBtn">↻ Refresh</button>
+    <a class="btn" href="FM Manage.html" id="manageBtn" style="display:none">Manage Data</a>
+    <a class="btn" href="https://airtable.com/app27jUbqonTIiHXY" target="_blank" id="editBtn" style="display:none">Edit in Airtable</a>
+    <div class="view-toggle">
+      <button class="active" onclick="setView('calendar')">Calendar</button>
+      <button onclick="setView('list')">By Investment</button>
+      <button onclick="setView('checklist')">Checklist</button>
+    </div>
+  </div>
+</header>
+
+<div class="progress-section" id="progArea" style="display:none">
+  <div class="progress-header">
+    <div class="progress-label"><span class="dn" id="pDone">0</span> / <span class="tt" id="pTot">0</span> tasks completed</div>
+    <div class="progress-actions">
+    </div>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="pFill" style="width:0%"></div></div>
+  <div class="all-done" id="pBanner">All tasks complete for this month!</div>
+</div>
+
+<div class="filters" id="filters"></div>
+
+<div id="calView">
+  <div class="cal-nav">
+    <button onclick="changeMonth(-1)">‹</button>
+    <div class="mlabel" id="mLabel"></div>
+    <button onclick="changeMonth(1)">›</button>
+  </div>
+  <div class="cal-grid" id="calGrid"></div>
+</div>
+
+<div class="list-view" id="listView"></div>
+<div class="list-view" id="checkView" style="display:none"></div>
+<div class="tip" id="tooltip"></div>
+
+<div class="modal-bg" id="resetModal">
+  <div class="modal">
+    <h3>Reset all checkboxes?</h3>
+    <p>This will clear all completed tasks for the current month.</p>
+    <div class="modal-btns">
+      <button class="mbtn" onclick="closeReset()">Cancel</button>
+      <button class="mbtn danger" onclick="doReset()">Reset</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const BASE_ID='app27jUbqonTIiHXY', TABLE_NAME='Sheet1';
+const API_TOKEN='__AIRTABLE_TOKEN__';
+const STATUS_FIELD='fld1MOQBkRaFEIXdl', COMPLETED_DATE_FIELD='fldKBm9ch5K8EfCCR';
+const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const QTR=[0,3,6,9];
+const PALETTE=["#00b0d4","#50dcb4","#ff8c5a","#dc78ff","#ffd250","#50c8ff","#ff6482","#a78bfa","#f472b6","#38bdf8","#4ade80","#fb923c","#e879f9","#22d3ee","#b4b4b4"];
+let colorMap={},colorIdx=0;
+function getClr(p){if(!colorMap[p]){colorMap[p]=PALETTE[colorIdx%PALETTE.length];colorIdx++;}return colorMap[p];}
+function hexA(h,a){h=h.replace('#','');return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;}
+
+let EVENTS=[],COLORS={},currentMonth=0,currentView='calendar',activeFilters=new Set();
+const today=new Date(),todayDay=today.getDate(),todayMonth=today.getMonth(),todayYear=today.getFullYear();
+
+const DEFAULTS=[
+  {id:0,day:8,cadence:"Monthly",property:"Pref Fund I - Solow",type:"AM Fee",task:"Transfer Solow AM fees to FMC - $5,208 (BofA scheduled)",owner:"BofA - automatic"},
+  {id:1,day:8,cadence:"Monthly",property:"41 Flatbush Ave",type:"AM Fee",task:"Receive JLL Financial Package from JLL. Invoice them for AM Fee - 2.5%",owner:"Anthony"},
+  {id:2,day:10,cadence:"Monthly",property:"Paramus Plaza",type:"Reporting",task:"Upload Monthly Management Reports to DRA",owner:"Anthony"},
+  {id:3,day:20,cadence:"Quarterly",property:"Pref Fund II - JPY",type:"Investor Payment",task:"Purchase JPY to Goldman Sachs. Loan from FMC if cash shortfall.",owner:"Anthony"},
+  {id:4,day:20,cadence:"Quarterly",property:"Pref Fund II - JPY",type:"Investor Payment",task:"Send JPY to investors via Goldman Sachs",owner:"Anthony"},
+  {id:5,day:20,cadence:"Monthly",property:"61 S Paramus",type:"AM Fee",task:"Transfer distros from property to FM Paramus Member (BofA scheduled)",owner:"BofA - automatic"},
+  {id:6,day:21,cadence:"Monthly",property:"61 S Paramus",type:"AM Fee",task:"Transfer AM fee split 48k to FM and 4k to Ring (BofA scheduled)",owner:"BofA - automatic"},
+  {id:7,day:23,cadence:"Monthly",property:"61 S Paramus",type:"Investor Payment",task:"Send Distros via Appfolio",owner:"Anthony"},
+  {id:8,day:23,cadence:"Monthly",property:"Paramus Plaza",type:"Investor Payment",task:"Send Distros via Appfolio",owner:"Anthony"},
+  {id:9,day:23,cadence:"Monthly",property:"One River Centre",type:"Investor Payment",task:"Send Distros via Appfolio (*Xuan sends for now, will be transferred soon to Anthony)",owner:"Xuan"},
+  {id:10,day:23,cadence:"Monthly",property:"1700 East Putnam",type:"Investor Payment",task:"Send Distros via Appfolio (*Currently Suspended)",owner:"Xuan"},
+  {id:11,day:23,cadence:"Monthly",property:"Pref Fund I - Solow",type:"Investor Payment",task:"Send Distros via Appfolio",owner:"Anthony"},
+  {id:12,day:25,cadence:"Monthly",property:"Paramus Plaza",type:"AM Fee",task:"Pay Paramus Plaza AM Fee, if cash distro received by DRA",owner:"Anthony"},
+  {id:13,day:25,cadence:"Quarterly",property:"ALL",type:"Reporting",task:"Send Asset Management Report",owner:"Morris"},
+];
+
+// ── Airtable fetch ──
+function parseDay(s){const m=String(s).match(/(\d+)/);return m?parseInt(m[1]):1;}
+
+async function fetchAT(){
+  setLoading(true);
+  try{
+    const r=await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}?pageSize=100`,{headers:{'Authorization':`Bearer ${API_TOKEN}`}});
+    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
+    const d=await r.json();
+    EVENTS=d.records.map((r,i)=>({
+      id:i,airtableId:r.id,day:parseDay(r.fields['Day of Month']||'1'),
+      cadence:(r.fields['Cadence']?.name||r.fields['Cadence']||'Monthly'),
+      property:(r.fields['Property']?.name||r.fields['Property']||''),
+      type:(r.fields['Payment Type']?.name||r.fields['Payment Type']||''),
+      task:(r.fields['Description']||''),
+      owner:(r.fields['Owner']?.name||r.fields['Owner']||''),
+      status:(r.fields['Status']?.name||r.fields['Status']||''),
+      completedBy:(r.fields['Completed By']||''),
+      completedDate:(r.fields['Completed Date']||''),
+    }));
+    buildClrs();
+    setSync('live',`Live · ${EVENTS.length} deadlines`);
+    return true;
+  }catch(e){console.error(e);setSync('error',e.message);return false;}
+  finally{setLoading(false);}
+}
+
+function buildClrs(){colorMap={};colorIdx=0;COLORS={};[...new Set(EVENTS.map(e=>e.property))].sort().forEach(p=>{const c=getClr(p);COLORS[p]={bg:hexA(c,.15),fg:c,border:c};});}
+
+// ── Setup ──
+function showUI(){['progArea','refreshBtn','editBtn','manageBtn','syncPill'].forEach(id=>document.getElementById(id).style.display='');}
+async function refreshData(){const ok=await fetchAT();if(ok){activeFilters=new Set(Object.keys(COLORS));buildFilters();render();}}
+
+// ── Checks (Airtable-backed) ──
+function isC(id){const ev=EVENTS[id];return ev&&ev.status==='Done';}
+function cT(id){const ev=EVENTS[id];return ev?ev.completedDate:null;}
+function cBy(id){const ev=EVENTS[id];return ev?ev.completedBy:'';}
+
+async function tog(id){
+  const ev=EVENTS[id];if(!ev||!ev.airtableId)return;
+  const wasDone=ev.status==='Done';
+
+  // Optimistic update
+  if(wasDone){ev.status='';ev.completedDate='';}
+  else{ev.status='Done';ev.completedDate=new Date().toISOString();}
+  render();
+
+  // Write to Airtable
+  try{
+    const fields={};
+    fields[STATUS_FIELD]=wasDone?null:'Done';
+    fields[COMPLETED_DATE_FIELD]=wasDone?null:new Date().toISOString();
+    const res=await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
+      method:'PATCH',
+      headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
+      body:JSON.stringify({records:[{id:ev.airtableId,fields}]})
+    });
+    if(!res.ok){const err=await res.json().catch(()=>({}));console.error('Write-back error:',err);}
+  }catch(e){console.error('Write-back failed:',e);}
+}
+
+async function markAllDoneAT(){
+  const evts=mEvts(currentMonth).filter(e=>e.status!=='Done');
+  if(!evts.length)return;
+
+  evts.forEach(ev=>{ev.status='Done';ev.completedDate=new Date().toISOString();});
+  render();
+
+  for(let i=0;i<evts.length;i+=10){
+    const batch=evts.slice(i,i+10);
+    const records=batch.map(ev=>{
+      const fields={};
+      fields[STATUS_FIELD]='Done';
+      fields[COMPLETED_DATE_FIELD]=new Date().toISOString();
+      return{id:ev.airtableId,fields};
+    });
+    try{
+      await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
+        method:'PATCH',
+        headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
+        body:JSON.stringify({records})
+      });
+    }catch(e){console.error('Batch write failed:',e);}
+  }
+}
+
+async function resetMonthAT(){
+  const evts=mEvts(currentMonth).filter(e=>e.status==='Done');
+  if(!evts.length)return;
+
+  evts.forEach(ev=>{ev.status='';ev.completedDate='';});
+  render();
+
+  for(let i=0;i<evts.length;i+=10){
+    const batch=evts.slice(i,i+10);
+    const records=batch.map(ev=>{
+      const fields={};
+      fields[STATUS_FIELD]=null;
+      fields[COMPLETED_DATE_FIELD]=null;
+      return{id:ev.airtableId,fields};
+    });
+    try{
+      await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
+        method:'PATCH',
+        headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
+        body:JSON.stringify({records})
+      });
+    }catch(e){console.error('Batch reset failed:',e);}
+  }
+}
+
+// ── Filters ──
+function buildFilters(){const el=document.getElementById('filters');el.innerHTML='';Object.keys(COLORS).forEach(p=>{const ch=document.createElement('div');ch.className='chip'+(activeFilters.has(p)?' active':'');ch.textContent=p;ch.style.setProperty('--chip-c',COLORS[p].fg);ch.style.setProperty('--chip-bg',COLORS[p].bg);ch.onclick=()=>{if(activeFilters.has(p)){activeFilters.delete(p);ch.classList.remove('active');}else{activeFilters.add(p);ch.classList.add('active');}render();};el.appendChild(ch);});}
+function flt(){return EVENTS.filter(e=>activeFilters.has(e.property));}
+function mEvts(m){return flt().filter(e=>e.cadence==='Monthly'||(e.cadence==='Quarterly'&&QTR.includes(m)));}
+function dim(m,y){return new Date(y,m+1,0).getDate();}
+function fdow(m,y){return new Date(y,m,1).getDay();}
+function ord(n){const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);}
+
+// ── UI helpers ──
+function setLoading(on){document.getElementById('loadBar').className=on?'loading-bar active':'loading-bar done';}
+function setSync(st,lb){const el=document.getElementById('syncPill');el.className='sync-pill '+st;el.querySelector('span').textContent=lb;}
+function updateProg(){const e=mEvts(currentMonth),t=e.length,d=e.filter(x=>isC(x.id)).length,p=t>0?Math.round(d/t*100):0;document.getElementById('pDone').textContent=d;document.getElementById('pTot').textContent=t;document.getElementById('pFill').style.width=p+'%';const b=document.getElementById('pBanner');if(d===t&&t>0)b.classList.add('show');else b.classList.remove('show');}
+
+// ── Calendar ──
+function renderCal(){
+  const m=currentMonth;document.getElementById('mLabel').textContent=MONTHS[m]+' 2026';
+  const g=document.getElementById('calGrid');g.innerHTML='';
+  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>{const h=document.createElement('div');h.className='cal-hdr';h.textContent=d;g.appendChild(h);});
+  const f=fdow(m,2026),di=dim(m,2026),evts=mEvts(m);
+  for(let i=0;i<f;i++){const e=document.createElement('div');e.className='cal-cell empty';g.appendChild(e);}
+  for(let d=1;d<=di;d++){
+    const cell=document.createElement('div');cell.className='cal-cell';
+    if(d===todayDay&&m===todayMonth&&2026===todayYear)cell.classList.add('today');
+    const num=document.createElement('div');num.className='dnum';num.textContent=d;cell.appendChild(num);
+    evts.filter(e=>e.day===d).forEach(ev=>{
+      const c=COLORS[ev.property]||{bg:'rgba(180,180,180,.15)',fg:'#b4b4b4',border:'#b4b4b4'};
+      const chk=isC(ev.id);
+      const tag=document.createElement('div');tag.className='ev'+(chk?' done':'');
+      tag.style.background=c.bg;tag.style.color=c.fg;tag.style.borderLeftColor=chk?'var(--green)':c.border;
+      const cb=document.createElement('div');cb.className='ev-cb'+(chk?' on':'');cb.style.borderColor=chk?'var(--green)':c.fg;cb.innerHTML=chk?'✓':'';
+      cb.onclick=e=>{e.stopPropagation();tog(ev.id);};
+      const txt=document.createElement('span');txt.className='ev-txt';
+      txt.innerHTML=`<span class="ev-lbl">${ev.property==='ALL'?'ALL':ev.property.split(' ').slice(0,2).join(' ')}</span> · ${ev.type}`;
+      tag.appendChild(cb);tag.appendChild(txt);tag.onmouseenter=e=>showTT(e,ev);tag.onmouseleave=hideTT;
+      cell.appendChild(tag);
+    });
+    g.appendChild(cell);
+  }
+}
+
+// ── List ──
+function renderList(){
+  const el=document.getElementById('listView');el.innerHTML='';
+  const grouped={};flt().forEach(ev=>{if(!grouped[ev.property])grouped[ev.property]=[];grouped[ev.property].push(ev);});
+  Object.keys(grouped).sort().forEach(prop=>{
+    const items=grouped[prop],c=COLORS[prop]||{fg:'#b4b4b4'};
+    const grp=document.createElement('div');grp.className='grp';
+    const dn=items.filter(e=>isC(e.id)).length;
+    grp.innerHTML=`<div class="grp-hdr"><div class="grp-dot" style="background:${c.fg}"></div><h3>${prop}</h3><div class="cnt">${dn}/${items.length} done</div></div>`;
+    items.sort((a,b)=>a.day-b.day).forEach(ev=>{
+      const chk=isC(ev.id);
+      const row=document.createElement('div');row.className='row'+(chk?' done':'');
+      row.innerHTML=`<div class="cb-wrap"><div class="cb ${chk?'on':''}"></div></div><div class="day">${ord(ev.day)}</div><div class="tag tag-${ev.cadence==='Monthly'?'m':'q'}">${ev.cadence}</div><div class="task">${ev.task}</div><div class="owner">${ev.owner}</div>`;
+      row.querySelector('.cb').onclick=()=>tog(ev.id);grp.appendChild(row);
+    });el.appendChild(grp);
+  });
+}
+
+// ── Checklist ──
+function renderChk(){
+  const el=document.getElementById('checkView');el.innerHTML='';
+  const evts=mEvts(currentMonth).sort((a,b)=>a.day-b.day||a.id-b.id);
+  const byDay={};evts.forEach(ev=>{if(!byDay[ev.day])byDay[ev.day]=[];byDay[ev.day].push(ev);});
+  Object.keys(byDay).sort((a,b)=>+a-+b).forEach(day=>{
+    const d=byDay[day],sec=document.createElement('div');sec.className='grp';
+    const dn=d.filter(e=>isC(e.id)).length;
+    sec.innerHTML=`<div class="grp-hdr"><h3>${MONTHS[currentMonth]} ${ord(+day)}</h3><div class="cnt">${dn}/${d.length} done</div></div>`;
+    d.forEach(ev=>{
+      const c=COLORS[ev.property]||{fg:'#b4b4b4',border:'#b4b4b4'};const chk=isC(ev.id);const ts=cT(ev.id);
+      const row=document.createElement('div');row.className='row'+(chk?' done':'');row.style.borderLeft=`4px solid ${chk?'var(--green)':c.border}`;
+      row.innerHTML=`<div class="cb-wrap"><div class="cb ${chk?'on':''}"></div></div><div class="day" style="color:${c.fg}">${ev.property}</div><div class="tag tag-${ev.cadence==='Monthly'?'m':'q'}">${ev.type}</div><div class="task">${ev.task}${chk?'<br><span style="font-size:9px;color:var(--green)">✓ Completed '+new Date(ts).toLocaleString()+'</span>':''}</div><div class="owner">${ev.owner}</div>`;
+      row.querySelector('.cb').onclick=()=>tog(ev.id);sec.appendChild(row);
+    });el.appendChild(sec);
+  });
+}
+
+// ── Render ──
+function render(){renderCal();renderList();renderChk();updateProg();}
+function setView(v){currentView=v;document.querySelectorAll('.view-toggle button').forEach(b=>b.classList.remove('active'));const btns=document.querySelectorAll('.view-toggle button');document.getElementById('calView').style.display=v==='calendar'?'':'none';document.getElementById('listView').style.display=v==='list'?'block':'none';document.getElementById('checkView').style.display=v==='checklist'?'block':'none';if(v==='calendar')btns[0].classList.add('active');else if(v==='list')btns[1].classList.add('active');else btns[2].classList.add('active');}
+function changeMonth(d){currentMonth=Math.max(0,Math.min(11,currentMonth+d));render();}
+function markAllDone(){markAllDoneAT();}
+function confirmReset(){document.getElementById('resetModal').classList.add('show');}
+function closeReset(){document.getElementById('resetModal').classList.remove('show');}
+function doReset(){closeReset();resetMonthAT();}
+
+// ── Tooltip ──
+function showTT(e,ev){const t=document.getElementById('tooltip'),c=COLORS[ev.property]||{fg:'#b4b4b4'};const chk=isC(ev.id),ts=cT(ev.id);t.innerHTML=`<div class="tp" style="color:${c.fg}">${ev.property}</div><div class="ty">${ev.type} · ${ev.cadence}</div><div class="tk">${ev.task}</div><div class="to">Owner: ${ev.owner}</div><div class="ts" style="color:${chk?'var(--green)':'var(--red)'}">${chk?'✓ Completed '+new Date(ts).toLocaleString():'Not yet completed'}</div>`;const r=e.target.getBoundingClientRect();let left=r.right+10,top=r.top;if(left+320>window.innerWidth)left=r.left-330;if(top+180>window.innerHeight)top=window.innerHeight-190;t.style.left=left+'px';t.style.top=top+'px';t.classList.add('show');}
+function hideTT(){document.getElementById('tooltip').classList.remove('show');}
+
+// ── Init ──
+async function init(){
+  currentMonth=todayYear===2026?todayMonth:0;
+  const ok=await fetchAT();
+  if(ok){showUI();activeFilters=new Set(Object.keys(COLORS));buildFilters();render();setInterval(()=>refreshData(),120000);}
+  else{EVENTS=[...DEFAULTS];buildClrs();activeFilters=new Set(Object.keys(COLORS));setSync('error','Could not connect');showUI();buildFilters();render();}
+}
+init();
+
+// ── Chat Widget ──
+const CLAUDE_API_KEY = window.CLAUDE_API_KEY || '__CLAUDE_API_KEY__';
+let chatHistory = [];
+
+function toggleChat() {
+  const panel = document.getElementById('chatPanel');
+  const fab = document.getElementById('chatFab');
+  const isOpen = panel.classList.toggle('open');
+  fab.classList.toggle('hidden', isOpen);
+  if (isOpen) document.getElementById('chatInput').focus();
+}
+
+function addChatMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.textContent = text;
+  document.getElementById('chatMessages').appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth' });
+}
+
+function buildCalendarContext() {
+  // Build a summary of deadlines for Claude
+  const now = new Date();
+  const month = currentMonth;
+  const monthEvents = EVENTS.filter(ev => {
+    const d = new Date(ev.date);
+    return d.getMonth() === month && d.getFullYear() === 2026;
+  }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  const lines = monthEvents.map(ev => {
+    const done = isC(ev.id);
+    return `${ev.date} | ${ev.property} | ${ev.type} | ${ev.task} | ${ev.owner} | ${done ? 'DONE' : 'PENDING'}`;
+  });
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return `Current month: ${MONTHS[month]} 2026\nDeadlines (date|property|type|task|owner|status):\n${lines.join('\n')}`;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  addChatMsg('user', msg);
+
+  const sendBtn = document.getElementById('chatSend');
+  sendBtn.disabled = true;
+
+  const systemPrompt = `You are an AI assistant for First Mile Capital's accounting calendar. You help Morris track deadlines, filings, and accounting tasks across the FMC real estate portfolio.
+
+CONTEXT:
+${buildCalendarContext()}
+
+You can answer questions about upcoming deadlines, what's overdue, who owns what task, and general accounting guidance. Be concise and helpful.`;
+
+  chatHistory.push({ role: 'user', content: msg });
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: chatHistory.slice(-10)
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`API ${resp.status}: ${err}`);
+    }
+
+    const data = await resp.json();
+    const reply = data.content[0].text;
+    chatHistory.push({ role: 'assistant', content: reply });
+    addChatMsg('assistant', reply);
+
+  } catch (e) {
+    console.error(e);
+    addChatMsg('assistant', `Error: ${e.message}`);
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+</script>
+
+<!-- Chat FAB + Panel -->
+<button class="chat-fab" id="chatFab" onclick="toggleChat()">💬</button>
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-panel-header">
+    <h4>FMC Assistant</h4>
+    <button class="chat-close" onclick="toggleChat()">&times;</button>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-msg assistant">Hi Morris — ask me about upcoming deadlines, overdue tasks, or anything about the accounting calendar.</div>
+  </div>
+  <div class="chat-input-row">
+    <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask about deadlines..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+    <button class="chat-send" id="chatSend" onclick="sendChat()">Send</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+</body>
+</html>

@@ -1,13 +1,11 @@
-<!-- test push -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>First Mile Accounting Calendar — 2026</title>
+<title>First Mile Capital — Admin</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <style>
-  .logo-icon { height: 28px; width: auto; margin-right: 10px; vertical-align: middle; }
   :root {
     --bg: #e2e6ef;
     --surface: #ffffff;
@@ -19,574 +17,640 @@
     --accent-dim: rgba(0,176,212,0.08);
     --green: #1a9a6b;
     --green-dim: rgba(26,154,107,0.08);
-    --red: #e5534b;
+    --navy: #283d55;
+    --sidebar-bg: #1e2d44;
+    --sidebar-text: #c0ccdb;
+    --sidebar-hover: rgba(0,176,212,0.12);
+    --sidebar-active: rgba(0,176,212,0.18);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:var(--bg); color:var(--text); min-height:100vh; display:flex; }
 
-  .loading-bar { height:3px; background:var(--accent); position:fixed; top:0; left:0; width:0; transition:width .3s; z-index:500; }
-  .loading-bar.active { width:60%; }
-  .loading-bar.done { width:100%; opacity:0; transition:width .2s, opacity .5s .3s; }
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 240px;
+    min-height: 100vh;
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    flex-shrink: 0;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .sidebar-logo {
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sidebar-logo img { height: 24px; width: auto; }
+  .sidebar-logo .logo-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #e2e8f0;
+    letter-spacing: 0.5px;
+  }
+  .sidebar-logo .logo-text span { color: var(--accent); }
 
-  /* ── Setup Screen ── */
-  .setup-overlay { position:fixed; inset:0; background:var(--bg); z-index:400; display:flex; align-items:center; justify-content:center; }
-  .setup-overlay.hidden { display:none; }
-  .setup-card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px; max-width:520px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.5); }
-  .setup-card h2 { font-size:20px; margin-bottom:6px; }
-  .setup-card h2 span { color:var(--accent); }
-  .setup-card .sub { font-size:13px; color:var(--text-dim); margin-bottom:24px; line-height:1.6; }
-  .setup-card label { display:block; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; margin-bottom:6px; }
-  .setup-card input { width:100%; padding:11px 14px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; font-family:monospace; margin-bottom:16px; }
-  .setup-card input:focus { outline:none; border-color:var(--accent); }
-  .setup-card .steps { font-size:12px; color:var(--text-dim); line-height:1.8; margin-bottom:20px; }
-  .setup-card .steps strong { color:var(--text); }
-  .setup-card .steps code { background:var(--surface2); padding:1px 6px; border-radius:3px; font-size:11px; color:var(--accent); }
-  .setup-actions { display:flex; gap:10px; }
-  .setup-btn { flex:1; padding:10px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--accent); background:var(--accent-dim); color:var(--accent); transition:all .2s; text-align:center; }
-  .setup-btn:hover { background:rgba(0,176,212,.25); }
-  .setup-btn.secondary { border-color:var(--border); background:var(--surface); color:var(--text-dim); }
-  .setup-error { color:var(--red); font-size:12px; margin-bottom:12px; display:none; }
-  .setup-error.show { display:block; }
+  .sidebar-section {
+    padding: 20px 0 8px;
+  }
+  .sidebar-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: rgba(255,255,255,0.25);
+    padding: 0 20px;
+    margin-bottom: 8px;
+  }
+  .sidebar-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    font-size: 13px;
+    color: var(--sidebar-text);
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    border-left: 3px solid transparent;
+  }
+  .sidebar-item:hover {
+    background: var(--sidebar-hover);
+    color: #fff;
+  }
+  .sidebar-item.active {
+    background: var(--sidebar-active);
+    color: var(--accent);
+    border-left-color: var(--accent);
+  }
+  .sidebar-item svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.6;
+    flex-shrink: 0;
+  }
+  .sidebar-item:hover svg,
+  .sidebar-item.active svg { opacity: 1; }
 
-  /* ── Header ── */
-  header { padding:28px 40px 16px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; }
-  header h1 { font-size:20px; font-weight:600; }
-  header h1 span { color:var(--accent); }
-  .header-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
-  .sync-pill { font-size:11px; padding:4px 10px; border-radius:12px; display:inline-flex; align-items:center; gap:5px; }
-  .sync-dot { width:6px; height:6px; border-radius:50%; }
-  .sync-pill.live { color:var(--green); } .sync-pill.live .sync-dot { background:var(--green); }
-  .sync-pill.error { color:var(--red); } .sync-pill.error .sync-dot { background:var(--red); }
-  .btn { padding:7px 14px; border-radius:7px; font-size:12px; font-weight:600; text-decoration:none; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .2s; }
-  .btn:hover { background:var(--surface2); color:var(--text); }
-  .btn.accent { color:var(--accent); border-color:rgba(0,176,212,.3); background:var(--accent-dim); }
-  .view-toggle { display:flex; background:var(--surface); border-radius:8px; overflow:hidden; border:1px solid var(--border); }
-  .view-toggle button { padding:7px 16px; background:none; border:none; color:var(--text-dim); font-size:12px; cursor:pointer; transition:all .2s; }
-  .view-toggle button.active { background:var(--accent-dim); color:var(--accent); font-weight:600; }
+  .sidebar-spacer { flex: 1; }
 
-  /* ── Progress ── */
-  .progress-section { padding:0 40px 16px; }
-  .progress-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
-  .progress-label { font-size:13px; font-weight:600; }
-  .progress-label .dn { color:var(--green); }
-  .progress-label .tt { color:var(--text-dim); }
-  .progress-actions { display:flex; gap:6px; }
-  .btn-sm { padding:4px 10px; border-radius:5px; font-size:10px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .15s; }
-  .btn-sm:hover { background:var(--surface2); color:var(--text); }
-  .btn-sm.danger:hover { border-color:var(--red); color:var(--red); }
-  .btn-sm.success { border-color:var(--green); color:var(--green); background:var(--green-dim); }
-  .progress-track { width:100%; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; }
-  .progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:3px; transition:width .4s cubic-bezier(.4,0,.2,1); }
-  .all-done { margin-top:8px; padding:8px 14px; background:var(--green-dim); border:1px solid rgba(26,154,107,.3); border-radius:7px; font-size:12px; color:var(--green); font-weight:600; text-align:center; display:none; }
-  .all-done.show { display:block; }
+  .sidebar-footer {
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .sidebar-footer a {
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+  .sidebar-footer a:hover { color: var(--sidebar-text); }
 
-  /* ── Filters ── */
-  .filters { padding:0 40px 20px; display:flex; flex-wrap:wrap; gap:6px; }
-  .chip { padding:5px 12px; border-radius:18px; font-size:11px; font-weight:500; cursor:pointer; border:1.5px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .2s; user-select:none; }
-  .chip.active { border-color:var(--chip-c,var(--accent)); background:var(--chip-bg,var(--accent-dim)); color:var(--chip-c,var(--accent)); }
-
-  /* ── Calendar ── */
-  .cal-nav { display:flex; align-items:center; justify-content:center; gap:16px; padding:0 40px 16px; }
-  .cal-nav button { background:var(--surface); border:1px solid var(--border); color:var(--text); width:32px; height:32px; border-radius:7px; cursor:pointer; font-size:15px; transition:background .15s; }
-  .cal-nav button:hover { background:var(--surface2); }
-  .cal-nav .mlabel { font-size:17px; font-weight:600; min-width:170px; text-align:center; }
-  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:var(--border); margin:0 40px 32px; border-radius:10px; overflow:hidden; border:1px solid var(--border); }
-  .cal-hdr { background:var(--surface); padding:8px; text-align:center; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; }
-  .cal-cell { background:var(--surface); min-height:100px; padding:6px; position:relative; transition:background .15s; }
-  .cal-cell:hover { background:var(--surface2); }
-  .cal-cell.empty { background:var(--bg); opacity:.35; }
-  .cal-cell.today { box-shadow:inset 0 0 0 2px var(--accent); }
-  .cal-cell .dnum { font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:4px; }
-  .ev { padding:2px 5px; border-radius:3px; font-size:10px; margin-bottom:2px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:all .15s; border-left:3px solid; display:flex; align-items:center; gap:3px; }
-  .ev:hover { filter:brightness(1.2); }
-  .ev.done { opacity:.4; }
-  .ev.done .ev-txt { text-decoration:line-through; }
-  .ev .ev-lbl { font-weight:600; }
-  .ev-cb { width:10px; height:10px; border-radius:2px; border:1.5px solid; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:7px; transition:all .15s; }
-  .ev-cb.on { background:var(--green); border-color:var(--green); color:#fff; }
-
-  /* ── List / Checklist ── */
-  .list-view { padding:0 40px 32px; display:none; }
-  .grp { margin-bottom:24px; }
-  .grp-hdr { display:flex; align-items:center; gap:8px; margin-bottom:10px; padding-bottom:6px; border-bottom:1px solid var(--border); }
-  .grp-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
-  .grp-hdr h3 { font-size:14px; font-weight:600; }
-  .grp-hdr .cnt { font-size:11px; color:var(--text-dim); margin-left:auto; }
-  .row { display:grid; grid-template-columns:32px 70px 90px 1fr 100px; gap:10px; align-items:center; padding:8px 10px; background:var(--surface); border-radius:7px; margin-bottom:3px; font-size:12px; transition:all .15s; }
-  .row:hover { background:var(--surface2); }
-  .row.done { opacity:.45; }
-  .row.done .task { text-decoration:line-through; }
-  .row .day { font-weight:600; color:var(--accent); }
-  .row .tag { padding:2px 7px; border-radius:3px; font-size:10px; font-weight:600; text-align:center; }
-  .row .task { color:var(--text); }
-  .row .owner { color:var(--text-dim); text-align:right; font-size:11px; }
-  .tag-m { background:rgba(0,176,212,.15); color:#00b0d4; }
-  .tag-q { background:rgba(255,170,80,.15); color:#ffaa50; }
-  .cb-wrap { display:flex; align-items:center; justify-content:center; }
-  .cb { width:18px; height:18px; border-radius:4px; border:2px solid var(--border); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all .15s; background:transparent; flex-shrink:0; }
-  .cb:hover { border-color:var(--accent); background:var(--accent-dim); }
-  .cb.on { background:var(--green); border-color:var(--green); }
-  .cb.on::after { content:'✓'; color:#fff; font-size:12px; font-weight:700; }
-
-  /* ── Tooltip ── */
-  .tip { position:fixed; background:var(--surface2); border:1px solid var(--border); border-radius:9px; padding:12px 14px; font-size:12px; max-width:320px; z-index:100; box-shadow:0 10px 28px rgba(0,0,0,.5); pointer-events:none; opacity:0; transition:opacity .15s; line-height:1.5; }
-  .tip.show { opacity:1; }
-  .tip .tp { font-weight:700; margin-bottom:3px; }
-  .tip .ty { font-size:10px; font-weight:600; margin-bottom:5px; opacity:.7; }
-  .tip .tk { margin-bottom:5px; }
-  .tip .to { font-size:10px; color:var(--text-dim); }
-  .tip .ts { font-size:10px; margin-top:5px; padding-top:5px; border-top:1px solid var(--border); font-weight:600; }
-
-  /* ── Modal ── */
-  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; z-index:200; opacity:0; pointer-events:none; transition:opacity .2s; }
-  .modal-bg.show { opacity:1; pointer-events:all; }
-  .modal { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px 28px; max-width:360px; text-align:center; box-shadow:0 16px 40px rgba(0,0,0,.5); }
-  .modal h3 { font-size:15px; margin-bottom:6px; }
-  .modal p { font-size:12px; color:var(--text-dim); margin-bottom:16px; line-height:1.5; }
-  .modal-btns { display:flex; gap:8px; justify-content:center; }
-  .mbtn { padding:7px 18px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface2); color:var(--text); transition:all .2s; }
-  .mbtn:hover { background:var(--border); }
-  .mbtn.danger { background:rgba(229,83,75,.15); border-color:var(--red); color:var(--red); }
-
-  @media(max-width:800px) {
-    header,.filters,.cal-nav,.list-view,.progress-section { padding-left:14px; padding-right:14px; }
-    .cal-grid { margin:0 14px 20px; }
-    .cal-cell { min-height:70px; padding:3px; }
-    .ev { font-size:8px; }
-    .row { grid-template-columns:28px 55px 70px 1fr 70px; font-size:11px; }
+  /* ── Main Content ── */
+  .main {
+    flex: 1;
+    min-height: 100vh;
+    overflow-y: auto;
   }
 
-  /* ── Chat Widget ── */
-  .chat-fab { position:fixed; bottom:24px; right:24px; width:52px; height:52px; border-radius:50%; background:var(--text); color:#fff; border:none; cursor:pointer; font-size:22px; box-shadow:0 4px 16px rgba(0,0,0,.15); z-index:200; display:flex; align-items:center; justify-content:center; transition:transform .2s; }
-  .chat-fab:hover { transform:scale(1.08); }
-  .chat-fab.hidden { display:none; }
-  .chat-panel { position:fixed; bottom:24px; right:24px; width:400px; height:520px; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.12); z-index:300; display:none; flex-direction:column; overflow:hidden; }
-  .chat-panel.open { display:flex; }
-  .chat-panel-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
-  .chat-panel-header h4 { font-size:14px; font-weight:700; }
-  .chat-close { background:none; border:none; font-size:18px; cursor:pointer; color:var(--text-dim); padding:4px; }
-  .chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
-  .chat-msg { max-width:85%; padding:10px 14px; border-radius:12px; font-size:13px; line-height:1.5; word-wrap:break-word; }
-  .chat-msg.user { align-self:flex-end; background:var(--text); color:#fff; border-bottom-right-radius:4px; }
-  .chat-msg.assistant { align-self:flex-start; background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; }
-  .chat-input-row { padding:12px; border-top:1px solid var(--border); display:flex; gap:8px; }
-  .chat-input { flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--surface2); font-size:13px; color:var(--text); resize:none; font-family:inherit; }
-  .chat-input:focus { outline:none; border-color:var(--accent); }
-  .chat-send { padding:10px 16px; border-radius:10px; border:none; background:var(--text); color:#fff; font-size:13px; font-weight:600; cursor:pointer; transition:background .15s; }
-  .chat-send:hover { background:#0a1a2e; }
-  .chat-send:disabled { opacity:.4; cursor:default; }
-  .toast { position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(10px); padding:10px 20px; background:var(--text); color:#fff; border-radius:8px; font-size:13px; font-weight:500; opacity:0; transition:all .3s; z-index:600; pointer-events:none; }
-  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-  @media(max-width:500px) { .chat-panel { width:calc(100vw - 16px); right:8px; bottom:8px; height:70vh; } }
+  .topbar {
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+  }
+  .topbar h1 {
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .topbar h1 span { color: var(--accent); }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .user-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--surface2);
+    border-radius: 20px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .user-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── Home View ── */
+  .home-view {
+    padding: 40px;
+    max-width: 1200px;
+  }
+  .home-greeting {
+    margin-bottom: 32px;
+  }
+  .home-greeting h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .home-greeting p {
+    font-size: 14px;
+    color: var(--text-dim);
+  }
+
+  .module-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+  }
+
+  .module-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    text-decoration: none;
+    color: var(--text);
+    transition: all 0.2s;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+  .module-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 8px 30px rgba(0,176,212,0.10);
+    transform: translateY(-2px);
+  }
+  .module-card-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .module-card-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+  .module-card-icon.calendar { background: var(--accent-dim); color: var(--accent); }
+  .module-card-icon.financials { background: var(--green-dim); color: var(--green); }
+  .module-card-icon.budgeting { background: rgba(212,134,10,0.08); color: #d4860a; }
+
+  .module-card h3 {
+    font-size: 17px;
+    font-weight: 600;
+  }
+  .module-card p {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .module-card-arrow {
+    position: absolute;
+    top: 28px;
+    right: 24px;
+    color: var(--border);
+    transition: all 0.2s;
+  }
+  .module-card:hover .module-card-arrow {
+    color: var(--accent);
+    transform: translateX(3px);
+  }
+
+  .module-card-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    width: fit-content;
+  }
+  .module-card-status.live {
+    background: var(--green-dim);
+    color: var(--green);
+  }
+  .module-card-status.coming {
+    background: rgba(212,134,10,0.08);
+    color: #d4860a;
+  }
+  .module-card-status .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  /* ── Manage Views (Properties / Users) ── */
+  .manage-view {
+    padding: 40px;
+    max-width: 1200px;
+    display: none;
+  }
+  .manage-view.show { display: block; }
+  .manage-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .manage-header h2 {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .btn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text-dim);
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .btn:hover { background: var(--surface2); color: var(--text); }
+  .btn.accent {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn.accent:hover { background: #009ab8; }
+
+  .data-table {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .data-table table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .data-table th {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-dim);
+    background: var(--surface2);
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table td {
+    padding: 12px 16px;
+    font-size: 13px;
+    border-bottom: 1px solid var(--border);
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:hover td { background: rgba(0,176,212,0.03); }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .tag.active { background: var(--green-dim); color: var(--green); }
+  .tag.inactive { background: rgba(107,125,150,0.1); color: var(--text-dim); }
+  .tag.multifamily { background: var(--accent-dim); color: var(--accent); }
+  .tag.office { background: rgba(212,134,10,0.08); color: #d4860a; }
+  .tag.retail { background: rgba(154,26,107,0.08); color: #9a1a6b; }
+  .tag.industrial { background: rgba(26,107,154,0.08); color: #1a6b9a; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-dim);
+  }
+  .empty-state svg { margin-bottom: 12px; opacity: 0.4; }
+  .empty-state p { font-size: 14px; margin-bottom: 4px; }
+  .empty-state .sub { font-size: 12px; }
+
+  .loading-spinner {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+    color: var(--text-dim);
+    font-size: 13px;
+    gap: 8px;
+  }
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .sidebar { width: 60px; }
+    .sidebar-logo .logo-text,
+    .sidebar-section-label,
+    .sidebar-item span,
+    .sidebar-footer { display: none; }
+    .sidebar-item { justify-content: center; padding: 12px; border-left: none; }
+    .home-view, .manage-view { padding: 20px; }
+    .module-grid { grid-template-columns: 1fr; }
+  }
 </style>
 </head>
 <body>
 
-<div class="loading-bar" id="loadBar"></div>
+<!-- ── Sidebar ── -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <img src="First_Mile_Capital_Logo_KO_White.png" alt="First Mile Capital">
+  </div>
 
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Modules</div>
+    <a class="sidebar-item active" data-view="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </a>
+    <a class="sidebar-item" data-view="calendar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      <span>Accounting Calendar</span>
+    </a>
+    <a class="sidebar-item" data-view="financials">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      <span>Property Financials</span>
+    </a>
+    <a class="sidebar-item" data-view="budgeting">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      <span>Property Budgeting</span>
+    </a>
+  </div>
 
-<!-- Main App -->
-<header>
-  <h1 style="display:flex;align-items:center;gap:14px"><img src="First_Mile_Capital_Logo_RGB.png" style="height:44px;width:auto" alt="First Mile Capital"><span style="color:var(--text-dim);font-weight:400;font-size:14px">Accounting Calendar — 2026</span></h1>
-  <div class="header-right">
-    <div class="sync-pill live" id="syncPill" style="display:none"><div class="sync-dot"></div><span>Live</span></div>
-    <button class="btn accent" onclick="refreshData()" style="display:none" id="refreshBtn">↻ Refresh</button>
-    <a class="btn" href="FM Manage.html" id="manageBtn" style="display:none">Manage Data</a>
-    <a class="btn" href="https://airtable.com/app27jUbqonTIiHXY" target="_blank" id="editBtn" style="display:none">Edit in Airtable</a>
-    <div class="view-toggle">
-      <button class="active" onclick="setView('calendar')">Calendar</button>
-      <button onclick="setView('list')">By Investment</button>
-      <button onclick="setView('checklist')">Checklist</button>
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Manage</div>
+    <a class="sidebar-item" data-view="properties">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/><path d="M9 9v.01"/><path d="M9 12v.01"/><path d="M9 15v.01"/><path d="M9 18v.01"/></svg>
+      <span>Properties</span>
+    </a>
+    <a class="sidebar-item" data-view="users">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+      <span>Users</span>
+    </a>
+  </div>
+
+  <div class="sidebar-spacer"></div>
+
+  <div class="sidebar-footer">
+    <a href="exec.html">Executive Dashboard →</a>
+  </div>
+</nav>
+
+<!-- ── Main ── -->
+<div class="main">
+  <div class="topbar">
+    <h1><img src="First_Mile_Capital_Logo_RGB.png" alt="First Mile Capital" style="height:32px; vertical-align:middle;"></h1>
+    <div class="topbar-right">
+      <div class="user-pill">
+        <div class="user-avatar">MZ</div>
+        Morris
+      </div>
     </div>
   </div>
-</header>
 
-<div class="progress-section" id="progArea" style="display:none">
-  <div class="progress-header">
-    <div class="progress-label"><span class="dn" id="pDone">0</span> / <span class="tt" id="pTot">0</span> tasks completed</div>
-    <div class="progress-actions">
+  <!-- Home View -->
+  <div class="home-view" id="view-home">
+    <div class="home-greeting">
+      <h2>Welcome back, Morris</h2>
+      <p>First Mile Capital — Admin Portal</p>
+    </div>
+
+    <div class="module-grid">
+      <!-- Accounting Calendar -->
+      <div class="module-card" onclick="switchView('calendar')" style="cursor:pointer">
+        <div class="module-card-icon calendar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <div class="module-card-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <h3>Accounting Calendar</h3>
+        <p>Track recurring deadlines, payment schedules, and compliance tasks across all properties.</p>
+        <div class="module-card-status live"><span class="dot"></span> Live</div>
+      </div>
+
+      <!-- Property Financials -->
+      <div class="module-card" onclick="switchView('financials')">
+        <div class="module-card-icon financials">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+        </div>
+        <div class="module-card-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <h3>Property Financials</h3>
+        <p>View income, expenses, and cash flow across your portfolio with real-time bank data.</p>
+        <div class="module-card-status coming"><span class="dot"></span> Coming Soon</div>
+      </div>
+
+      <!-- Property Budgeting -->
+      <div class="module-card" onclick="switchView('budgeting')">
+        <div class="module-card-icon budgeting">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <div class="module-card-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <h3>Property Budgeting</h3>
+        <p>Build and track annual budgets per property. Compare actuals vs. budget in real time.</p>
+        <div class="module-card-status coming"><span class="dot"></span> Coming Soon</div>
+      </div>
     </div>
   </div>
-  <div class="progress-track"><div class="progress-fill" id="pFill" style="width:0%"></div></div>
-  <div class="all-done" id="pBanner">All tasks complete for this month!</div>
-</div>
 
-<div class="filters" id="filters"></div>
-
-<div id="calView">
-  <div class="cal-nav">
-    <button onclick="changeMonth(-1)">‹</button>
-    <div class="mlabel" id="mLabel"></div>
-    <button onclick="changeMonth(1)">›</button>
-  </div>
-  <div class="cal-grid" id="calGrid"></div>
-</div>
-
-<div class="list-view" id="listView"></div>
-<div class="list-view" id="checkView" style="display:none"></div>
-<div class="tip" id="tooltip"></div>
-
-<div class="modal-bg" id="resetModal">
-  <div class="modal">
-    <h3>Reset all checkboxes?</h3>
-    <p>This will clear all completed tasks for the current month.</p>
-    <div class="modal-btns">
-      <button class="mbtn" onclick="closeReset()">Cancel</button>
-      <button class="mbtn danger" onclick="doReset()">Reset</button>
+  <!-- Properties View -->
+  <div class="manage-view" id="view-properties">
+    <div class="manage-header">
+      <h2>Properties</h2>
+      <button class="btn accent" onclick="alert('Add property form coming soon')">+ Add Property</button>
+    </div>
+    <div class="data-table">
+      <div class="loading-spinner" id="properties-loading">
+        <div class="spinner"></div>
+        Loading properties from Airtable…
+      </div>
+      <table id="properties-table" style="display:none">
+        <thead>
+          <tr>
+            <th>Property Name</th>
+            <th>Type</th>
+            <th>Address</th>
+            <th>Units</th>
+            <th>Entity</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="properties-tbody"></tbody>
+      </table>
     </div>
   </div>
+
+  <!-- Users View -->
+  <div class="manage-view" id="view-users">
+    <div class="manage-header">
+      <h2>Users</h2>
+      <button class="btn accent" onclick="alert('Add user form coming soon')">+ Add User</button>
+    </div>
+    <div class="data-table">
+      <div class="loading-spinner" id="users-loading">
+        <div class="spinner"></div>
+        Loading users from Airtable…
+      </div>
+      <table id="users-table" style="display:none">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Properties</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="users-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Placeholder views for future modules -->
+  <div class="manage-view" id="view-financials">
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      <p>Property Financials</p>
+      <p class="sub">This module is under development.</p>
+    </div>
+  </div>
+
+  <!-- Calendar View (iframe) -->
+  <div class="manage-view" id="view-calendar" style="padding:0; height:calc(100vh - 65px);">
+    <iframe src="calendar.html" style="width:100%; height:100%; border:none;"></iframe>
+  </div>
+
+  <div class="manage-view" id="view-budgeting">
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      <p>Property Budgeting</p>
+      <p class="sub">This module is under development.</p>
+    </div>
+  </div>
+
 </div>
 
 <script>
-const BASE_ID='app27jUbqonTIiHXY', TABLE_NAME='Sheet1';
-const API_TOKEN='__AIRTABLE_TOKEN__';
-const STATUS_FIELD='fld1MOQBkRaFEIXdl', COMPLETED_DATE_FIELD='fldKBm9ch5K8EfCCR';
-const MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
-const QTR=[0,3,6,9];
-const PALETTE=["#00b0d4","#50dcb4","#ff8c5a","#dc78ff","#ffd250","#50c8ff","#ff6482","#a78bfa","#f472b6","#38bdf8","#4ade80","#fb923c","#e879f9","#22d3ee","#b4b4b4"];
-let colorMap={},colorIdx=0;
-function getClr(p){if(!colorMap[p]){colorMap[p]=PALETTE[colorIdx%PALETTE.length];colorIdx++;}return colorMap[p];}
-function hexA(h,a){h=h.replace('#','');return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;}
+  // ── View Switching ──
+  function switchView(view) {
+    // Update sidebar
+    document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+    const sidebarItem = document.querySelector(`.sidebar-item[data-view="${view}"]`);
+    if (sidebarItem) sidebarItem.classList.add('active');
 
-let EVENTS=[],COLORS={},currentMonth=0,currentView='calendar',activeFilters=new Set();
-const today=new Date(),todayDay=today.getDate(),todayMonth=today.getMonth(),todayYear=today.getFullYear();
+    // Hide all views
+    document.getElementById('view-home').style.display = 'none';
+    document.querySelectorAll('.manage-view').forEach(el => el.classList.remove('show'));
 
-const DEFAULTS=[
-  {id:0,day:8,cadence:"Monthly",property:"Pref Fund I - Solow",type:"AM Fee",task:"Transfer Solow AM fees to FMC - $5,208 (BofA scheduled)",owner:"BofA - automatic"},
-  {id:1,day:8,cadence:"Monthly",property:"41 Flatbush Ave",type:"AM Fee",task:"Receive JLL Financial Package from JLL. Invoice them for AM Fee - 2.5%",owner:"Anthony"},
-  {id:2,day:10,cadence:"Monthly",property:"Paramus Plaza",type:"Reporting",task:"Upload Monthly Management Reports to DRA",owner:"Anthony"},
-  {id:3,day:20,cadence:"Quarterly",property:"Pref Fund II - JPY",type:"Investor Payment",task:"Purchase JPY to Goldman Sachs. Loan from FMC if cash shortfall.",owner:"Anthony"},
-  {id:4,day:20,cadence:"Quarterly",property:"Pref Fund II - JPY",type:"Investor Payment",task:"Send JPY to investors via Goldman Sachs",owner:"Anthony"},
-  {id:5,day:20,cadence:"Monthly",property:"61 S Paramus",type:"AM Fee",task:"Transfer distros from property to FM Paramus Member (BofA scheduled)",owner:"BofA - automatic"},
-  {id:6,day:21,cadence:"Monthly",property:"61 S Paramus",type:"AM Fee",task:"Transfer AM fee split 48k to FM and 4k to Ring (BofA scheduled)",owner:"BofA - automatic"},
-  {id:7,day:23,cadence:"Monthly",property:"61 S Paramus",type:"Investor Payment",task:"Send Distros via Appfolio",owner:"Anthony"},
-  {id:8,day:23,cadence:"Monthly",property:"Paramus Plaza",type:"Investor Payment",task:"Send Distros via Appfolio",owner:"Anthony"},
-  {id:9,day:23,cadence:"Monthly",property:"One River Centre",type:"Investor Payment",task:"Send Distros via Appfolio (*Xuan sends for now, will be transferred soon to Anthony)",owner:"Xuan"},
-  {id:10,day:23,cadence:"Monthly",property:"1700 East Putnam",type:"Investor Payment",task:"Send Distros via Appfolio (*Currently Suspended)",owner:"Xuan"},
-  {id:11,day:23,cadence:"Monthly",property:"Pref Fund I - Solow",type:"Investor Payment",task:"Send Distros via Appfolio",owner:"Anthony"},
-  {id:12,day:25,cadence:"Monthly",property:"Paramus Plaza",type:"AM Fee",task:"Pay Paramus Plaza AM Fee, if cash distro received by DRA",owner:"Anthony"},
-  {id:13,day:25,cadence:"Quarterly",property:"ALL",type:"Reporting",task:"Send Asset Management Report",owner:"Morris"},
-];
-
-// ── Airtable fetch ──
-function parseDay(s){const m=String(s).match(/(\d+)/);return m?parseInt(m[1]):1;}
-
-async function fetchAT(){
-  setLoading(true);
-  try{
-    const r=await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}?pageSize=100`,{headers:{'Authorization':`Bearer ${API_TOKEN}`}});
-    if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`HTTP ${r.status}`);}
-    const d=await r.json();
-    EVENTS=d.records.map((r,i)=>({
-      id:i,airtableId:r.id,day:parseDay(r.fields['Day of Month']||'1'),
-      cadence:(r.fields['Cadence']?.name||r.fields['Cadence']||'Monthly'),
-      property:(r.fields['Property']?.name||r.fields['Property']||''),
-      type:(r.fields['Payment Type']?.name||r.fields['Payment Type']||''),
-      task:(r.fields['Description']||''),
-      owner:(r.fields['Owner']?.name||r.fields['Owner']||''),
-      status:(r.fields['Status']?.name||r.fields['Status']||''),
-      completedBy:(r.fields['Completed By']||''),
-      completedDate:(r.fields['Completed Date']||''),
-    }));
-    buildClrs();
-    setSync('live',`Live · ${EVENTS.length} deadlines`);
-    return true;
-  }catch(e){console.error(e);setSync('error',e.message);return false;}
-  finally{setLoading(false);}
-}
-
-function buildClrs(){colorMap={};colorIdx=0;COLORS={};[...new Set(EVENTS.map(e=>e.property))].sort().forEach(p=>{const c=getClr(p);COLORS[p]={bg:hexA(c,.15),fg:c,border:c};});}
-
-// ── Setup ──
-function showUI(){['progArea','refreshBtn','editBtn','manageBtn','syncPill'].forEach(id=>document.getElementById(id).style.display='');}
-async function refreshData(){const ok=await fetchAT();if(ok){activeFilters=new Set(Object.keys(COLORS));buildFilters();render();}}
-
-// ── Checks (Airtable-backed) ──
-function isC(id){const ev=EVENTS[id];return ev&&ev.status==='Done';}
-function cT(id){const ev=EVENTS[id];return ev?ev.completedDate:null;}
-function cBy(id){const ev=EVENTS[id];return ev?ev.completedBy:'';}
-
-async function tog(id){
-  const ev=EVENTS[id];if(!ev||!ev.airtableId)return;
-  const wasDone=ev.status==='Done';
-
-  // Optimistic update
-  if(wasDone){ev.status='';ev.completedDate='';}
-  else{ev.status='Done';ev.completedDate=new Date().toISOString();}
-  render();
-
-  // Write to Airtable
-  try{
-    const fields={};
-    fields[STATUS_FIELD]=wasDone?null:'Done';
-    fields[COMPLETED_DATE_FIELD]=wasDone?null:new Date().toISOString();
-    const res=await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
-      method:'PATCH',
-      headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
-      body:JSON.stringify({records:[{id:ev.airtableId,fields}]})
-    });
-    if(!res.ok){const err=await res.json().catch(()=>({}));console.error('Write-back error:',err);}
-  }catch(e){console.error('Write-back failed:',e);}
-}
-
-async function markAllDoneAT(){
-  const evts=mEvts(currentMonth).filter(e=>e.status!=='Done');
-  if(!evts.length)return;
-
-  evts.forEach(ev=>{ev.status='Done';ev.completedDate=new Date().toISOString();});
-  render();
-
-  for(let i=0;i<evts.length;i+=10){
-    const batch=evts.slice(i,i+10);
-    const records=batch.map(ev=>{
-      const fields={};
-      fields[STATUS_FIELD]='Done';
-      fields[COMPLETED_DATE_FIELD]=new Date().toISOString();
-      return{id:ev.airtableId,fields};
-    });
-    try{
-      await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
-        method:'PATCH',
-        headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
-        body:JSON.stringify({records})
-      });
-    }catch(e){console.error('Batch write failed:',e);}
-  }
-}
-
-async function resetMonthAT(){
-  const evts=mEvts(currentMonth).filter(e=>e.status==='Done');
-  if(!evts.length)return;
-
-  evts.forEach(ev=>{ev.status='';ev.completedDate='';});
-  render();
-
-  for(let i=0;i<evts.length;i+=10){
-    const batch=evts.slice(i,i+10);
-    const records=batch.map(ev=>{
-      const fields={};
-      fields[STATUS_FIELD]=null;
-      fields[COMPLETED_DATE_FIELD]=null;
-      return{id:ev.airtableId,fields};
-    });
-    try{
-      await fetch(`https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE_NAME)}`,{
-        method:'PATCH',
-        headers:{'Authorization':`Bearer ${API_TOKEN}`,'Content-Type':'application/json'},
-        body:JSON.stringify({records})
-      });
-    }catch(e){console.error('Batch reset failed:',e);}
-  }
-}
-
-// ── Filters ──
-function buildFilters(){const el=document.getElementById('filters');el.innerHTML='';Object.keys(COLORS).forEach(p=>{const ch=document.createElement('div');ch.className='chip'+(activeFilters.has(p)?' active':'');ch.textContent=p;ch.style.setProperty('--chip-c',COLORS[p].fg);ch.style.setProperty('--chip-bg',COLORS[p].bg);ch.onclick=()=>{if(activeFilters.has(p)){activeFilters.delete(p);ch.classList.remove('active');}else{activeFilters.add(p);ch.classList.add('active');}render();};el.appendChild(ch);});}
-function flt(){return EVENTS.filter(e=>activeFilters.has(e.property));}
-function mEvts(m){return flt().filter(e=>e.cadence==='Monthly'||(e.cadence==='Quarterly'&&QTR.includes(m)));}
-function dim(m,y){return new Date(y,m+1,0).getDate();}
-function fdow(m,y){return new Date(y,m,1).getDay();}
-function ord(n){const s=["th","st","nd","rd"],v=n%100;return n+(s[(v-20)%10]||s[v]||s[0]);}
-
-// ── UI helpers ──
-function setLoading(on){document.getElementById('loadBar').className=on?'loading-bar active':'loading-bar done';}
-function setSync(st,lb){const el=document.getElementById('syncPill');el.className='sync-pill '+st;el.querySelector('span').textContent=lb;}
-function updateProg(){const e=mEvts(currentMonth),t=e.length,d=e.filter(x=>isC(x.id)).length,p=t>0?Math.round(d/t*100):0;document.getElementById('pDone').textContent=d;document.getElementById('pTot').textContent=t;document.getElementById('pFill').style.width=p+'%';const b=document.getElementById('pBanner');if(d===t&&t>0)b.classList.add('show');else b.classList.remove('show');}
-
-// ── Calendar ──
-function renderCal(){
-  const m=currentMonth;document.getElementById('mLabel').textContent=MONTHS[m]+' 2026';
-  const g=document.getElementById('calGrid');g.innerHTML='';
-  ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d=>{const h=document.createElement('div');h.className='cal-hdr';h.textContent=d;g.appendChild(h);});
-  const f=fdow(m,2026),di=dim(m,2026),evts=mEvts(m);
-  for(let i=0;i<f;i++){const e=document.createElement('div');e.className='cal-cell empty';g.appendChild(e);}
-  for(let d=1;d<=di;d++){
-    const cell=document.createElement('div');cell.className='cal-cell';
-    if(d===todayDay&&m===todayMonth&&2026===todayYear)cell.classList.add('today');
-    const num=document.createElement('div');num.className='dnum';num.textContent=d;cell.appendChild(num);
-    evts.filter(e=>e.day===d).forEach(ev=>{
-      const c=COLORS[ev.property]||{bg:'rgba(180,180,180,.15)',fg:'#b4b4b4',border:'#b4b4b4'};
-      const chk=isC(ev.id);
-      const tag=document.createElement('div');tag.className='ev'+(chk?' done':'');
-      tag.style.background=c.bg;tag.style.color=c.fg;tag.style.borderLeftColor=chk?'var(--green)':c.border;
-      const cb=document.createElement('div');cb.className='ev-cb'+(chk?' on':'');cb.style.borderColor=chk?'var(--green)':c.fg;cb.innerHTML=chk?'✓':'';
-      cb.onclick=e=>{e.stopPropagation();tog(ev.id);};
-      const txt=document.createElement('span');txt.className='ev-txt';
-      txt.innerHTML=`<span class="ev-lbl">${ev.property==='ALL'?'ALL':ev.property.split(' ').slice(0,2).join(' ')}</span> · ${ev.type}`;
-      tag.appendChild(cb);tag.appendChild(txt);tag.onmouseenter=e=>showTT(e,ev);tag.onmouseleave=hideTT;
-      cell.appendChild(tag);
-    });
-    g.appendChild(cell);
-  }
-}
-
-// ── List ──
-function renderList(){
-  const el=document.getElementById('listView');el.innerHTML='';
-  const grouped={};flt().forEach(ev=>{if(!grouped[ev.property])grouped[ev.property]=[];grouped[ev.property].push(ev);});
-  Object.keys(grouped).sort().forEach(prop=>{
-    const items=grouped[prop],c=COLORS[prop]||{fg:'#b4b4b4'};
-    const grp=document.createElement('div');grp.className='grp';
-    const dn=items.filter(e=>isC(e.id)).length;
-    grp.innerHTML=`<div class="grp-hdr"><div class="grp-dot" style="background:${c.fg}"></div><h3>${prop}</h3><div class="cnt">${dn}/${items.length} done</div></div>`;
-    items.sort((a,b)=>a.day-b.day).forEach(ev=>{
-      const chk=isC(ev.id);
-      const row=document.createElement('div');row.className='row'+(chk?' done':'');
-      row.innerHTML=`<div class="cb-wrap"><div class="cb ${chk?'on':''}"></div></div><div class="day">${ord(ev.day)}</div><div class="tag tag-${ev.cadence==='Monthly'?'m':'q'}">${ev.cadence}</div><div class="task">${ev.task}</div><div class="owner">${ev.owner}</div>`;
-      row.querySelector('.cb').onclick=()=>tog(ev.id);grp.appendChild(row);
-    });el.appendChild(grp);
-  });
-}
-
-// ── Checklist ──
-function renderChk(){
-  const el=document.getElementById('checkView');el.innerHTML='';
-  const evts=mEvts(currentMonth).sort((a,b)=>a.day-b.day||a.id-b.id);
-  const byDay={};evts.forEach(ev=>{if(!byDay[ev.day])byDay[ev.day]=[];byDay[ev.day].push(ev);});
-  Object.keys(byDay).sort((a,b)=>+a-+b).forEach(day=>{
-    const d=byDay[day],sec=document.createElement('div');sec.className='grp';
-    const dn=d.filter(e=>isC(e.id)).length;
-    sec.innerHTML=`<div class="grp-hdr"><h3>${MONTHS[currentMonth]} ${ord(+day)}</h3><div class="cnt">${dn}/${d.length} done</div></div>`;
-    d.forEach(ev=>{
-      const c=COLORS[ev.property]||{fg:'#b4b4b4',border:'#b4b4b4'};const chk=isC(ev.id);const ts=cT(ev.id);
-      const row=document.createElement('div');row.className='row'+(chk?' done':'');row.style.borderLeft=`4px solid ${chk?'var(--green)':c.border}`;
-      row.innerHTML=`<div class="cb-wrap"><div class="cb ${chk?'on':''}"></div></div><div class="day" style="color:${c.fg}">${ev.property}</div><div class="tag tag-${ev.cadence==='Monthly'?'m':'q'}">${ev.type}</div><div class="task">${ev.task}${chk?'<br><span style="font-size:9px;color:var(--green)">✓ Completed '+new Date(ts).toLocaleString()+'</span>':''}</div><div class="owner">${ev.owner}</div>`;
-      row.querySelector('.cb').onclick=()=>tog(ev.id);sec.appendChild(row);
-    });el.appendChild(sec);
-  });
-}
-
-// ── Render ──
-function render(){renderCal();renderList();renderChk();updateProg();}
-function setView(v){currentView=v;document.querySelectorAll('.view-toggle button').forEach(b=>b.classList.remove('active'));const btns=document.querySelectorAll('.view-toggle button');document.getElementById('calView').style.display=v==='calendar'?'':'none';document.getElementById('listView').style.display=v==='list'?'block':'none';document.getElementById('checkView').style.display=v==='checklist'?'block':'none';if(v==='calendar')btns[0].classList.add('active');else if(v==='list')btns[1].classList.add('active');else btns[2].classList.add('active');}
-function changeMonth(d){currentMonth=Math.max(0,Math.min(11,currentMonth+d));render();}
-function markAllDone(){markAllDoneAT();}
-function confirmReset(){document.getElementById('resetModal').classList.add('show');}
-function closeReset(){document.getElementById('resetModal').classList.remove('show');}
-function doReset(){closeReset();resetMonthAT();}
-
-// ── Tooltip ──
-function showTT(e,ev){const t=document.getElementById('tooltip'),c=COLORS[ev.property]||{fg:'#b4b4b4'};const chk=isC(ev.id),ts=cT(ev.id);t.innerHTML=`<div class="tp" style="color:${c.fg}">${ev.property}</div><div class="ty">${ev.type} · ${ev.cadence}</div><div class="tk">${ev.task}</div><div class="to">Owner: ${ev.owner}</div><div class="ts" style="color:${chk?'var(--green)':'var(--red)'}">${chk?'✓ Completed '+new Date(ts).toLocaleString():'Not yet completed'}</div>`;const r=e.target.getBoundingClientRect();let left=r.right+10,top=r.top;if(left+320>window.innerWidth)left=r.left-330;if(top+180>window.innerHeight)top=window.innerHeight-190;t.style.left=left+'px';t.style.top=top+'px';t.classList.add('show');}
-function hideTT(){document.getElementById('tooltip').classList.remove('show');}
-
-// ── Init ──
-async function init(){
-  currentMonth=todayYear===2026?todayMonth:0;
-  const ok=await fetchAT();
-  if(ok){showUI();activeFilters=new Set(Object.keys(COLORS));buildFilters();render();setInterval(()=>refreshData(),120000);}
-  else{EVENTS=[...DEFAULTS];buildClrs();activeFilters=new Set(Object.keys(COLORS));setSync('error','Could not connect');showUI();buildFilters();render();}
-}
-init();
-
-// ── Chat Widget ──
-const CLAUDE_API_KEY = window.CLAUDE_API_KEY || '__CLAUDE_API_KEY__';
-let chatHistory = [];
-
-function toggleChat() {
-  const panel = document.getElementById('chatPanel');
-  const fab = document.getElementById('chatFab');
-  const isOpen = panel.classList.toggle('open');
-  fab.classList.toggle('hidden', isOpen);
-  if (isOpen) document.getElementById('chatInput').focus();
-}
-
-function addChatMsg(role, text) {
-  const div = document.createElement('div');
-  div.className = `chat-msg ${role}`;
-  div.textContent = text;
-  document.getElementById('chatMessages').appendChild(div);
-  div.scrollIntoView({ behavior: 'smooth' });
-}
-
-function buildCalendarContext() {
-  // Build a summary of deadlines for Claude
-  const now = new Date();
-  const month = currentMonth;
-  const monthEvents = EVENTS.filter(ev => {
-    const d = new Date(ev.date);
-    return d.getMonth() === month && d.getFullYear() === 2026;
-  }).sort((a, b) => new Date(a.date) - new Date(b.date));
-
-  const lines = monthEvents.map(ev => {
-    const done = isC(ev.id);
-    return `${ev.date} | ${ev.property} | ${ev.type} | ${ev.task} | ${ev.owner} | ${done ? 'DONE' : 'PENDING'}`;
-  });
-
-  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  return `Current month: ${MONTHS[month]} 2026\nDeadlines (date|property|type|task|owner|status):\n${lines.join('\n')}`;
-}
-
-async function sendChat() {
-  const input = document.getElementById('chatInput');
-  const msg = input.value.trim();
-  if (!msg) return;
-
-  input.value = '';
-  addChatMsg('user', msg);
-
-  const sendBtn = document.getElementById('chatSend');
-  sendBtn.disabled = true;
-
-  const systemPrompt = `You are an AI assistant for First Mile Capital's accounting calendar. You help Morris track deadlines, filings, and accounting tasks across the FMC real estate portfolio.
-
-CONTEXT:
-${buildCalendarContext()}
-
-You can answer questions about upcoming deadlines, what's overdue, who owns what task, and general accounting guidance. Be concise and helpful.`;
-
-  chatHistory.push({ role: 'user', content: msg });
-
-  try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': CLAUDE_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: chatHistory.slice(-10)
-      })
-    });
-
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(`API ${resp.status}: ${err}`);
+    // Show selected view
+    if (view === 'home') {
+      document.getElementById('view-home').style.display = 'block';
+    } else {
+      const target = document.getElementById(`view-${view}`);
+      if (target) target.classList.add('show');
     }
 
-    const data = await resp.json();
-    const reply = data.content[0].text;
-    chatHistory.push({ role: 'assistant', content: reply });
-    addChatMsg('assistant', reply);
-
-  } catch (e) {
-    console.error(e);
-    addChatMsg('assistant', `Error: ${e.message}`);
+    // Load data if needed
+    if (view === 'properties') loadProperties();
+    if (view === 'users') loadUsers();
   }
 
-  sendBtn.disabled = false;
-  input.focus();
-}
+  // ── Sidebar click handlers ──
+  document.querySelectorAll('.sidebar-item').forEach(item => {
+    item.addEventListener('click', function(e) {
+      const view = this.dataset.view;
+      // Let calendar link navigate normally
+      if (view === 'calendar') return;
+      e.preventDefault();
+      switchView(view);
+    });
+  });
+
+  // ── Airtable Config ──
+  // Properties and Users tables will be created in FMC Banking base
+  const AIRTABLE_CONFIG = {
+    // To connect: set your Airtable PAT here or use environment config
+    apiKey: '',
+    baseId: 'appTXzlQGcpVk3IcU',
+    propertiesTableId: 'tbl1svBgBM6IoaoQM',
+    usersTableId: 'tblllwXWUUcOoeQRT',
+  };
+
+  // ── Load Properties ──
+  let propertiesLoaded = false;
+  function loadProperties() {
+    if (propertiesLoaded) return;
+    // Show placeholder data for now (Airtable integration ready)
+    setTimeout(() => {
+      document.getElementById('properties-loading').style.display = 'none';
+      document.getElementById('properties-table').style.display = 'table';
+      document.getElementById('properties-tbody').innerHTML = `
+        <tr><td colspan="6" style="text-align:center; color:var(--text-dim); padding:32px;">
+          Connect Airtable to see your properties here.<br>
+          <span style="font-size:11px;">Tables have been created in your FMC Banking base.</span>
+        </td></tr>
+      `;
+      propertiesLoaded = true;
+    }, 600);
+  }
+
+  // ── Load Users ──
+  let usersLoaded = false;
+  function loadUsers() {
+    if (usersLoaded) return;
+    setTimeout(() => {
+      document.getElementById('users-loading').style.display = 'none';
+      document.getElementById('users-table').style.display = 'table';
+      document.getElementById('users-tbody').innerHTML = `
+        <tr><td colspan="5" style="text-align:center; color:var(--text-dim); padding:32px;">
+          Connect Airtable to see your users here.<br>
+          <span style="font-size:11px;">Tables have been created in your FMC Banking base.</span>
+        </td></tr>
+      `;
+      usersLoaded = true;
+    }, 600);
+  }
 </script>
 
-<!-- Chat FAB + Panel -->
-<button class="chat-fab" id="chatFab" onclick="toggleChat()">💬</button>
-<div class="chat-panel" id="chatPanel">
-  <div class="chat-panel-header">
-    <h4>FMC Assistant</h4>
-    <button class="chat-close" onclick="toggleChat()">&times;</button>
-  </div>
-  <div class="chat-messages" id="chatMessages">
-    <div class="chat-msg assistant">Hi Morris — ask me about upcoming deadlines, overdue tasks, or anything about the accounting calendar.</div>
-  </div>
-  <div class="chat-input-row">
-    <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask about deadlines..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
-    <button class="chat-send" id="chatSend" onclick="sendChat()">Send</button>
-  </div>
-</div>
-<div class="toast" id="toast"></div>
 </body>
 </html>
