@@ -1464,6 +1464,16 @@
     return r.json();
   }
 
+  async function supaWrite(table, method, body, query = '') {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/${table}${query}`, {
+      method,
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+      body: JSON.stringify(body)
+    });
+    if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
+    return method === 'DELETE' ? null : r.json();
+  }
+
   async function loadProperties() {
     if (propertiesLoaded) return;
     propertiesLoaded = true;
@@ -2034,12 +2044,12 @@
   const CHAT_TOOLS = [
     {
       name: 'supabase_query',
-      description: 'Query data from Supabase tables. Tables: calendar_tasks (accounting deadlines - columns: day_of_month, cadence, property, payment_type, description, owner, status), properties (property metadata - columns: property_name, property_type, address, city, state, units, sqft, entity_name, acquisition_date, acquisition_price, current_valuation, status, notes), app_users (team members - columns: display_name, email, role, phone, status).',
+      description: 'Query data from Supabase tables. Tables: calendar_tasks (accounting deadlines - columns: day_of_month, cadence, property, payment_type, description, owner, status), properties (property metadata - columns: property_name, property_type, address, city, state, units, sqft, entity_name, acquisition_date, acquisition_price, current_valuation, status, notes), app_users (team members - columns: display_name, email, role, phone, status), exec_transactions (corporate bank transactions - columns: date, description, amount, ledger_balance, transaction_type, credit_debit, account_name, account_number, category_override), exec_investments (balance sheet investments - columns: name, ownership_pct, committed, contributed, distributed, unreturned_capital, net_equity, valuation, status), exec_liabilities (balance sheet liabilities - columns: lender, related_deal, principal, currency, usd_equivalent, maturity_date, status, notes).',
       input_schema: {
         type: 'object',
         properties: {
-          table: { type: 'string', description: 'Table name (calendar_tasks, properties, or app_users)' },
-          query: { type: 'string', description: 'PostgREST query string, e.g. ?property=eq.Paramus Plaza&order=day_of_month.asc' }
+          table: { type: 'string', description: 'Table name (calendar_tasks, properties, app_users, exec_transactions, exec_investments, or exec_liabilities)' },
+          query: { type: 'string', description: 'PostgREST query string, e.g. ?property=eq.Paramus Plaza&order=day_of_month.asc or ?description=ilike.*CROWN*&order=date.desc' }
         },
         required: ['table']
       }
@@ -2053,6 +2063,18 @@
           propertyName: { type: 'string', description: 'Property name' }
         },
         required: ['propertyName']
+      }
+    },
+    {
+      name: 'recategorize_transaction',
+      description: 'Change the category of an executive bank transaction. Use when the user explicitly tells you to recategorize a transaction. First query exec_transactions to find the record ID, then call this tool.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          recordId: { type: 'number', description: 'The transaction ID from exec_transactions' },
+          category: { type: 'string', description: 'New category name. Valid categories: Asset Management Fee Income, Property Management Fee Income, Investment Income, Other Income, Payroll, Credit Cards, Legal/Corp Services, Taxes, Wire Payments, Banking, Checks, AM Partner Payout, PM Expenses, Software/Services, Other Operating, Internal Transfer, Payroll Reimbursement, Investor Contribution (Pass-Through)' }
+        },
+        required: ['recordId', 'category']
       }
     }
   ];
@@ -2076,6 +2098,19 @@
       }));
       return JSON.stringify({ name: prop.name, sqft: prop.sqft, summary });
     }
+    if (name === 'recategorize_transaction') {
+      try {
+        await supaWrite('exec_transactions', 'PATCH', { category_override: input.category }, `?id=eq.${input.recordId}`);
+        // Notify exec iframe to refresh if visible
+        const execFrame = document.getElementById('execFrame');
+        if (execFrame && execFrame.contentWindow) {
+          try { execFrame.contentWindow.postMessage({ type: 'refreshDashboard' }, '*'); } catch(e) {}
+        }
+        return JSON.stringify({ success: true, message: `Transaction ${input.recordId} recategorized to "${input.category}"` });
+      } catch(e) {
+        return JSON.stringify({ success: false, error: e.message });
+      }
+    }
     return 'Unknown tool';
   }
 
@@ -2083,11 +2118,28 @@
     depth = depth || 0;
     if (depth > 5) return 'Too many tool calls, stopping.';
 
-    const sysPrompt = `You are First Mile Capital's AI assistant embedded in the admin portal. You help Morris query and manage property data. Be concise and helpful. When asked to look up data, use the tools. Format responses clearly. For dollar amounts use commas. Supabase tables:
-- calendar_tasks: columns are day_of_month, cadence, property, payment_type, description, owner, status, completed_by, completed_date
-- properties: columns are property_name, property_type, address, city, state, units, sqft, entity_name, acquisition_date, acquisition_price, current_valuation, status, notes
-- app_users: columns are display_name, email, role, phone, status
-Use PostgREST query syntax (e.g. ?property=eq.Paramus Plaza). Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), Paramus Plaza (153,494 SF), 575 Broadway (178,898 SF), 1700 East Putnam (183,190 SF), 340 Mount Kemble (423,261 SF).`;
+    const sysPrompt = `You are First Mile Capital's AI assistant embedded in the admin portal. You help Morris query and manage property data, corporate finances, and investments. Be concise and helpful. When asked to look up data, use the tools. Format responses clearly. For dollar amounts use commas.
+
+SUPABASE TABLES:
+- calendar_tasks: accounting deadlines (day_of_month, cadence, property, payment_type, description, owner, status, completed_by, completed_date)
+- properties: property metadata (property_name, property_type, address, city, state, units, sqft, entity_name, acquisition_date, acquisition_price, current_valuation, status, notes)
+- app_users: team members (display_name, email, role, phone, status)
+- exec_transactions: corporate bank transactions (date, description, amount, ledger_balance, transaction_type, credit_debit, account_name, account_number, category_override). Use ilike for text search e.g. ?description=ilike.*ELYSE*
+- exec_investments: balance sheet investments (name, ownership_pct, committed, contributed, distributed, unreturned_capital, net_equity, valuation, status)
+- exec_liabilities: balance sheet liabilities (lender, related_deal, principal, currency, usd_equivalent, maturity_date, status, notes)
+
+Use PostgREST query syntax. Budget data is available via get_budget_summary for: 61 S Paramus (281,504 SF), Paramus Plaza (153,494 SF), 575 Broadway (178,898 SF), 1700 East Putnam (183,190 SF), 340 Mount Kemble (423,261 SF).
+
+TRANSACTION CATEGORIZATION:
+You can recategorize exec_transactions using the recategorize_transaction tool. First query to find the transaction(s), then recategorize.
+Valid categories: Asset Management Fee Income, Property Management Fee Income, Investment Income, Other Income, Payroll, Credit Cards, Legal/Corp Services, Taxes, Wire Payments, Banking, Checks, AM Partner Payout, PM Expenses, Software/Services, Other Operating, Internal Transfer, Payroll Reimbursement, Investor Contribution (Pass-Through).
+
+ACCOUNT CONTEXT:
+- Corporate accounts: First Mile Capital (checking/savings), First Mile Management, Member accounts (Paramus, Plaza, Kemble, Red)
+- AM fees come into Member accounts, PM fees into Management
+- Biweekly transfers of $20200, $19939, $16287, $2011.36 are payroll reimbursements
+- Investor contributions (typically $1M+) are pass-through — not income
+- CROWN ACQUISITIONS ~$8,089 monthly payments are Rent`;
 
     const body = {
       model: 'claude-sonnet-4-20250514',

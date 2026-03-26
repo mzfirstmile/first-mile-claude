@@ -1502,10 +1502,10 @@ function getCashBalance() {
 function renderBalanceSheet() {
   const cash = getCashBalance();
 
-  // Investments total (use valuation if available, else unreturned capital)
+  // Investments total — use valuation (actual asset value), fall back to net_equity
   let investmentsTotal = 0;
   const invCards = bsInvestments.map(r => {
-    const value = r.valuation || r.unreturned || r.contributed;
+    const value = r.valuation != null && r.valuation > 0 ? r.valuation : (r.netEquity || 0);
     investmentsTotal += value;
     return { id: r.id, name: r.name || 'Unknown', ownership: r.ownership || 0, committed: r.committed || 0, contributed: r.contributed || 0, distributed: r.distributed || 0, unreturned: r.unreturned || 0, valuation: r.valuation, netEquity: r.netEquity || 0, status: r.status, value };
   });
@@ -1885,6 +1885,12 @@ if (window.parent !== window) {
   const panel = document.getElementById('chatPanel');
   if (fab) fab.style.display = 'none';
   if (panel) panel.style.display = 'none';
+  // Listen for refresh from parent chat after recategorization
+  window.addEventListener('message', function(e) {
+    if (e.data && e.data.type === 'refreshDashboard' && typeof renderPeriodDashboard === 'function') {
+      loadData();
+    }
+  });
 }
 </script>
 </body>
