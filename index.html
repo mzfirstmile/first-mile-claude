@@ -599,8 +599,6 @@
   document.querySelectorAll('.sidebar-item').forEach(item => {
     item.addEventListener('click', function(e) {
       const view = this.dataset.view;
-      // Let calendar link navigate normally
-      if (view === 'calendar') return;
       e.preventDefault();
       switchView(view);
     });
