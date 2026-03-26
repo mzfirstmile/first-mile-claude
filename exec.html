@@ -1587,15 +1587,32 @@ function getCashBalance() {
   const latestByAcct = {};
   allRecords.forEach(r => {
     const acct = getAccountNumber(r);
+    const acctName = getAccountName(r);
     const d = getDate(r);
     const bal = getField(r, 'Ledger Balance');
     if (bal != null && acct) {
       if (!latestByAcct[acct] || d > latestByAcct[acct].date) {
-        latestByAcct[acct] = { date: d, balance: bal };
+        latestByAcct[acct] = { date: d, balance: bal, name: acctName || acct };
       }
     }
   });
   return Object.values(latestByAcct).reduce((s, v) => s + v.balance, 0);
+}
+
+function getCashDetails() {
+  const latestByAcct = {};
+  allRecords.forEach(r => {
+    const acct = getAccountNumber(r);
+    const acctName = getAccountName(r);
+    const d = getDate(r);
+    const bal = getField(r, 'Ledger Balance');
+    if (bal != null && acct) {
+      if (!latestByAcct[acct] || d > latestByAcct[acct].date) {
+        latestByAcct[acct] = { date: d, balance: bal, name: acctName || acct };
+      }
+    }
+  });
+  return Object.entries(latestByAcct).map(([acct, v]) => ({ acct, name: v.name, balance: v.balance })).sort((a, b) => b.balance - a.balance);
 }
 
 function renderBalanceSheet() {
@@ -1621,10 +1638,12 @@ function renderBalanceSheet() {
       value = r.propertyValuation * ownershipPct;
       valueSource = 'property';
     } else if (r.valuation != null && r.valuation > 0) {
+      // Manual valuation explicitly entered
       value = r.valuation;
     } else {
-      value = r.netEquity || 0;
-      valueSource = 'equity';
+      // No valuation set — show 0, don't fall back to contributed/net_equity which inflates total
+      value = 0;
+      valueSource = 'none';
     }
     investmentsTotal += value;
     return { id: r.id, name: r.name || 'Unknown', ownership: r.ownership || 0, committed: r.committed || 0, contributed: r.contributed || 0, distributed: r.distributed || 0, unreturned: r.unreturned || 0, valuation: r.valuation, netEquity: r.netEquity || 0, status: r.status, value, valueSource, valuationDetails, propertyId: r.propertyId, propertyName: r.propertyName, propertyValuation: r.propertyValuation, capRate: r.capRate, propertyNOI: r.propertyNOI, propertyDebt: r.propertyDebt };
@@ -1658,12 +1677,15 @@ function renderBalanceSheet() {
 
   // Stacked bar
   const barTotal = cash + investmentsTotal + liabilitiesTotal;
+  const cashAccounts = getCashDetails();
+  const cashTooltipLines = cashAccounts.map(a => `${a.name}: ${fmt(a.balance)}`).join('\n');
+  const cashTooltip = `Cash: ${fmt(cash)}\n─────────────\n${cashTooltipLines}`;
   if (barTotal > 0) {
     const cashPct = (cash / barTotal * 100).toFixed(1);
     const invPct = (investmentsTotal / barTotal * 100).toFixed(1);
     const liabPct = (liabilitiesTotal / barTotal * 100).toFixed(1);
     document.getElementById('bsStackBar').innerHTML =
-      `<div class="bs-bar-seg bs-bar-cash" style="width:${cashPct}%" title="Cash: ${fmt(cash)}"></div>` +
+      `<div class="bs-bar-seg bs-bar-cash" style="width:${cashPct}%;cursor:pointer;" title="${cashTooltip}"></div>` +
       `<div class="bs-bar-seg bs-bar-inv" style="width:${invPct}%" title="Investments: ${fmt(investmentsTotal)}"></div>` +
       `<div class="bs-bar-seg bs-bar-liab" style="width:${liabPct}%" title="Liabilities: ${fmt(liabilitiesTotal)}"></div>`;
   }
