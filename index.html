@@ -372,6 +372,42 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* ── Calendar ── */
+  .cal-controls { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+  .cal-nav { display:flex; align-items:center; gap:12px; }
+  .cal-nav button { width:32px; height:32px; border-radius:8px; border:1px solid var(--border); background:var(--surface); cursor:pointer; font-size:15px; color:var(--text-dim); transition:all .15s; display:flex; align-items:center; justify-content:center; }
+  .cal-nav button:hover { background:var(--surface2); color:var(--text); }
+  .cal-nav .cal-month { font-size:17px; font-weight:600; min-width:160px; text-align:center; }
+  .cal-status { display:flex; align-items:center; gap:8px; }
+  .cal-status .sync-dot { width:7px; height:7px; border-radius:50%; }
+  .cal-status .sync-dot.live { background:var(--green); }
+  .cal-status .sync-dot.err { background:#e5534b; }
+  .cal-status span { font-size:11px; color:var(--text-dim); }
+  .cal-progress { height:5px; background:var(--surface2); border-radius:3px; overflow:hidden; margin-bottom:16px; }
+  .cal-progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:3px; transition:width .4s; }
+  .cal-filters { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:20px; }
+  .cal-chip { padding:4px 11px; border-radius:16px; font-size:11px; font-weight:500; cursor:pointer; border:1.5px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .15s; user-select:none; }
+  .cal-chip.on { color:#fff; }
+  .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:var(--border); border-radius:10px; overflow:hidden; border:1px solid var(--border); }
+  .cal-hdr { background:var(--surface); padding:8px; text-align:center; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; }
+  .cal-cell { background:var(--surface); min-height:110px; padding:6px; position:relative; transition:background .15s; }
+  .cal-cell:hover { background:var(--surface2); }
+  .cal-cell.empty { background:var(--bg); opacity:.35; }
+  .cal-cell.today { box-shadow:inset 0 0 0 2px var(--accent); }
+  .cal-cell .dnum { font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:4px; }
+  .cal-ev { padding:2px 5px; border-radius:3px; font-size:10px; margin-bottom:2px; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:all .15s; border-left:3px solid; display:flex; align-items:center; gap:3px; }
+  .cal-ev:hover { filter:brightness(1.15); }
+  .cal-ev.done { opacity:.4; }
+  .cal-ev.done .cal-ev-txt { text-decoration:line-through; }
+  .cal-ev-cb { width:10px; height:10px; border-radius:2px; border:1.5px solid; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:7px; transition:all .15s; cursor:pointer; }
+  .cal-ev-cb.on { background:var(--green); border-color:var(--green); color:#fff; }
+  .cal-tooltip { position:fixed; background:var(--surface); border:1px solid var(--border); border-radius:9px; padding:12px 14px; font-size:12px; max-width:300px; z-index:100; box-shadow:0 10px 28px rgba(0,0,0,.12); pointer-events:none; opacity:0; transition:opacity .15s; line-height:1.5; }
+  .cal-tooltip.show { opacity:1; }
+  .cal-tooltip .tt-prop { font-weight:700; margin-bottom:2px; }
+  .cal-tooltip .tt-type { font-size:10px; font-weight:600; opacity:.7; margin-bottom:4px; }
+  .cal-tooltip .tt-task { margin-bottom:4px; }
+  .cal-tooltip .tt-owner { font-size:10px; color:var(--text-dim); }
+
   /* ── Responsive ── */
   @media (max-width: 768px) {
     .sidebar { width: 60px; }
@@ -559,9 +595,24 @@
     </div>
   </div>
 
-  <!-- Calendar View (iframe) -->
-  <div class="manage-view" id="view-calendar" style="padding:0; height:calc(100vh - 65px);">
-    <iframe src="calendar.html" style="width:100%; height:100%; border:none;"></iframe>
+  <!-- Calendar View (native) -->
+  <div class="manage-view" id="view-calendar" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
+    <div class="cal-controls">
+      <div class="cal-nav">
+        <button onclick="calChangeMonth(-1)">‹</button>
+        <div class="cal-month" id="calMonthLabel"></div>
+        <button onclick="calChangeMonth(1)">›</button>
+      </div>
+      <div class="cal-status">
+        <div class="sync-dot" id="calSyncDot"></div>
+        <span id="calSyncText">Loading…</span>
+        <button class="btn" onclick="calRefresh()" style="margin-left:8px; padding:5px 12px; font-size:11px;">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="cal-progress"><div class="cal-progress-fill" id="calProgress" style="width:0%"></div></div>
+    <div class="cal-filters" id="calFilters"></div>
+    <div class="cal-grid" id="calGrid"></div>
+    <div class="cal-tooltip" id="calTooltip"></div>
   </div>
 
   <!-- Executive Dashboard (iframe) -->
@@ -615,6 +666,7 @@
     // Load data if needed
     if (view === 'properties') loadProperties();
     if (view === 'users') loadUsers();
+    if (view === 'calendar') calInit();
   }
 
   // ── Sidebar click handlers ──
@@ -669,6 +721,178 @@
       `;
       usersLoaded = true;
     }, 600);
+  }
+
+  // ══════════════════════════════════════
+  // ── ACCOUNTING CALENDAR (native) ──
+  // ══════════════════════════════════════
+  const CAL_BASE = 'app27jUbqonTIiHXY';
+  const CAL_TABLE = 'Sheet1';
+  const CAL_TOKEN = '__AIRTABLE_TOKEN__';
+  const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const CAL_PALETTE = ['#00b0d4','#50dcb4','#ff8c5a','#dc78ff','#ffd250','#50c8ff','#ff6482','#a78bfa','#f472b6','#38bdf8','#4ade80','#fb923c'];
+
+  let calEvents = [], calColors = {}, calColorIdx = 0, calMonth = new Date().getMonth();
+  let calFiltersActive = new Set(), calInited = false;
+
+  function calGetColor(p) {
+    if (!calColors[p]) { calColors[p] = CAL_PALETTE[calColorIdx % CAL_PALETTE.length]; calColorIdx++; }
+    return calColors[p];
+  }
+  function calHexA(h, a) { h = h.replace('#',''); return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`; }
+
+  async function calFetchAT() {
+    try {
+      const r = await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}?pageSize=100`, {
+        headers: { 'Authorization': `Bearer ${CAL_TOKEN}` }
+      });
+      if (!r.ok) { const e = await r.json().catch(()=>({})); throw new Error(e.error?.message || `HTTP ${r.status}`); }
+      const d = await r.json();
+      calEvents = d.records.map((rec, i) => ({
+        idx: i,
+        airtableId: rec.id,
+        day: parseInt(String(rec.fields['Day of Month'] || '1').match(/(\d+)/)?.[1] || '1'),
+        cadence: rec.fields['Cadence']?.name || rec.fields['Cadence'] || 'Monthly',
+        property: rec.fields['Property']?.name || rec.fields['Property'] || '',
+        type: rec.fields['Payment Type']?.name || rec.fields['Payment Type'] || '',
+        task: rec.fields['Description'] || '',
+        owner: rec.fields['Owner']?.name || rec.fields['Owner'] || '',
+        status: rec.fields['Status']?.name || rec.fields['Status'] || '',
+        completedBy: rec.fields['Completed By'] || '',
+        completedDate: rec.fields['Completed Date'] || '',
+      }));
+      // Build color map
+      calColorIdx = 0; calColors = {};
+      [...new Set(calEvents.map(e => e.property))].sort().forEach(p => calGetColor(p));
+      calFiltersActive = new Set(Object.keys(calColors));
+      document.getElementById('calSyncDot').className = 'sync-dot live';
+      document.getElementById('calSyncText').textContent = `Live · ${calEvents.length} tasks`;
+      return true;
+    } catch (e) {
+      console.error('Calendar fetch error:', e);
+      document.getElementById('calSyncDot').className = 'sync-dot err';
+      document.getElementById('calSyncText').textContent = e.message;
+      return false;
+    }
+  }
+
+  function calBuildFilters() {
+    const el = document.getElementById('calFilters');
+    const props = [...new Set(calEvents.map(e => e.property))].sort();
+    el.innerHTML = props.map(p => {
+      const c = calGetColor(p);
+      const on = calFiltersActive.has(p);
+      return `<div class="cal-chip${on ? ' on' : ''}" style="${on ? `background:${c};border-color:${c};` : ''}" onclick="calToggleFilter('${p.replace(/'/g,"\\'")}')">${p}</div>`;
+    }).join('');
+  }
+
+  function calToggleFilter(p) {
+    if (calFiltersActive.has(p)) calFiltersActive.delete(p); else calFiltersActive.add(p);
+    calBuildFilters();
+    calRender();
+  }
+
+  function calRender() {
+    const grid = document.getElementById('calGrid');
+    const year = 2026;
+    const m = calMonth;
+    const firstDay = new Date(year, m, 1).getDay();
+    const daysInMonth = new Date(year, m + 1, 0).getDate();
+    const today = new Date();
+    const isCurrentMonth = today.getFullYear() === year && today.getMonth() === m;
+
+    // Filter events for this month
+    const visible = calEvents.filter(e => calFiltersActive.has(e.property));
+    const monthly = visible.filter(e => e.cadence === 'Monthly');
+    const quarterly = visible.filter(e => e.cadence === 'Quarterly' && [0,3,6,9].includes(m));
+
+    let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="cal-hdr">${d}</div>`).join('');
+
+    // Empty cells before first day
+    for (let i = 0; i < firstDay; i++) html += '<div class="cal-cell empty"></div>';
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const isToday = isCurrentMonth && d === today.getDate();
+      const dayEvents = [...monthly, ...quarterly].filter(e => e.day === d);
+      html += `<div class="cal-cell${isToday ? ' today' : ''}">`;
+      html += `<div class="dnum">${d}</div>`;
+      dayEvents.forEach(ev => {
+        const c = calGetColor(ev.property);
+        const done = ev.status === 'Done';
+        html += `<div class="cal-ev${done ? ' done' : ''}" style="background:${calHexA(c,.12)};border-color:${c};"
+          onmouseenter="calShowTip(event,${ev.idx})" onmouseleave="calHideTip()">
+          <div class="cal-ev-cb${done ? ' on' : ''}" style="border-color:${done ? 'var(--green)' : c}" onclick="event.stopPropagation();calToggle(${ev.idx})">${done ? '✓' : ''}</div>
+          <span class="cal-ev-txt" style="color:${c}">${ev.property}</span>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    // Fill remaining cells
+    const totalCells = firstDay + daysInMonth;
+    const remaining = (7 - (totalCells % 7)) % 7;
+    for (let i = 0; i < remaining; i++) html += '<div class="cal-cell empty"></div>';
+
+    grid.innerHTML = html;
+    document.getElementById('calMonthLabel').textContent = `${CAL_MONTHS[m]} ${year}`;
+
+    // Progress
+    const done = visible.filter(e => e.status === 'Done').length;
+    const total = visible.length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    document.getElementById('calProgress').style.width = pct + '%';
+  }
+
+  function calChangeMonth(delta) {
+    calMonth = Math.max(0, Math.min(11, calMonth + delta));
+    calRender();
+  }
+
+  async function calToggle(idx) {
+    const ev = calEvents[idx];
+    if (!ev || !ev.airtableId) return;
+    const wasDone = ev.status === 'Done';
+    ev.status = wasDone ? '' : 'Done';
+    ev.completedDate = wasDone ? '' : new Date().toISOString();
+    calRender();
+    // Write to Airtable
+    try {
+      const fields = wasDone
+        ? { Status: '', 'Completed By': '', 'Completed Date': null }
+        : { Status: 'Done', 'Completed By': 'Morris', 'Completed Date': new Date().toISOString() };
+      await fetch(`https://api.airtable.com/v0/${CAL_BASE}/${encodeURIComponent(CAL_TABLE)}`, {
+        method: 'PATCH',
+        headers: { 'Authorization': `Bearer ${CAL_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ records: [{ id: ev.airtableId, fields }] })
+      });
+    } catch (e) { console.error('Toggle error:', e); }
+  }
+
+  function calShowTip(e, idx) {
+    const ev = calEvents[idx];
+    const tip = document.getElementById('calTooltip');
+    tip.innerHTML = `<div class="tt-prop">${ev.property}</div><div class="tt-type">${ev.cadence} · ${ev.type}</div><div class="tt-task">${ev.task}</div><div class="tt-owner">Owner: ${ev.owner}</div>`;
+    tip.style.left = Math.min(e.clientX + 12, window.innerWidth - 320) + 'px';
+    tip.style.top = (e.clientY + 12) + 'px';
+    tip.classList.add('show');
+  }
+  function calHideTip() { document.getElementById('calTooltip').classList.remove('show'); }
+
+  async function calRefresh() {
+    document.getElementById('calSyncText').textContent = 'Refreshing…';
+    await calFetchAT();
+    calBuildFilters();
+    calRender();
+  }
+
+  async function calInit() {
+    if (calInited) return;
+    calInited = true;
+    const ok = await calFetchAT();
+    if (ok) { calBuildFilters(); calRender(); }
+    else {
+      document.getElementById('calGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim);">Could not connect to Airtable. Check your API token.</div>';
+    }
   }
 </script>
 
