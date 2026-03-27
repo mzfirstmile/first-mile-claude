@@ -46,11 +46,11 @@
   .btn.accent { color:var(--accent); border-color:rgba(0,176,212,.3); background:var(--accent-dim); }
 
   /* ── Dashboard ── */
-  .dashboard { padding:0 40px 40px; display:none; max-width:1800px; margin:0 auto; }
+  .dashboard { padding:0 40px 40px; display:none; margin:0 auto; }
   .dashboard.show { display:block; }
 
-  /* Two-column layout */
-  .dashboard-grid { display:grid; grid-template-columns:minmax(500px, 1.2fr) minmax(0, 1fr); gap:28px; margin-top:24px; }
+  /* Two-column layout — balance sheet fixed width, cash flow stretches */
+  .dashboard-grid { display:grid; grid-template-columns:540px 1fr; gap:28px; margin-top:24px; }
   @media (max-width:1000px) { .dashboard-grid { grid-template-columns:1fr; } }
 
   /* ── Cash Flow Section ── */
