@@ -381,6 +381,7 @@
     <div class="summary-card"><div class="value orange" id="totalDistros">—</div><div class="label">Owner Distributions</div></div>
     <div class="summary-card"><div class="value orange" id="totalInvest">—</div><div class="label">Investment Contributions</div></div>
     <div class="summary-card"><div class="value orange" id="totalLoans">—</div><div class="label">Loans Out</div></div>
+    <div class="summary-card"><div class="value green" id="totalLoanPaybacks">—</div><div class="label">Loan Paybacks</div></div>
     <div class="summary-card"><div class="value" id="cashFlow">—</div><div class="label">Cash Flow</div></div>
   </div>
 
@@ -422,6 +423,14 @@
       <h3>Loans Out</h3>
     </div>
     <div id="loanRows"></div>
+  </div>
+
+  <!-- Loan Paybacks -->
+  <div class="cat-section" id="loanPaybackSection">
+    <div class="cat-section-header">
+      <h3>Loan Paybacks</h3>
+    </div>
+    <div id="loanPaybackRows"></div>
   </div>
 
   <!-- Drill-down -->
@@ -544,7 +553,8 @@ const CAT_ICONS = {
   'Travel': '✈️',
   'Finders Fee': '🔍',
   'Interest Expense': '💲',
-  'Loan': '🏦'
+  'Loan Out': '🏦',
+  'Loan Payback': '🏦'
 };
 
 // All possible categories for the dropdown
@@ -554,7 +564,7 @@ const ALL_CATEGORIES = [
   'Wire Payments', 'Banking', 'Checks', 'AM Partner Payout',
   'PM Expenses', 'Software/Services', 'Other Operating',
   'Internal Transfer', 'Payroll Reimbursement', 'Investor Contribution (Pass-Through)',
-  'Travel', 'Finders Fee', 'Interest Expense', 'Loan'
+  'Travel', 'Finders Fee', 'Interest Expense', 'Loan Out', 'Loan Payback'
 ];
 
 // Claude API key — injected at build time by GitHub Actions
@@ -714,11 +724,13 @@ function categorize(record) {
     const isExcluded = oc === 'Internal Transfer' || oc === 'Payroll Reimbursement';
     const isDistribution = oc === 'AM Partner Payout' || oc === 'Owner Distributions';
     const isInvestment = oc === 'Investment Contributions' || oc === 'Investor Contribution (Pass-Through)';
-    const isLoan = oc === 'Loan';
+    const isLoan = oc === 'Loan Out';
+    const isLoanPayback = oc === 'Loan Payback';
     if (isExcluded) return { category: oc === 'Payroll Reimbursement' ? 'payroll_offset' : 'excluded', type: oc };
     if (isDistribution) return { category: 'distribution', type: oc };
     if (isInvestment) return { category: 'investment', type: oc };
     if (isLoan) return { category: 'loan', type: oc };
+    if (isLoanPayback) return { category: 'loan_payback', type: oc };
     return { category: isIncome ? 'income' : 'expense', type: oc };
   }
 
@@ -912,12 +924,13 @@ function nextPeriod() {
 
 // ── Compute period financials ──
 function computePeriod(records) {
-  let totalIncome = 0, totalOpex = 0, totalDistributions = 0, totalInvestments = 0, totalLoans = 0, payrollReimb = 0;
+  let totalIncome = 0, totalOpex = 0, totalDistributions = 0, totalInvestments = 0, totalLoans = 0, totalLoanPaybacks = 0, payrollReimb = 0;
   const incomeBuckets = {};
   const opexBuckets = {};       // Operating expenses
   const distroBuckets = {};     // Owner distributions
   const investBuckets = {};     // Investment contributions
   const loanBuckets = {};       // Loans out (balance sheet asset)
+  const loanPaybackBuckets = {}; // Loan paybacks (not operating income)
   const excludedBuckets = {};
 
   INCOME_CATEGORIES.forEach(c => incomeBuckets[c] = { total: 0, count: 0, records: [] });
@@ -972,6 +985,12 @@ function computePeriod(records) {
       loanBuckets[type].total += amount;
       loanBuckets[type].count++;
       loanBuckets[type].records.push(r);
+    } else if (category === 'loan_payback') {
+      totalLoanPaybacks += amount;
+      if (!loanPaybackBuckets[type]) loanPaybackBuckets[type] = { total: 0, count: 0, records: [] };
+      loanPaybackBuckets[type].total += amount;
+      loanPaybackBuckets[type].count++;
+      loanPaybackBuckets[type].records.push(r);
     } else if (category === 'payroll_offset') {
       payrollReimb += amount;
       if (!excludedBuckets[type]) excludedBuckets[type] = { total: 0, count: 0 };
@@ -988,15 +1007,15 @@ function computePeriod(records) {
   const netOpex = totalOpex + payrollReimb;
   // Net Income = Income - Operating Expenses
   const netIncome = totalIncome + netOpex;
-  // Cash Flow = Net Income + Distributions + Investments + Loans (all negative values)
-  const cashFlow = netIncome + totalDistributions + totalInvestments + totalLoans;
+  // Cash Flow = Net Income - Distributions - Investments - Loans Out + Loan Paybacks
+  const cashFlow = netIncome + totalDistributions + totalInvestments + totalLoans + totalLoanPaybacks;
 
   return {
     totalIncome, totalOpex: Math.abs(totalOpex), netOpex, payrollReimb,
     totalDistributions: Math.abs(totalDistributions), totalInvestments: Math.abs(totalInvestments),
-    totalLoans: Math.abs(totalLoans),
+    totalLoans: Math.abs(totalLoans), totalLoanPaybacks,
     netIncome, cashFlow,
-    incomeBuckets, opexBuckets, distroBuckets, investBuckets, loanBuckets, excludedBuckets
+    incomeBuckets, opexBuckets, distroBuckets, investBuckets, loanBuckets, loanPaybackBuckets, excludedBuckets
   };
 }
 
@@ -1152,6 +1171,7 @@ function renderPeriodDashboard() {
   document.getElementById('totalDistros').textContent = comp.totalDistributions > 0 ? fmt(-comp.totalDistributions) : '—';
   document.getElementById('totalInvest').textContent = comp.totalInvestments > 0 ? fmt(-comp.totalInvestments) : '—';
   document.getElementById('totalLoans').textContent = comp.totalLoans > 0 ? fmt(-comp.totalLoans) : '—';
+  document.getElementById('totalLoanPaybacks').textContent = comp.totalLoanPaybacks > 0 ? fmt(comp.totalLoanPaybacks) : '—';
 
   const cfEl = document.getElementById('cashFlow');
   cfEl.textContent = fmt(comp.cashFlow);
@@ -1181,6 +1201,9 @@ function renderPeriodDashboard() {
 
   // Loans out
   renderCategoryRows('loanRows', comp.loanBuckets, 'expense', comp.totalLoans);
+
+  // Loan paybacks
+  renderCategoryRows('loanPaybackRows', comp.loanPaybackBuckets, 'income', comp.totalLoanPaybacks);
 
   // Excluded
   const exDiv = document.getElementById('excludedRows');
@@ -1386,6 +1409,7 @@ function openDrilldown(type, cssClass) {
   document.getElementById('distroSection').style.display = 'none';
   document.getElementById('investSection').style.display = 'none';
   document.getElementById('loanSection').style.display = 'none';
+  document.getElementById('loanPaybackSection').style.display = 'none';
 }
 
 function closeDrilldown() {
@@ -1397,6 +1421,7 @@ function closeDrilldown() {
   document.getElementById('distroSection').style.display = '';
   document.getElementById('investSection').style.display = '';
   document.getElementById('loanSection').style.display = '';
+  document.getElementById('loanPaybackSection').style.display = '';
 }
 
 async function changeCategory(recordId, newCategory) {
