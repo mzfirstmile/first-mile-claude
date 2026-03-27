@@ -1223,7 +1223,7 @@ function openDrilldown(type, cssClass) {
         drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: t, isSynthetic: false });
       } else if (t === 'AM Partner Payout' && category === 'distribution') {
         // Partner payout — show as deduction within AM Fee, with editable category
-        drillItems.push({ date: getDate(r), desc: `Less: AM Partner Payout`, acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: 'AM Partner Payout', isSynthetic: false, isAmPayout: true });
+        drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: 'AM Partner Payout', isSynthetic: false, isAmPayout: true });
       }
     });
   } else if (type === 'Property Management Fee Income') {
