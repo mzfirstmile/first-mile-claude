@@ -1081,7 +1081,7 @@
     </div>
   </div>
   <div class="chat-body" id="chatBody">
-    <div class="chat-msg bot">Hi Morris! I can help you query and manage your data — properties, budgets, calendar tasks, and more. Try asking me something.</div>
+    <div class="chat-msg bot" id="chatGreeting">Hi! I can help you query and manage your data — properties, budgets, calendar tasks, and more. Try asking me something.</div>
   </div>
   <div class="chat-input-wrap">
     <textarea class="chat-input" id="chatInput" rows="1" placeholder="Ask about your data…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();chatSend();}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px';"></textarea>
@@ -1300,6 +1300,9 @@
     // Update home greeting
     const greeting = document.querySelector('.home-greeting h2');
     if (greeting) greeting.textContent = `Welcome back, ${currentUser.name.split(' ')[0]}`;
+    // Update chat greeting
+    const chatGreeting = document.getElementById('chatGreeting');
+    if (chatGreeting) chatGreeting.textContent = `Hi ${currentUser.name.split(' ')[0]}! I can help you query and manage your data — properties, budgets, calendar tasks, and more. Try asking me something.`;
   }
 
   function applyModuleAccess() {
@@ -1847,7 +1850,7 @@
     try {
       const body = wasDone
         ? { status: '', completed_by: '', completed_date: null }
-        : { status: 'Done', completed_by: 'Morris', completed_date: new Date().toISOString() };
+        : { status: 'Done', completed_by: currentUser ? currentUser.name : 'Unknown', completed_date: new Date().toISOString() };
       await fetch(`${SUPABASE_URL}/rest/v1/calendar_tasks?id=eq.${ev.supaId}`, {
         method: 'PATCH',
         headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
@@ -2100,6 +2103,62 @@
         },
         required: ['recordId', 'category']
       }
+    },
+    {
+      name: 'send_email',
+      description: 'Send an email from aiassistant@firstmilecap.com. Use when the user asks you to send, email, or notify someone. Always confirm the recipient and content with the user before sending.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Recipient email address (or comma-separated for multiple)' },
+          cc: { type: 'string', description: 'CC email address(es), optional' },
+          subject: { type: 'string', description: 'Email subject line' },
+          body: { type: 'string', description: 'Email body (HTML supported)' }
+        },
+        required: ['to', 'subject', 'body']
+      }
+    },
+    {
+      name: 'search_emails',
+      description: 'Search the AI assistant inbox (aiassistant@firstmilecap.com). Query emails by sender, subject, date, read status, or full-text search. Use this when user asks about emails, inbox, messages, or wants to check if someone emailed.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'PostgREST query for emails table, e.g. ?from_address=ilike.*john*&order=received_at.desc&limit=10' },
+          fullTextSearch: { type: 'string', description: 'Optional full-text search term (searches subject + body). Use instead of query for keyword searches.' }
+        }
+      }
+    },
+    {
+      name: 'sync_inbox',
+      description: 'Trigger an inbox sync to pull latest emails from Microsoft. Use before searching if user asks about very recent emails.',
+      input_schema: {
+        type: 'object',
+        properties: {},
+      }
+    },
+    {
+      name: 'send_sms',
+      description: 'Send an SMS text message from the AI assistant phone number (+18665684445). Use when the user asks you to text, SMS, or message someone by phone. ALWAYS confirm the recipient number and message with the user before sending.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          to: { type: 'string', description: 'Recipient phone number (US format, e.g. +12125551234 or 2125551234)' },
+          body: { type: 'string', description: 'Text message content (160 chars per segment)' }
+        },
+        required: ['to', 'body']
+      }
+    },
+    {
+      name: 'search_sms',
+      description: 'Search SMS message history. Query sent and received text messages by phone number, content, direction (inbound/outbound), or date.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'PostgREST query for sms_messages table, e.g. ?from_number=ilike.*2125*&order=created_at.desc&limit=20' },
+          fullTextSearch: { type: 'string', description: 'Optional full-text search on message body.' }
+        }
+      }
     }
   ];
 
@@ -2135,6 +2194,84 @@
         return JSON.stringify({ success: false, error: e.message });
       }
     }
+    if (name === 'send_email') {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` },
+          body: JSON.stringify({
+            to: input.to.includes(',') ? input.to.split(',').map(e => e.trim()) : input.to.trim(),
+            cc: input.cc ? (input.cc.includes(',') ? input.cc.split(',').map(e => e.trim()) : input.cc.trim()) : undefined,
+            subject: input.subject,
+            body: input.body,
+            bodyType: 'html',
+            sentBy: currentUser ? currentUser.name : 'ai-assistant'
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Send failed');
+        return JSON.stringify(data);
+      } catch(e) {
+        return JSON.stringify({ success: false, error: e.message });
+      }
+    }
+    if (name === 'search_emails') {
+      try {
+        if (input.fullTextSearch) {
+          const q = input.fullTextSearch.split(/\s+/).join(' & ');
+          const rows = await supaFetch('emails', `?fts=fts.${encodeURIComponent(q)}&order=received_at.desc&limit=20`);
+          return JSON.stringify(rows);
+        }
+        const rows = await supaFetch('emails', input.query || '?order=received_at.desc&limit=20');
+        return JSON.stringify(rows);
+      } catch(e) {
+        return JSON.stringify({ error: e.message });
+      }
+    }
+    if (name === 'sync_inbox') {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/sync-inbox`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` }
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Sync failed');
+        return JSON.stringify(data);
+      } catch(e) {
+        return JSON.stringify({ success: false, error: e.message });
+      }
+    }
+    if (name === 'send_sms') {
+      try {
+        const res = await fetch(`${SUPABASE_URL}/functions/v1/send-sms`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` },
+          body: JSON.stringify({
+            to: input.to,
+            body: input.body,
+            sentBy: currentUser ? currentUser.name : 'ai-assistant'
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Send failed');
+        return JSON.stringify(data);
+      } catch(e) {
+        return JSON.stringify({ success: false, error: e.message });
+      }
+    }
+    if (name === 'search_sms') {
+      try {
+        if (input.fullTextSearch) {
+          const q = input.fullTextSearch.split(/\s+/).join(' & ');
+          const rows = await supaFetch('sms_messages', `?fts=fts.${encodeURIComponent(q)}&order=created_at.desc&limit=20`);
+          return JSON.stringify(rows);
+        }
+        const rows = await supaFetch('sms_messages', input.query || '?order=created_at.desc&limit=20');
+        return JSON.stringify(rows);
+      } catch(e) {
+        return JSON.stringify({ error: e.message });
+      }
+    }
     return 'Unknown tool';
   }
 
@@ -2142,7 +2279,8 @@
     depth = depth || 0;
     if (depth > 5) return 'Too many tool calls, stopping.';
 
-    const sysPrompt = `You are First Mile Capital's AI assistant embedded in the admin portal. You help Morris query and manage property data, corporate finances, and investments. Be concise and helpful. When asked to look up data, use the tools. Format responses clearly. For dollar amounts use commas.
+    const userName = currentUser ? currentUser.name.split(' ')[0] : 'the user';
+    const sysPrompt = `You are First Mile Capital's AI assistant embedded in the admin portal. You help ${userName} query and manage property data, corporate finances, and investments. Be concise and helpful. When asked to look up data, use the tools. Format responses clearly. For dollar amounts use commas.
 
 SUPABASE TABLES:
 - calendar_tasks: accounting deadlines (day_of_month, cadence, property, payment_type, description, owner, status, completed_by, completed_date)
@@ -2163,7 +2301,20 @@ ACCOUNT CONTEXT:
 - AM fees come into Member accounts, PM fees into Management
 - Biweekly transfers of $20200, $19939, $16287, $2011.36 are payroll reimbursements
 - Investor contributions (typically $1M+) are pass-through — not income
-- CROWN ACQUISITIONS ~$8,089 monthly payments are Rent`;
+- CROWN ACQUISITIONS ~$8,089 monthly payments are Rent
+
+EMAIL:
+You have your own email address: aiassistant@firstmilecap.com. You can send emails, search your inbox, and sync new mail.
+- Use send_email to send emails on behalf of the assistant. ALWAYS confirm recipient and content with the user before sending.
+- Use search_emails to look up emails by sender, subject, keywords, or date. The emails table has: from_address, from_name, to_addresses, subject, body_preview, body_text, is_read, ai_category, received_at, folder (inbox/sent).
+- Use sync_inbox before searching if the user asks about very recent mail.
+- When composing emails, be professional and sign as "First Mile Capital AI Assistant".
+
+SMS:
+You have your own phone number: +1 (866) 568-4445. You can send and search SMS messages.
+- Use send_sms to text someone. ALWAYS confirm the recipient number and message with the user before sending.
+- Use search_sms to look up past text messages by phone number, content, or direction (inbound/outbound).
+- Keep texts concise and professional.`;
 
     const body = {
       model: 'claude-sonnet-4-20250514',
