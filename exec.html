@@ -1381,8 +1381,17 @@ async function changeCategory(recordId, newCategory) {
   }
   // Persist to Supabase
   try {
-    await supaWrite('exec_transactions', 'PATCH', { category_override: newCategory }, `?id=eq.${recordId}`);
-  } catch(e) { console.error('Failed to save override:', e); }
+    const result = await supaWrite('exec_transactions', 'PATCH', { category_override: newCategory }, `?id=eq.${recordId}`);
+    if (!result || result.length === 0) {
+      console.error(`Category override: no rows updated for id=${recordId}. Column may not exist — run: ALTER TABLE exec_transactions ADD COLUMN IF NOT EXISTS category_override TEXT;`);
+      showToast('⚠️ Override not saved — check console', 'error');
+    } else {
+      console.log(`Category override saved: ${recordId} → ${newCategory}`);
+    }
+  } catch(e) {
+    console.error('Failed to save override:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
 }
 
 // ── Chat Widget ──
