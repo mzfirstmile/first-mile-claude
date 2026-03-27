@@ -525,7 +525,7 @@
   <div class="drilldown" id="drilldown">
     <div class="drilldown-header">
       <h3 id="drilldownTitle">Transactions</h3>
-      <button class="drilldown-back" onclick="closeDrilldown()">&#8592; Back</button>
+      <button class="drilldown-back" onclick="history.back()">&#8592; Back</button>
     </div>
     <div class="txn-list" id="txnList"></div>
   </div>
@@ -698,6 +698,13 @@ function loadStateFromHash() {
   const params = new URLSearchParams(hash);
   return { mode: params.get('m'), periodLabel: params.get('p'), drillType: params.get('d'), drillCss: params.get('dc') };
 }
+
+// Browser back button: close drilldown if one is open
+window.addEventListener('popstate', function(e) {
+  if (currentDrilldownType) {
+    closeDrilldown(true); // true = don't go back again
+  }
+});
 
 // Auth handled by parent site's Microsoft SSO; Supabase uses anon key
 
@@ -1623,9 +1630,11 @@ function openDrilldown(type, cssClass) {
   document.getElementById('depositSection').style.display = 'none';
   document.getElementById('loanPaybackSection').style.display = 'none';
   saveStateToHash();
+  // Push history so browser back button closes drilldown
+  history.pushState({ drilldown: type }, '', location.hash);
 }
 
-function closeDrilldown() {
+function closeDrilldown(skipHistoryBack) {
   currentDrilldownType = null;
   currentDrilldownCssClass = null;
   document.getElementById('drilldown').classList.remove('show');
