@@ -730,6 +730,12 @@
   .login-btn svg { width:20px; height:20px; }
   .login-error { color:#e5534b; font-size:12px; margin-top:16px; display:none; }
   .login-loading { color:#6b7d96; font-size:12px; margin-top:16px; display:none; }
+  .sql-preset { padding:4px 10px; font-size:11px; border:1px solid var(--border); border-radius:6px; background:var(--surface2); cursor:pointer; color:var(--text-dim); }
+  .sql-preset:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .sql-result-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .sql-result-table th { padding:8px 10px; text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); border-bottom:2px solid var(--border); font-weight:600; position:sticky; top:0; background:#fff; }
+  .sql-result-table td { padding:6px 10px; border-bottom:1px solid var(--border); max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:'SF Mono',Menlo,Monaco,monospace; font-size:11px; }
+  .sql-result-table tr:hover td { background:var(--surface2); }
 </style>
 </head>
 <body>
@@ -792,6 +798,10 @@
     <a class="sidebar-item" data-view="jobs">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
       <span>Scheduled Jobs</span>
+    </a>
+    <a class="sidebar-item" data-view="sql">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+      <span>SQL Console</span>
     </a>
   </div>
 
@@ -1119,6 +1129,34 @@
     </div>
   </div>
 
+  <!-- SQL Console View -->
+  <div class="manage-view" id="view-sql" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <div>
+        <h2 style="font-size:20px; font-weight:700;">SQL Console</h2>
+        <p style="font-size:13px; color:var(--text-dim); margin-top:4px;">Run queries directly against Supabase</p>
+      </div>
+    </div>
+    <div style="position:relative;">
+      <textarea id="sqlInput" placeholder="SELECT * FROM properties LIMIT 10;" style="width:100%; min-height:120px; padding:14px; font-family:'SF Mono',Menlo,Monaco,monospace; font-size:13px; border:1px solid var(--border); border-radius:10px; resize:vertical; background:var(--surface2); color:var(--text); outline:none; line-height:1.5;"></textarea>
+      <div style="display:flex; gap:8px; margin-top:10px; align-items:center;">
+        <button onclick="runSql()" id="sqlRunBtn" style="padding:8px 20px; background:var(--accent); color:#fff; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">Run ▶</button>
+        <span style="font-size:11px; color:var(--text-dim);">Ctrl+Enter to run</span>
+        <div style="flex:1"></div>
+        <div style="display:flex; gap:4px; flex-wrap:wrap;">
+          <button class="sql-preset" onclick="sqlPreset('SELECT * FROM properties ORDER BY property_name')">Properties</button>
+          <button class="sql-preset" onclick="sqlPreset('SELECT * FROM exec_investments ORDER BY name')">Investments</button>
+          <button class="sql-preset" onclick="sqlPreset('SELECT * FROM exec_liabilities ORDER BY lender')">Liabilities</button>
+          <button class="sql-preset" onclick="sqlPreset('SELECT * FROM exec_transactions ORDER BY date DESC LIMIT 50')">Transactions</button>
+          <button class="sql-preset" onclick="sqlPreset('SELECT * FROM emails ORDER BY received_at DESC LIMIT 20')">Emails</button>
+          <button class="sql-preset" onclick="sqlPreset('SELECT * FROM sms_messages ORDER BY created_at DESC LIMIT 20')">SMS</button>
+          <button class="sql-preset" onclick="sqlPreset(`SELECT jobid, jobname, schedule, active FROM cron.job ORDER BY jobname`)">Cron Jobs</button>
+        </div>
+      </div>
+    </div>
+    <div id="sqlOutput" style="margin-top:16px;"></div>
+  </div>
+
 </div>
 
 <!-- Chat Widget -->
@@ -1274,6 +1312,7 @@
         properties: userRecord ? userRecord.access_properties === true : false,
         users: userRecord ? (userRecord.access_users === true || userRecord.is_admin) : false,
         jobs: userRecord ? userRecord.is_admin === true : false,
+        sql: userRecord ? userRecord.is_admin === true : false,
       },
     };
 
@@ -1397,7 +1436,7 @@
   function authBypass() {
     currentUser = {
       email: 'mz@firstmilecap.com', name: 'Morris Zeitouni', initials: 'MZ', isAdmin: true,
-      access: { calendar: true, financials: true, forecasting: true, exec: true, properties: true, users: true, jobs: true }
+      access: { calendar: true, financials: true, forecasting: true, exec: true, properties: true, users: true, jobs: true, sql: true }
     };
     updateUserUI();
     applyModuleAccess();
@@ -1422,6 +1461,7 @@
     users: 'Manage <span>Users</span>',
     exec: 'Executive <span>Financials</span>',
     jobs: 'Scheduled <span>Jobs</span>',
+    sql: 'SQL <span>Console</span>',
   };
 
   let currentView = 'home';
@@ -1706,6 +1746,120 @@
       document.getElementById('cronHistoryBody').innerHTML = html;
     } catch (e) {
       document.getElementById('cronHistoryBody').innerHTML = `<p style="color:#e53e3e; font-size:13px;">Error: ${e.message}</p>`;
+    }
+  }
+
+  // ── SQL Console ──
+  function sqlPreset(query) {
+    document.getElementById('sqlInput').value = query;
+    runSql();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && document.getElementById('view-sql').style.display !== 'none') {
+      runSql();
+    }
+  });
+
+  async function runSql() {
+    const sql = document.getElementById('sqlInput').value.trim();
+    if (!sql) return;
+    const btn = document.getElementById('sqlRunBtn');
+    const output = document.getElementById('sqlOutput');
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+    output.innerHTML = '<p style="color:var(--text-dim);font-size:13px;">Executing...</p>';
+
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ query: sql }),
+      });
+
+      if (!r.ok) {
+        const errText = await r.text();
+        // If exec_sql doesn't exist, show setup instructions
+        if (errText.includes('exec_sql') || errText.includes('does not exist')) {
+          output.innerHTML = `<div style="padding:16px;background:#fff3cd;border:1px solid #ffc107;border-radius:8px;font-size:13px;">
+            <strong>⚠️ Setup required</strong><br>Run this SQL in your Supabase SQL Editor first:
+            <pre style="margin-top:8px;padding:12px;background:#f8f9fa;border-radius:6px;font-size:11px;overflow-x:auto;white-space:pre-wrap;">CREATE OR REPLACE FUNCTION public.exec_sql(query text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  result jsonb;
+BEGIN
+  EXECUTE 'SELECT jsonb_agg(row_to_json(t)) FROM (' || query || ') t' INTO result;
+  RETURN COALESCE(result, '[]'::jsonb);
+EXCEPTION WHEN OTHERS THEN
+  BEGIN
+    EXECUTE query;
+    RETURN jsonb_build_object('success', true, 'message', 'Statement executed successfully');
+  EXCEPTION WHEN OTHERS THEN
+    RETURN jsonb_build_object('error', true, 'message', SQLERRM, 'detail', SQLSTATE);
+  END;
+END;
+$$;</pre></div>`;
+          return;
+        }
+        throw new Error(errText);
+      }
+
+      const data = await r.json();
+
+      // Handle non-SELECT results
+      if (data && data.success === true) {
+        output.innerHTML = `<div style="padding:16px;background:#d4edda;border:1px solid #28a745;border-radius:8px;font-size:13px;color:#155724;">
+          ✓ ${data.message || 'Statement executed successfully'}
+        </div>`;
+        return;
+      }
+
+      if (data && data.error === true) {
+        output.innerHTML = `<div style="padding:16px;background:#f8d7da;border:1px solid #dc3545;border-radius:8px;font-size:13px;color:#721c24;">
+          ✗ ${data.message || 'Error executing statement'}${data.detail ? ` (${data.detail})` : ''}
+        </div>`;
+        return;
+      }
+
+      // SELECT results — render as table
+      if (!data || (Array.isArray(data) && data.length === 0)) {
+        output.innerHTML = '<p style="color:var(--text-dim);font-size:13px;padding:16px;">No rows returned.</p>';
+        return;
+      }
+
+      const rows = Array.isArray(data) ? data : [data];
+      const cols = Object.keys(rows[0]);
+      let html = `<div style="font-size:11px;color:var(--text-dim);margin-bottom:6px;">${rows.length} row${rows.length !== 1 ? 's' : ''}</div>`;
+      html += '<div style="overflow-x:auto;border:1px solid var(--border);border-radius:8px;max-height:60vh;overflow-y:auto;">';
+      html += '<table class="sql-result-table"><thead><tr>';
+      cols.forEach(c => { html += `<th>${c}</th>`; });
+      html += '</tr></thead><tbody>';
+      rows.forEach(row => {
+        html += '<tr>';
+        cols.forEach(c => {
+          let val = row[c];
+          if (val === null) val = '<span style="color:#ccc">null</span>';
+          else if (typeof val === 'object') val = JSON.stringify(val);
+          else val = String(val);
+          html += `<td title="${val.replace(/"/g,'&quot;')}">${val}</td>`;
+        });
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
+      output.innerHTML = html;
+    } catch (e) {
+      output.innerHTML = `<p style="color:#e53e3e;font-size:13px;padding:16px;">Error: ${e.message}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Run ▶';
     }
   }
 
@@ -2346,6 +2500,17 @@
       }
     },
     {
+      name: 'run_sql',
+      description: 'Execute a SQL query against the Supabase database. Use for any data lookup, insert, update, alter table, or schema change. Returns JSON results for SELECT queries or success/error for DDL/DML.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          sql: { type: 'string', description: 'SQL query to execute (SELECT, INSERT, UPDATE, ALTER TABLE, etc.)' }
+        },
+        required: ['sql']
+      }
+    },
+    {
       name: 'send_sms',
       description: 'Send an SMS text message from the AI assistant phone number (+18665684445). Use when the user asks you to text, SMS, or message someone by phone. ALWAYS confirm the recipient number and message with the user before sending.',
       input_schema: {
@@ -2400,6 +2565,20 @@
         return JSON.stringify({ success: true, message: `Transaction ${input.recordId} recategorized to "${input.category}"` });
       } catch(e) {
         return JSON.stringify({ success: false, error: e.message });
+      }
+    }
+    if (name === 'run_sql') {
+      try {
+        const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+          method: 'POST',
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: input.sql }),
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        return JSON.stringify(data);
+      } catch(e) {
+        return JSON.stringify({ error: e.message });
       }
     }
     if (name === 'send_email') {
