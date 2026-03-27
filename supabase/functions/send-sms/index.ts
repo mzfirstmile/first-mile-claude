@@ -1,13 +1,12 @@
 // supabase/functions/send-sms/index.ts
-// Sends SMS via Twilio API from +18665684445
+// Sends SMS via Telnyx API from +18665684445
 // Deploy: supabase functions deploy send-sms
-// Secrets: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, SB_SERVICE_KEY
+// Secrets: TELNYX_API_KEY, SB_SERVICE_KEY
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { encode as base64Encode } from "https://deno.land/std@0.177.0/encoding/base64.ts";
 
-const TWILIO_FROM = "+18665684445";
+const TELNYX_FROM = "+18665684445";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,33 +35,30 @@ serve(async (req: Request) => {
       toNumber = toNumber.startsWith("1") ? `+${toNumber}` : `+1${toNumber}`;
     }
 
-    const accountSid = Deno.env.get("TWILIO_ACCOUNT_SID")!;
-    const authToken = Deno.env.get("TWILIO_AUTH_TOKEN")!;
+    const apiKey = Deno.env.get("TELNYX_API_KEY")!;
 
-    // Twilio REST API — send SMS
-    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-    const authHeader = `Basic ${base64Encode(new TextEncoder().encode(`${accountSid}:${authToken}`))}`;
-
-    const params = new URLSearchParams({
-      From: TWILIO_FROM,
-      To: toNumber,
-      Body: body,
-    });
-
-    const twilioRes = await fetch(twilioUrl, {
+    // Telnyx v2 API — send SMS
+    const telnyxRes = await fetch("https://api.telnyx.com/v2/messages", {
       method: "POST",
       headers: {
-        Authorization: authHeader,
-        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
-      body: params.toString(),
+      body: JSON.stringify({
+        from: TELNYX_FROM,
+        to: toNumber,
+        text: body,
+      }),
     });
 
-    const twilioData = await twilioRes.json();
+    const telnyxData = await telnyxRes.json();
 
-    if (!twilioRes.ok) {
-      throw new Error(`Twilio error: ${twilioData.message || JSON.stringify(twilioData)}`);
+    if (!telnyxRes.ok) {
+      const errMsg = telnyxData?.errors?.[0]?.detail || JSON.stringify(telnyxData);
+      throw new Error(`Telnyx error: ${errMsg}`);
     }
+
+    const messageId = telnyxData?.data?.id;
 
     // Log to Supabase
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -70,19 +66,19 @@ serve(async (req: Request) => {
     const sb = createClient(supabaseUrl, supabaseKey);
 
     await sb.from("sms_messages").insert({
-      twilio_sid: twilioData.sid,
+      provider_id: messageId,
       direction: "outbound",
-      from_number: TWILIO_FROM,
+      from_number: TELNYX_FROM,
       to_number: toNumber,
       body: body,
-      status: twilioData.status || "sent",
-      num_segments: twilioData.num_segments || 1,
+      status: telnyxData?.data?.to?.[0]?.status || "queued",
+      num_segments: telnyxData?.data?.parts || 1,
       sent_by: sentBy || "ai-assistant",
       created_at: new Date().toISOString(),
     });
 
     return new Response(
-      JSON.stringify({ success: true, message: `SMS sent to ${toNumber}`, sid: twilioData.sid }),
+      JSON.stringify({ success: true, message: `SMS sent to ${toNumber}`, id: messageId }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

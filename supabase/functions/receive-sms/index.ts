@@ -1,7 +1,7 @@
 // supabase/functions/receive-sms/index.ts
-// Twilio webhook — receives inbound SMS and stores in Supabase
+// Telnyx webhook — receives inbound SMS and stores in Supabase
 // Deploy: supabase functions deploy receive-sms
-// Then configure Twilio webhook URL: https://qrtleqasnhbnruodlgpt.supabase.co/functions/v1/receive-sms
+// Then configure Telnyx webhook URL: https://qrtleqasnhbnruodlgpt.supabase.co/functions/v1/receive-sms
 // Secrets: SB_SERVICE_KEY
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
@@ -19,18 +19,32 @@ serve(async (req: Request) => {
   }
 
   try {
-    // Twilio sends webhook as application/x-www-form-urlencoded
-    const formData = await req.formData();
-    const messageSid = formData.get("MessageSid") as string;
-    const from = formData.get("From") as string;
-    const to = formData.get("To") as string;
-    const body = formData.get("Body") as string;
-    const numSegments = parseInt(formData.get("NumSegments") as string || "1");
+    // Telnyx sends webhook as JSON
+    const json = await req.json();
 
-    if (!messageSid || !from || !body) {
+    // Telnyx webhook structure: { data: { event_type, payload: { ... } } }
+    const eventType = json?.data?.event_type;
+
+    // Only process inbound messages
+    if (eventType !== "message.received") {
       return new Response(
-        "<Response><Message>Error: missing fields</Message></Response>",
-        { status: 400, headers: { "Content-Type": "text/xml" } }
+        JSON.stringify({ ok: true, skipped: eventType }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const payload = json.data.payload;
+    const messageId = payload.id;
+    const from = payload.from?.phone_number;
+    const to = payload.to?.[0]?.phone_number || payload.to?.phone_number || "";
+    const body = payload.text || "";
+    const parts = payload.parts || 1;
+    const receivedAt = payload.received_at || new Date().toISOString();
+
+    if (!messageId || !from || !body) {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -41,29 +55,29 @@ serve(async (req: Request) => {
 
     await sb.from("sms_messages").upsert(
       {
-        twilio_sid: messageSid,
+        provider_id: messageId,
         direction: "inbound",
         from_number: from,
         to_number: to,
         body: body,
         status: "received",
-        num_segments: numSegments,
-        received_at: new Date().toISOString(),
+        num_segments: parts,
+        received_at: receivedAt,
         created_at: new Date().toISOString(),
       },
-      { onConflict: "twilio_sid" }
+      { onConflict: "provider_id" }
     );
 
-    // Respond with empty TwiML (no auto-reply)
+    // Return 200 to acknowledge receipt (Telnyx requires 2xx within 2 seconds)
     return new Response(
-      "<Response></Response>",
-      { headers: { "Content-Type": "text/xml" } }
+      JSON.stringify({ ok: true }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
     console.error("receive-sms error:", err);
     return new Response(
-      "<Response><Message>Internal error</Message></Response>",
-      { status: 500, headers: { "Content-Type": "text/xml" } }
+      JSON.stringify({ error: err.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
