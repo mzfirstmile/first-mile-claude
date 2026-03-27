@@ -596,11 +596,10 @@ const INCLUDE_ACCOUNTS = {
   '483103381719': 'FM PARAMUS MEMBER LLC',         // AM fees
   '483108155623': 'FM Plaza Member LLC',            // AM fees
   '483107673423': 'FM Kemble Membe',               // AM fees (truncated)
-  '483108413860': 'FM RED MEMBER LLC',             // Member
 };
 
 // Account classifications
-const MEMBER_ACCOUNTS = ['FM PARAMUS MEMBER LLC', 'FM Paramus Member LLC', 'FM Plaza Member LLC', 'FM Kemble Membe', 'FM Kemble Member LLC', 'FM RED MEMBER LLC'];
+const MEMBER_ACCOUNTS = ['FM PARAMUS MEMBER LLC', 'FM Paramus Member LLC', 'FM Plaza Member LLC', 'FM Kemble Membe', 'FM Kemble Member LLC'];
 const MGMT_ACCOUNT = 'First Mile Management LLC';
 const INVESTOR_ACCOUNTS = ['FM 340 Kemble LLC Investors'];
 
@@ -1998,6 +1997,7 @@ function renderBalanceSheet() {
   if (invCards.length === 0) {
     invContainer.innerHTML = '<p style="color:var(--text-dim);padding:16px;text-align:center;">No investments found.</p>';
   } else {
+    invCards.sort((a, b) => b.value - a.value);
     invContainer.innerHTML = invCards.map(inv => {
       const ownershipDisplay = inv.ownership > 1 ? `${inv.ownership.toFixed(2)}%` : (inv.ownership > 0 ? `${(inv.ownership * 100).toFixed(2)}%` : '—');
       const linkedBadge = inv.propertyId
@@ -2074,6 +2074,7 @@ function renderBalanceSheet() {
   if (liabCards.length === 0) {
     liabContainer.innerHTML = '<p style="color:var(--text-dim);padding:16px;text-align:center;">No liabilities found.</p>';
   } else {
+    liabCards.sort((a, b) => b.usdValue - a.usdValue);
     liabContainer.innerHTML = liabCards.map(l => {
       const currName = typeof l.currency === 'object' ? l.currency.name : l.currency;
       const isJpy = currName === 'JPY';
