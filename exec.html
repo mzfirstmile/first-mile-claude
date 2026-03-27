@@ -681,6 +681,22 @@ let selectedPeriodIndex = -1; // -1 means latest
 let periods = [];
 let lastPeriodComp = null; // Store latest computePeriod result for balance sheet
 
+// ── URL State Persistence ──
+// Saves cfMode, period, and drilldown to URL hash so refresh keeps your place
+function saveStateToHash() {
+  const state = { m: cfMode };
+  if (periods.length > 0 && selectedPeriodIndex >= 0) state.p = periods[selectedPeriodIndex].label;
+  if (currentDrilldownType) { state.d = currentDrilldownType; state.dc = currentDrilldownCssClass; }
+  const hash = new URLSearchParams(state).toString();
+  history.replaceState(null, '', '#' + hash);
+}
+function loadStateFromHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return {};
+  const params = new URLSearchParams(hash);
+  return { mode: params.get('m'), periodLabel: params.get('p'), drillType: params.get('d'), drillCss: params.get('dc') };
+}
+
 // Auth handled by parent site's Microsoft SSO; Supabase uses anon key
 
 // Auto-init (auth handled by parent site's Microsoft SSO)
@@ -736,9 +752,28 @@ async function loadData() {
     // Match known payroll splits to actual Supabase record IDs by transaction amount
     matchPayrollSplits();
     bar.className = 'loading-bar done';
+
+    // Restore view state from URL hash (survives page refresh)
+    const saved = loadStateFromHash();
+    if (saved.mode && saved.mode !== cfMode) {
+      cfMode = saved.mode;
+      document.querySelectorAll('.cf-toggle button').forEach(b => b.classList.remove('active'));
+      const modeBtn = document.querySelector(`.cf-toggle button[onclick="setCfMode('${cfMode}')"]`);
+      if (modeBtn) modeBtn.classList.add('active');
+    }
     buildPeriods();
-    selectedPeriodIndex = periods.length - 1;
+    // Restore period by label match (so "2026" or "March 2026" survives even if index changes)
+    if (saved.periodLabel) {
+      const idx = periods.findIndex(p => p.label === saved.periodLabel);
+      selectedPeriodIndex = idx >= 0 ? idx : periods.length - 1;
+    } else {
+      selectedPeriodIndex = periods.length - 1;
+    }
     renderAll();
+    // Restore drilldown if one was open
+    if (saved.drillType) {
+      openDrilldown(saved.drillType, saved.drillCss || '');
+    }
     loadBalanceSheet();
   } catch (e) {
     bar.className = 'loading-bar';
@@ -1019,14 +1054,15 @@ function setCfMode(mode) {
   buildPeriods();
   selectedPeriodIndex = periods.length - 1;
   renderAll();
+  saveStateToHash();
 }
 
 function prevPeriod() {
-  if (selectedPeriodIndex > 0) { selectedPeriodIndex--; renderAll(); }
+  if (selectedPeriodIndex > 0) { selectedPeriodIndex--; renderAll(); saveStateToHash(); }
 }
 
 function nextPeriod() {
-  if (selectedPeriodIndex < periods.length - 1) { selectedPeriodIndex++; renderAll(); }
+  if (selectedPeriodIndex < periods.length - 1) { selectedPeriodIndex++; renderAll(); saveStateToHash(); }
 }
 
 // ── Compute period financials ──
@@ -1047,12 +1083,10 @@ function computePeriod(records) {
     const { category, type } = categorize(r);
     let amount = getAmount(r);
 
-    // Handle payroll splits: deduct payroll portion from PM fee income
-    const splitAmt = payrollSplits[r.id];
-    if (splitAmt && splitAmt > 0 && category === 'income') {
-      payrollReimb += splitAmt;
-      amount -= splitAmt;
-    }
+    // NOTE: payroll splits no longer reduce PM fee income here.
+    // PM fees are shown gross. Only standalone payroll_offset transfers
+    // (from property accounts) reduce expenses via payrollReimb.
+    // This avoids double-counting where splits reduced income AND expenses.
 
     // AM Partner Payouts: net against AM Fee Income (show as deduction, not separate distribution)
     if (category === 'distribution' && type === 'AM Partner Payout') {
@@ -1261,6 +1295,7 @@ function renderChart() {
 function selectPeriod(idx) {
   selectedPeriodIndex = idx;
   renderAll();
+  saveStateToHash();
 }
 
 // ── Render Period Dashboard ──
@@ -1532,6 +1567,7 @@ function openDrilldown(type, cssClass) {
   document.getElementById('loanSection').style.display = 'none';
   document.getElementById('depositSection').style.display = 'none';
   document.getElementById('loanPaybackSection').style.display = 'none';
+  saveStateToHash();
 }
 
 function closeDrilldown() {
@@ -1545,6 +1581,7 @@ function closeDrilldown() {
   document.getElementById('loanSection').style.display = '';
   document.getElementById('depositSection').style.display = '';
   document.getElementById('loanPaybackSection').style.display = '';
+  saveStateToHash();
 }
 
 async function changeCategory(recordId, newCategory) {
