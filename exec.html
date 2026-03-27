@@ -647,7 +647,8 @@ const CAT_ICONS = {
   'Loan Out': '🏦',
   'Loan Payback': '🏦',
   'Deposit': '🔒',
-  'Marketing': '📣'
+  'Marketing': '📣',
+  'Contractors': '🔨'
 };
 
 // All possible categories for the dropdown
@@ -657,7 +658,7 @@ const ALL_CATEGORIES = [
   'Wire Payments', 'Banking', 'Checks', 'AM Partner Payout',
   'PM Expenses', 'Software/Services', 'Other Operating',
   'Internal Transfer', 'Payroll Reimbursement', 'Investor Contribution (Pass-Through)',
-  'Travel', 'Finders Fee', 'Interest Expense', 'Marketing', 'Loan Out', 'Loan Payback', 'Deposit'
+  'Travel', 'Finders Fee', 'Interest Expense', 'Marketing', 'Contractors', 'Loan Out', 'Loan Payback', 'Deposit'
 ];
 
 // Claude API key — injected at build time by GitHub Actions
@@ -937,7 +938,7 @@ function categorize(record) {
   // Main operating account logic
   if (acctNum === MAIN_ACCT) {
     if (desc.includes('JUSTWORK')) return { category: 'expense', type: 'Payroll' };
-    if (desc.includes('X SHORE') || desc.includes('XSHORE')) return { category: 'expense', type: 'Payroll' };
+    if (desc.includes('X SHORE') || desc.includes('XSHORE')) return { category: 'expense', type: 'Contractors' };
     if (desc.includes('LEVINE') && desc.includes('JACOBS')) return { category: 'expense', type: 'Legal/Corp Services' };
 
     if (isTransfer && amount > 0) {
