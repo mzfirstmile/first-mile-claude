@@ -225,7 +225,12 @@
 
   /* Investment cards */
   .bs-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:16px; }
-  .bs-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; transition:box-shadow .2s; }
+  .bs-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; transition:box-shadow .2s; cursor:pointer; }
+  .bs-card-collapsed { padding:10px 14px; }
+  .bs-card-collapsed .bs-card-header { margin-bottom:0; }
+  .bs-card-chevron { color:var(--text-dim); transition:transform .2s; flex-shrink:0; }
+  .bs-card:not(.bs-card-collapsed) .bs-card-chevron { transform:rotate(90deg); }
+  .bs-card-collapsed-value { font-size:14px; font-weight:600; color:var(--green); white-space:nowrap; }
   .bs-card:hover { box-shadow:0 4px 20px rgba(0,0,0,.06); }
   .bs-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
   .bs-card-title { font-size:13px; font-weight:600; }
@@ -251,7 +256,10 @@
   .bs-card-actions button.delete:hover { color:var(--red); }
 
   /* Liabilities */
-  .bs-liab-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; }
+  .bs-liab-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; cursor:pointer; }
+  .bs-liab-card.bs-card-collapsed { padding:10px 14px; }
+  .bs-liab-card.bs-card-collapsed .bs-liab-header { margin-bottom:0; }
+  .bs-liab-card:not(.bs-card-collapsed) .bs-card-chevron { transform:rotate(90deg); }
   .bs-liab-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:8px; gap:8px; }
   .bs-liab-title { font-size:13px; font-weight:600; }
   .bs-liab-amount { font-size:14px; font-weight:700; font-family:'SF Mono','Fira Code',monospace; color:var(--red-dark); white-space:nowrap; }
@@ -802,6 +810,11 @@ function categorize(record) {
   // Appfolio distributions (description contains APPFOLIO or SIGONFILE for property deposits)
   if (desc.includes('APPFOLIO') && amount > 0) {
     return { category: 'income', type: 'Investment Income' };
+  }
+
+  // Elyse $20K payments = Finders Fee
+  if (desc.includes('ELYSE') && amount < 0 && Math.abs(Math.abs(amount) - 20000) < 500) {
+    return { category: 'expense', type: 'Finders Fee' };
   }
 
   // Crown Acquisitions rent payments (~$8,089)
@@ -1880,12 +1893,12 @@ function renderBalanceSheet() {
         valueNote = `<div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Net equity (no valuation set)</div>`;
       }
       const editBtn = (inv.valueSource !== 'property' && inv.valueSource !== 'caprate')
-        ? `<button class="bs-edit-btn" id="avBtn-${inv.id}" onclick="editAssetValue('${inv.id}', ${inv.value})" title="Edit value">✏️</button>`
+        ? `<button class="bs-edit-btn" id="avBtn-${inv.id}" onclick="event.stopPropagation();editAssetValue('${inv.id}', ${inv.value})" title="Edit value">✏️</button>`
         : '';
       // Cap rate display for linked investments
       const capRateDisplay = inv.capRate
-        ? `<span id="cr-${inv.id}" style="color:var(--accent);cursor:pointer;" onclick="editCapRate('${inv.id}', ${inv.capRate})">${inv.capRate.toFixed(2)}%</span> <button class="bs-edit-btn" onclick="editCapRate('${inv.id}', ${inv.capRate})" title="Edit cap rate" style="font-size:10px;">✏️</button>`
-        : `<span style="font-size:10px;color:var(--text-dim);cursor:pointer;" onclick="editCapRate('${inv.id}', 0)">Set rate</span>`;
+        ? `<span id="cr-${inv.id}" style="color:var(--accent);cursor:pointer;" onclick="event.stopPropagation();editCapRate('${inv.id}', ${inv.capRate})">${inv.capRate.toFixed(2)}%</span> <button class="bs-edit-btn" onclick="event.stopPropagation();editCapRate('${inv.id}', ${inv.capRate})" title="Edit cap rate" style="font-size:10px;">✏️</button>`
+        : `<span style="font-size:10px;color:var(--text-dim);cursor:pointer;" onclick="event.stopPropagation();editCapRate('${inv.id}', 0)">Set rate</span>`;
       const capRateRow = inv.propertyId ? `
           <div class="bs-card-metrics" style="margin-top:4px;">
             <div class="bs-metric">
@@ -1902,35 +1915,41 @@ function renderBalanceSheet() {
             </div>
           </div>` : '';
       return `
-        <div class="bs-card">
+        <div class="bs-card bs-card-collapsed" onclick="toggleInvCard(this, event)">
           <div class="bs-card-header">
-            <div class="bs-card-title">${inv.name}${linkedBadge}</div>
-            <div style="display:flex;align-items:center;gap:4px;">
-              <div class="bs-card-ownership">${ownershipDisplay} equity</div>
-              <div class="bs-card-actions">
-                <button title="Edit" onclick="openEditInvestment('${inv.id}')">✏️</button>
-                <button class="delete" title="Delete" onclick="deleteInvestment('${inv.id}','${inv.name.replace(/'/g,"\\'")}')">🗑️</button>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <svg class="bs-card-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div class="bs-card-title">${inv.name}${linkedBadge}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="bs-card-collapsed-value">${fmt(inv.value)}</div>
+              <div class="bs-card-ownership" style="display:none;">${ownershipDisplay} equity</div>
+              <div class="bs-card-actions" style="display:none;">
+                <button title="Edit" onclick="event.stopPropagation();openEditInvestment('${inv.id}')">✏️</button>
+                <button class="delete" title="Delete" onclick="event.stopPropagation();deleteInvestment('${inv.id}','${inv.name.replace(/'/g,"\\'")}')">🗑️</button>
               </div>
             </div>
           </div>
-          <div class="bs-card-asset-row" style="margin-bottom:8px;">
-            <div>
-              <div class="bs-metric-label">Position Value</div>
-              <div class="bs-asset-value" id="av-${inv.id}">${fmt(inv.value)}</div>
-              ${valueNote}
+          <div class="bs-card-body" style="display:none;">
+            <div class="bs-card-asset-row" style="margin-bottom:8px;">
+              <div>
+                <div class="bs-metric-label">Position Value</div>
+                <div class="bs-asset-value" id="av-${inv.id}">${fmt(inv.value)}</div>
+                ${valueNote}
+              </div>
+              ${editBtn}
             </div>
-            ${editBtn}
+            <div class="bs-card-metrics">
+              <div class="bs-metric">
+                <div class="bs-metric-label">Contributed</div>
+                <div class="bs-metric-value">${fmt(inv.contributed)}</div>
+              </div>
+              <div class="bs-metric">
+                <div class="bs-metric-label">Distributed</div>
+                <div class="bs-metric-value green">${fmt(inv.distributed)}</div>
+              </div>
+            </div>${capRateRow}
           </div>
-          <div class="bs-card-metrics">
-            <div class="bs-metric">
-              <div class="bs-metric-label">Contributed</div>
-              <div class="bs-metric-value">${fmt(inv.contributed)}</div>
-            </div>
-            <div class="bs-metric">
-              <div class="bs-metric-label">Distributed</div>
-              <div class="bs-metric-value green">${fmt(inv.distributed)}</div>
-            </div>
-          </div>${capRateRow}
         </div>`;
     }).join('');
   }
@@ -1964,22 +1983,37 @@ function renderBalanceSheet() {
         maturityHtml = `${dateStr} <span class="bs-maturity-badge ${maturityClass}">${yearsLeft}y</span>`;
       }
 
+      const collapsedAmt = isJpy ? fmt(l.usdValue) : fmt(l.principal);
+      let collapsedMaturity = '';
+      if (l.maturity) {
+        const mDate2 = new Date(l.maturity);
+        const daysLeft2 = Math.round((mDate2 - new Date()) / (1000 * 60 * 60 * 24));
+        const yearsLeft2 = (daysLeft2 / 365).toFixed(1);
+        const mc2 = daysLeft2 < 365 ? 'near' : (daysLeft2 < 365 * 3 ? 'mid' : 'far');
+        collapsedMaturity = `<span class="bs-maturity-badge ${mc2}" style="margin-left:4px;font-size:10px;">${yearsLeft2}y</span>`;
+      }
       return `
-        <div class="bs-liab-card">
+        <div class="bs-liab-card bs-card-collapsed" onclick="toggleLiabCard(this, event)">
           <div class="bs-liab-header">
-            <div style="display:flex;align-items:center;gap:4px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <svg class="bs-card-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
               <div class="bs-liab-title">${l.lender}</div>
-              <div class="bs-card-actions">
-                <button title="Edit" onclick="openEditLiability('${l.id}')">✏️</button>
-                <button class="delete" title="Delete" onclick="deleteLiability('${l.id}','${l.lender.replace(/'/g,"\\'")}')">🗑️</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="bs-card-collapsed-value" style="color:var(--red-dark);">${collapsedAmt}${collapsedMaturity}</div>
+              <div class="bs-card-actions" style="display:none;">
+                <button title="Edit" onclick="event.stopPropagation();openEditLiability('${l.id}')">✏️</button>
+                <button class="delete" title="Delete" onclick="event.stopPropagation();deleteLiability('${l.id}','${l.lender.replace(/'/g,"\\'")}')">🗑️</button>
               </div>
             </div>
-            <div class="bs-liab-amount">${amtStr}</div>
           </div>
-          <div class="bs-liab-details">
-            <div class="bs-liab-detail">
-              <div class="bs-liab-detail-label">Maturity</div>
-              <div class="bs-liab-detail-value">${maturityHtml}</div>
+          <div class="bs-liab-body" style="display:none;">
+            <div class="bs-liab-amount" style="margin:8px 0;">${amtStr}</div>
+            <div class="bs-liab-details">
+              <div class="bs-liab-detail">
+                <div class="bs-liab-detail-label">Maturity</div>
+                <div class="bs-liab-detail-value">${maturityHtml}</div>
+              </div>
             </div>
           </div>
         </div>`;
@@ -1998,6 +2032,48 @@ function closeModal() {
 }
 
 // ── Position Value inline edit ──
+function toggleInvCard(card, event) {
+  // Don't toggle if clicking buttons/inputs inside
+  if (event.target.closest('button, input, select, .bs-card-actions')) return;
+  const isCollapsed = card.classList.contains('bs-card-collapsed');
+  const body = card.querySelector('.bs-card-body');
+  const collapsedValue = card.querySelector('.bs-card-collapsed-value');
+  const ownership = card.querySelector('.bs-card-ownership');
+  const actions = card.querySelector('.bs-card-actions');
+  if (isCollapsed) {
+    card.classList.remove('bs-card-collapsed');
+    body.style.display = '';
+    if (collapsedValue) collapsedValue.style.display = 'none';
+    if (ownership) ownership.style.display = '';
+    if (actions) actions.style.display = '';
+  } else {
+    card.classList.add('bs-card-collapsed');
+    body.style.display = 'none';
+    if (collapsedValue) collapsedValue.style.display = '';
+    if (ownership) ownership.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+  }
+}
+
+function toggleLiabCard(card, event) {
+  if (event.target.closest('button, input, select, .bs-card-actions')) return;
+  const isCollapsed = card.classList.contains('bs-card-collapsed');
+  const body = card.querySelector('.bs-liab-body');
+  const collapsedValue = card.querySelector('.bs-card-collapsed-value');
+  const actions = card.querySelector('.bs-card-actions');
+  if (isCollapsed) {
+    card.classList.remove('bs-card-collapsed');
+    body.style.display = '';
+    if (collapsedValue) collapsedValue.style.display = 'none';
+    if (actions) actions.style.display = '';
+  } else {
+    card.classList.add('bs-card-collapsed');
+    body.style.display = 'none';
+    if (collapsedValue) collapsedValue.style.display = '';
+    if (actions) actions.style.display = 'none';
+  }
+}
+
 function editAssetValue(recordId, currentValue) {
   const el = document.getElementById(`av-${recordId}`);
   const btnEl = document.getElementById(`avBtn-${recordId}`);
