@@ -860,7 +860,7 @@ function categorize(record) {
     const isDeposit = oc === 'Deposit';
     if (isExcluded) return { category: oc === 'Payroll Reimbursement' ? 'payroll_offset' : 'excluded', type: oc };
     if (isDistribution) return { category: 'distribution', type: oc };
-    if (isInvestment) return { category: 'investment', type: oc };
+    if (isInvestment) return { category: 'investment', type: 'Investment Contributions' };
     if (isLoan) return { category: 'loan', type: oc };
     if (isLoanPayback) return { category: 'loan_payback', type: oc };
     if (isDeposit) return { category: 'deposit', type: oc };
@@ -1363,8 +1363,8 @@ function renderPeriodDashboard() {
   // Owner distributions
   renderCategoryRows('distroRows', comp.distroBuckets, 'expense', comp.totalDistributions);
 
-  // Investment contributions
-  renderCategoryRows('investRows', comp.investBuckets, 'expense', comp.totalInvestments);
+  // Investment contributions — show individual transaction descriptions
+  renderInvestmentRows('investRows', comp.investBuckets, comp.totalInvestments);
 
   // Loans out
   renderCategoryRows('loanRows', comp.loanBuckets, 'expense', comp.totalLoans);
@@ -1410,6 +1410,47 @@ function renderCategoryRows(containerId, buckets, cssClass, total) {
           </div>
         </div>
         <div class="cat-amount">${fmtFull(Math.abs(data.total))} (${pct.toFixed(1)}%)${subNote}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderInvestmentRows(containerId, buckets, total) {
+  const container = document.getElementById(containerId);
+  // Flatten all records from all investment buckets into individual rows
+  const allRecords = [];
+  Object.entries(buckets).forEach(([type, data]) => {
+    if (data.records) {
+      data.records.forEach(r => {
+        const amount = Math.abs(getAmount(r));
+        const desc = getDescription(r);
+        // Use friendly name from categoryNames if set, otherwise clean up bank description
+        const label = categoryNames[r.id] || desc.slice(0, 60);
+        const date = getDate(r);
+        allRecords.push({ label, amount, date, recordId: r.id });
+      });
+    }
+  });
+  // Sort by amount descending
+  allRecords.sort((a, b) => b.amount - a.amount);
+  const maxVal = allRecords.length > 0 ? Math.max(...allRecords.map(r => r.amount)) : 1;
+
+  container.innerHTML = allRecords.map(r => {
+    const pct = total > 0 ? (r.amount / total * 100) : 0;
+    const barWidth = Math.max((r.amount / maxVal) * 100, 3);
+    const dateStr = r.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `
+      <div class="cat-row expense" style="cursor:default;">
+        <div class="cat-icon">🏗️</div>
+        <div class="cat-info">
+          <div class="cat-name" style="font-size:12px;">${r.label}</div>
+          <div style="font-size:10px;color:var(--text-dim);">${dateStr}</div>
+        </div>
+        <div class="cat-bar-wrap">
+          <div class="cat-bar" style="width:${barWidth}%">
+            <span class="cat-bar-label">${r.label}</span>
+          </div>
+        </div>
+        <div class="cat-amount">${fmtFull(r.amount)} (${pct.toFixed(1)}%)</div>
       </div>`;
   }).join('');
 }
