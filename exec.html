@@ -1186,7 +1186,12 @@ function renderCategoryRows(containerId, buckets, cssClass, total) {
 }
 
 // ── Drill-down ──
+let currentDrilldownType = null;
+let currentDrilldownCssClass = null;
+
 function openDrilldown(type, cssClass) {
+  currentDrilldownType = type;
+  currentDrilldownCssClass = cssClass;
   const period = periods[selectedPeriodIndex];
   const records = getRecordsForPeriod(period);
 
@@ -1347,6 +1352,8 @@ function openDrilldown(type, cssClass) {
 }
 
 function closeDrilldown() {
+  currentDrilldownType = null;
+  currentDrilldownCssClass = null;
   document.getElementById('drilldown').classList.remove('show');
   document.getElementById('incomeSection').style.display = '';
   document.getElementById('opexSection').style.display = '';
@@ -1358,6 +1365,10 @@ async function changeCategory(recordId, newCategory) {
   categoryOverrides[recordId] = newCategory;
   showToast(`Category → ${newCategory}`);
   renderPeriodDashboard();
+  // Re-render the drilldown if it's open so recategorized items drop off
+  if (currentDrilldownType) {
+    openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  }
   // Persist to Supabase
   try {
     await supaWrite('exec_transactions', 'PATCH', { category_override: newCategory }, `?id=eq.${recordId}`);
