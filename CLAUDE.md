@@ -68,6 +68,9 @@ The embedded Claude chat has access to these tools:
 ## Business Logic & Domain Knowledge
 *(Things that live in Morris's head, not in the code — add here as we learn them)*
 - Payroll reimbursements are structured as deductions to the property management fee (not separate line items)
+- AM Partner Payouts (~$4,333/mo from FM Paramus Member account) are deductions against Asset Management Fee Income, not separate distributions — shown as "Less: AM Partner Payout" in the AM Fee drilldown
+- Email auto-reply is instant via Graph webhook (email-webhook) with 5-min cron fallback (check-inbox); dedup via atomic `replied_at` lock in auto-reply function
+- Graph webhook subscription (subscribe-inbox) expires every 3 days — needs daily cron renewal
 
 ## Preferences
 - Morris works fast — keep things concise, skip unnecessary explanation

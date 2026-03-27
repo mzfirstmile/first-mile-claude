@@ -908,6 +908,15 @@ function computePeriod(records) {
       amount -= splitAmt;
     }
 
+    // AM Partner Payouts: net against AM Fee Income (show as deduction, not separate distribution)
+    if (category === 'distribution' && type === 'AM Partner Payout') {
+      totalIncome += amount; // amount is negative (debit)
+      if (!incomeBuckets['Asset Management Fee Income']) incomeBuckets['Asset Management Fee Income'] = { total: 0, count: 0, records: [] };
+      incomeBuckets['Asset Management Fee Income'].total += amount;
+      incomeBuckets['Asset Management Fee Income'].records.push(r);
+      return; // skip adding to distributions
+    }
+
     if (category === 'income') {
       totalIncome += amount;
       if (!incomeBuckets[type]) incomeBuckets[type] = { total: 0, count: 0, records: [] };
@@ -1206,6 +1215,17 @@ function openDrilldown(type, cssClass) {
         drillItems.push({ date: getDate(r), desc: `Payroll reimb. split from: ${getDescription(r).slice(0,60)}…`, acct: getAccountName(r), amount: splitAmt, recordId: null, currentType: 'Payroll Reimbursement', isSynthetic: true });
       }
     });
+  } else if (type === 'Asset Management Fee Income') {
+    // AM Fee: show each income transaction, then show partner payouts as deductions
+    records.forEach(r => {
+      const { category, type: t } = categorize(r);
+      if (t === 'Asset Management Fee Income' && category === 'income') {
+        drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: t, isSynthetic: false });
+      } else if (t === 'AM Partner Payout' && category === 'distribution') {
+        // Partner payout — show as deduction within AM Fee, with editable category
+        drillItems.push({ date: getDate(r), desc: `Less: AM Partner Payout`, acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: 'AM Partner Payout', isSynthetic: false, isAmPayout: true });
+      }
+    });
   } else if (type === 'Property Management Fee Income') {
     // PM Fee: show each transaction, then subtract payroll splits as deductions
     records.forEach(r => {
@@ -1236,7 +1256,18 @@ function openDrilldown(type, cssClass) {
 
   // Summary bars for special drilldowns
   let summaryHtml = '';
-  if (type === 'Property Management Fee Income') {
+  if (type === 'Asset Management Fee Income') {
+    const gross = drillItems.filter(d => !d.isAmPayout).reduce((s, d) => s + d.amount, 0);
+    const deductions = drillItems.filter(d => d.isAmPayout).reduce((s, d) => s + d.amount, 0);
+    const net = gross + deductions;
+    if (deductions !== 0) {
+      summaryHtml = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;padding:16px;background:var(--surface2);border-radius:10px;">
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Gross AM Fee</div><div style="font-size:18px;font-weight:700;color:var(--green-dark);">${fmtFull(gross)}</div></div>
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Partner Payout</div><div style="font-size:18px;font-weight:700;color:var(--red-dark);">${fmtFull(deductions)}</div></div>
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Net AM Fee</div><div style="font-size:18px;font-weight:700;color:var(--accent);">${fmtFull(net)}</div></div>
+      </div>`;
+    }
+  } else if (type === 'Property Management Fee Income') {
     const gross = drillItems.filter(d => !d.isSynthetic).reduce((s, d) => s + d.amount, 0);
     const deductions = drillItems.filter(d => d.isSynthetic).reduce((s, d) => s + d.amount, 0);
     const net = gross + deductions;
