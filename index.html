@@ -1422,6 +1422,9 @@
     }
   }
 
+  // Forward-declare bgtData so sendNOIToExec can access it before budget module loads
+  var bgtData = null;
+
   function sendNOIToExec() {
     const frame = document.getElementById('execFrame');
     if (!frame || !frame.src) return;
@@ -2369,7 +2372,8 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
   // ── PROPERTY BUDGETING MODULE ──
   // ══════════════════════════════════════
   // ── Property Financials & Budgeting Module ──
-  let bgtData = null, bgtLoaded = false;
+  /* bgtData declared earlier (before sendNOIToExec) */
+  let bgtLoaded = false;
   let fbSelectedIdx = -1, fbActiveTab = 'summary', fbMode = 'nominal';
   let fbSelectedYear = 2026;
   const FB_YEARS = [
