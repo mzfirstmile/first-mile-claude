@@ -75,6 +75,8 @@ The embedded Claude chat has access to these tools:
 - "Loan Out" category = balance sheet asset, user assigns a friendly name (e.g. "Wooster loan to Ricky") shown on balance sheet instead of bank description
 - JLL CAS credits = Asset Management Fee Income (not Other Income)
 - Elyse ~$20K payments = Finders Fee (expense)
+- PACE payments = Marketing (expense)
+- FM Red Member LLC removed from tracked accounts
 - Balance sheet: Assets (green box) split into Investments (left) and Loans Out + Deposits (right); Liabilities (red box) below
 
 ## Preferences

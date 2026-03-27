@@ -644,7 +644,8 @@ const CAT_ICONS = {
   'Interest Expense': '💲',
   'Loan Out': '🏦',
   'Loan Payback': '🏦',
-  'Deposit': '🔒'
+  'Deposit': '🔒',
+  'Marketing': '📣'
 };
 
 // All possible categories for the dropdown
@@ -654,7 +655,7 @@ const ALL_CATEGORIES = [
   'Wire Payments', 'Banking', 'Checks', 'AM Partner Payout',
   'PM Expenses', 'Software/Services', 'Other Operating',
   'Internal Transfer', 'Payroll Reimbursement', 'Investor Contribution (Pass-Through)',
-  'Travel', 'Finders Fee', 'Interest Expense', 'Loan Out', 'Loan Payback', 'Deposit'
+  'Travel', 'Finders Fee', 'Interest Expense', 'Marketing', 'Loan Out', 'Loan Payback', 'Deposit'
 ];
 
 // Claude API key — injected at build time by GitHub Actions
@@ -872,6 +873,11 @@ function categorize(record) {
   // Appfolio distributions (description contains APPFOLIO or SIGONFILE for property deposits)
   if (desc.includes('APPFOLIO') && amount > 0) {
     return { category: 'income', type: 'Investment Income' };
+  }
+
+  // PACE payments = Marketing
+  if (desc.includes('PACE') && amount < 0) {
+    return { category: 'expense', type: 'Marketing' };
   }
 
   // Elyse $20K payments = Finders Fee
