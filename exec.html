@@ -2111,7 +2111,7 @@ function renderBalanceSheet() {
     invContainer.innerHTML = invCards.map(inv => {
       const ownershipDisplay = inv.ownership > 1 ? `${inv.ownership.toFixed(2)}%` : (inv.ownership > 0 ? `${(inv.ownership * 100).toFixed(2)}%` : '—');
       const linkedBadge = inv.propertyId
-        ? `<a href="index.html#financials&prop=${encodeURIComponent(inv.name)}" target="_top" onclick="event.stopPropagation();" style="display:inline-block;font-size:9px;background:var(--accent);color:#fff;padding:2px 6px;border-radius:8px;margin-left:6px;vertical-align:middle;text-decoration:none;cursor:pointer;" title="Open in Property Financials">Linked ↗</a>`
+        ? `<a href="index.html#financials&prop=${encodeURIComponent(inv.name)}" target="_top" onclick="event.stopPropagation();" style="display:inline-block;font-size:11px;margin-left:4px;vertical-align:middle;text-decoration:none;cursor:pointer;opacity:0.5;" title="Open in Property Financials">↗</a>`
         : '';
       let valueNote = '';
       if (inv.valueSource === 'equity') {
