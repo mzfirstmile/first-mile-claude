@@ -128,8 +128,19 @@
   .txn-desc .txn-tooltip { display:none; position:absolute; left:0; top:100%; background:var(--text); color:#fff; padding:10px 14px; border-radius:8px; font-size:12px; font-weight:400; white-space:pre-wrap; word-break:break-all; max-width:500px; min-width:280px; z-index:20; box-shadow:0 8px 24px rgba(0,0,0,.2); line-height:1.5; pointer-events:none; }
   .txn-desc:hover .txn-tooltip { display:block; }
   .txn-acct { color:var(--text-dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .txn-cat-select { padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:var(--surface2); font-size:12px; color:var(--text); cursor:pointer; max-width:180px; width:100%; }
-  .txn-cat-select:focus { outline:none; border-color:var(--accent); }
+  .txn-cat-select {
+    padding:6px 10px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface2); font-size:12px; color:var(--text);
+    cursor:pointer; max-width:180px; width:100%;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 8px center;
+    padding-right:24px; transition:all .15s ease;
+  }
+  .txn-cat-select:hover { border-color:var(--accent); background:var(--bg); }
+  .txn-cat-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,122,255,.15); }
+  .txn-cat-select optgroup { font-weight:700; font-size:11px; color:#666; padding:6px 0 3px; background:#f5f5f5; }
+  .txn-cat-select option { font-weight:400; font-size:12px; color:#333; padding:4px 12px; }
   .txn-amount { text-align:right; font-weight:600; font-family:'SF Mono','Fira Code',monospace; font-size:13px; }
   .txn-amount.green { color:var(--green-dark); }
   .txn-amount.red { color:var(--red-dark); }
@@ -481,44 +492,12 @@
     <div id="opexRows"></div>
   </div>
 
-  <!-- Owner Distributions -->
-  <div class="cat-section" id="distroSection">
+  <!-- Balance Sheet Transactions (merged: distributions, investments, loans, deposits, paybacks) -->
+  <div class="cat-section" id="bsItemsSection">
     <div class="cat-section-header">
-      <h3>Owner Distributions</h3>
+      <h3>Balance Sheet Transactions</h3>
     </div>
-    <div id="distroRows"></div>
-  </div>
-
-  <!-- Investment Contributions -->
-  <div class="cat-section" id="investSection">
-    <div class="cat-section-header">
-      <h3>Investment Contributions</h3>
-    </div>
-    <div id="investRows"></div>
-  </div>
-
-  <!-- Loans Out (Balance Sheet Asset) -->
-  <div class="cat-section" id="loanSection">
-    <div class="cat-section-header">
-      <h3>Loans Out</h3>
-    </div>
-    <div id="loanRows"></div>
-  </div>
-
-  <!-- Deposits (Balance Sheet Asset) -->
-  <div class="cat-section" id="depositSection">
-    <div class="cat-section-header">
-      <h3>Deposits</h3>
-    </div>
-    <div id="depositRows"></div>
-  </div>
-
-  <!-- Loan Paybacks -->
-  <div class="cat-section" id="loanPaybackSection">
-    <div class="cat-section-header">
-      <h3>Loan Paybacks</h3>
-    </div>
-    <div id="loanPaybackRows"></div>
+    <div id="bsItemsRows"></div>
   </div>
 
   <!-- Drill-down -->
@@ -651,15 +630,33 @@ const CAT_ICONS = {
   'Contractors': '🔨'
 };
 
-// All possible categories for the dropdown
-const ALL_CATEGORIES = [
-  ...INCOME_CATEGORIES,
-  'Payroll', 'Credit Cards', 'Legal/Corp Services', 'Taxes',
-  'Wire Payments', 'Banking', 'Checks', 'AM Partner Payout',
-  'PM Expenses', 'Software/Services', 'Other Operating',
-  'Internal Transfer', 'Payroll Reimbursement', 'Investor Contribution (Pass-Through)',
-  'Travel', 'Finders Fee', 'Interest Expense', 'Marketing', 'Contractors', 'Loan Out', 'Loan Payback', 'Deposit'
+// Grouped categories for the dropdown (with optgroup sections)
+const CATEGORY_GROUPS = [
+  { label: '💰 Income', items: INCOME_CATEGORIES },
+  { label: '📋 Expenses', items: [
+    'Payroll', 'Finders Fee', 'Interest Expense', 'Legal/Corp Services',
+    'Credit Cards', 'Other Operating', 'Marketing', 'Rent', 'Travel',
+    'Banking', 'Software/Services', 'Contractors', 'Taxes', 'Checks',
+    'PM Expenses', 'Wire Payments'
+  ]},
+  { label: '📊 Balance Sheet', items: [
+    'Owner Distributions', 'Investment Contributions', 'Loan Out', 'Loan Payback', 'Deposit'
+  ]},
+  { label: '🔄 Other', items: [
+    'AM Partner Payout', 'Internal Transfer', 'Payroll Reimbursement'
+  ]}
 ];
+// Flat list for backwards compat
+const ALL_CATEGORIES = CATEGORY_GROUPS.flatMap(g => g.items);
+
+// Build grouped <option> HTML for category selects
+function buildCategoryOptions(selectedValue) {
+  return CATEGORY_GROUPS.map(g =>
+    `<optgroup label="${g.label}">${g.items.map(c =>
+      `<option value="${c}" ${c === selectedValue ? 'selected' : ''}>${c}</option>`
+    ).join('')}</optgroup>`
+  ).join('');
+}
 
 // Claude API key — injected at build time by GitHub Actions
 const CLAUDE_API_KEY_FALLBACK = '__CLAUDE_API_KEY__';
@@ -678,6 +675,7 @@ const KNOWN_PAYROLL_SPLITS = {}; // populated by matchPayrollSplits() after data
 let allRecords = [];
 let categoryOverrides = {}; // recordId -> category (persisted in Supabase)
 let categoryNames = {};     // recordId -> friendly name for balance sheet display (persisted in Supabase)
+let investmentLinks = {};   // recordId -> investment_id (links transaction to an investment)
 let payrollSplits = {};     // recordId -> payroll amount to deduct from PM fee
 let cfMode = 'yearly';
 let selectedPeriodIndex = -1; // -1 means latest
@@ -744,6 +742,7 @@ async function loadData() {
     }).map(r => {
       if (r.category_override) categoryOverrides[r.id] = r.category_override;
       if (r.category_name) categoryNames[r.id] = r.category_name;
+      if (r.investment_id) investmentLinks[r.id] = r.investment_id;
       return {
         id: r.id,
         fields: {
@@ -1368,20 +1367,8 @@ function renderPeriodDashboard() {
   }
   renderCategoryRows('opexRows', opexDisplay, 'expense', comp.totalOpex);
 
-  // Owner distributions
-  renderCategoryRows('distroRows', comp.distroBuckets, 'expense', comp.totalDistributions);
-
-  // Investment contributions — show individual transaction descriptions
-  renderInvestmentRows('investRows', comp.investBuckets, comp.totalInvestments);
-
-  // Loans out
-  renderCategoryRows('loanRows', comp.loanBuckets, 'expense', comp.totalLoans);
-
-  // Deposits
-  renderCategoryRows('depositRows', comp.depositBuckets, 'expense', comp.totalDeposits);
-
-  // Loan paybacks
-  renderCategoryRows('loanPaybackRows', comp.loanPaybackBuckets, 'income', comp.totalLoanPaybacks);
+  // Balance Sheet Transactions — merged summary rows with click-to-drilldown
+  renderBsItems(comp);
 
   // Excluded
   const exDiv = document.getElementById('excludedRows');
@@ -1461,6 +1448,55 @@ function renderInvestmentRows(containerId, buckets, total) {
         <div class="cat-amount">${fmtFull(r.amount)} (${pct.toFixed(1)}%)</div>
       </div>`;
   }).join('');
+}
+
+function renderBsItems(comp) {
+  const container = document.getElementById('bsItemsRows');
+  const items = [];
+  if (comp.totalDistributions > 0) {
+    const count = Object.values(comp.distroBuckets).reduce((s, b) => s + b.count, 0);
+    items.push({ label: 'Owner Distributions', icon: '💸', amount: comp.totalDistributions, count, drillType: 'Owner Distributions', cssClass: 'expense' });
+  }
+  if (comp.totalInvestments > 0) {
+    const count = Object.values(comp.investBuckets).reduce((s, b) => s + b.count, 0);
+    items.push({ label: 'Investment Contributions', icon: '🏗️', amount: comp.totalInvestments, count, drillType: 'Investment Contributions', cssClass: 'expense' });
+  }
+  if (comp.totalLoans > 0) {
+    const count = Object.values(comp.loanBuckets).reduce((s, b) => s + b.count, 0);
+    items.push({ label: 'Loans Out', icon: '🏦', amount: comp.totalLoans, count, drillType: 'Loan Out', cssClass: 'expense' });
+  }
+  if (comp.totalDeposits > 0) {
+    const count = Object.values(comp.depositBuckets).reduce((s, b) => s + b.count, 0);
+    items.push({ label: 'Deposits', icon: '🔒', amount: comp.totalDeposits, count, drillType: 'Deposit', cssClass: 'expense' });
+  }
+  if (comp.totalLoanPaybacks > 0) {
+    items.push({ label: 'Loan Paybacks', icon: '↩️', amount: comp.totalLoanPaybacks, count: Object.values(comp.loanPaybackBuckets).reduce((s, b) => s + b.count, 0), drillType: 'Loan Payback', cssClass: 'income' });
+  }
+  const maxVal = items.length > 0 ? Math.max(...items.map(i => i.amount)) : 1;
+  const totalAll = items.reduce((s, i) => s + i.amount, 0);
+
+  container.innerHTML = items.map(item => {
+    const barWidth = Math.max((item.amount / maxVal) * 100, 5);
+    const pct = totalAll > 0 ? (item.amount / totalAll * 100).toFixed(1) : 0;
+    return `
+      <div class="cat-row ${item.cssClass}" onclick="openDrilldown('${item.drillType}', '${item.cssClass}')" style="cursor:pointer;">
+        <div class="cat-icon">${item.icon}</div>
+        <div class="cat-info">
+          <div class="cat-name">${item.label}</div>
+          <div style="font-size:10px;color:var(--text-dim);">${item.count} payment${item.count !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="cat-bar-wrap">
+          <div class="cat-bar" style="width:${barWidth}%">
+            <span class="cat-bar-label">${item.label}</span>
+          </div>
+        </div>
+        <div class="cat-amount">${fmtFull(item.amount)} (${pct}%)</div>
+      </div>`;
+  }).join('');
+
+  if (items.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-dim);padding:12px;text-align:center;font-size:13px;">No balance sheet transactions this period.</p>';
+  }
 }
 
 // ── Drill-down ──
@@ -1597,17 +1633,53 @@ function openDrilldown(type, cssClass) {
             <div class="txn-cat-select" style="border:none;background:none;font-size:12px;color:var(--text-dim);">PM Split</div>
             <div class="txn-amount ${amtClass}">${amtStr}</div>
           </div>`;
+      } else if (type === 'Investment Contributions') {
+        // Investment Contributions: show investment dropdown + category dropdown
+        const linkedInvId = investmentLinks[d.recordId] || '';
+        const invOptions = [
+          `<option value="">— Unlinked —</option>`,
+          ...bsInvestments.map(inv =>
+            `<option value="${inv.id}" ${inv.id === linkedInvId ? 'selected' : ''}>${inv.name}</option>`
+          ),
+          `<option value="__new__">+ Add New Investment…</option>`
+        ].join('');
+        const linkedInv = linkedInvId ? bsInvestments.find(i => i.id === linkedInvId) : null;
+        const invLabel = linkedInv ? `<div style="font-size:10px;color:var(--accent);margin-top:1px;">${linkedInv.name}</div>` : '';
+        html += `
+          <div class="txn-row" style="flex-wrap:wrap;">
+            <div class="txn-desc">${d.desc}${invLabel}<span class="txn-tooltip">${d.desc}</span></div>
+            <div class="txn-acct">${d.acct}</div>
+            <select class="txn-cat-select" style="max-width:120px;font-size:10px;" onchange="linkToInvestment('${d.recordId}', this.value, this)">
+              ${invOptions}
+            </select>
+            <select class="txn-cat-select" style="max-width:120px;font-size:10px;" onchange="changeCategory('${d.recordId}', this.value)">
+              ${buildCategoryOptions(d.currentType)}
+            </select>
+            <div class="txn-amount ${amtClass}">${amtStr}</div>
+          </div>`;
+      } else if ((type === 'Loan Out' || type === 'Deposit') && d.recordId) {
+        // Loan Out / Deposit: show editable friendly name + category dropdown
+        const currentName = categoryNames[d.recordId] || '';
+        html += `
+          <div class="txn-row" style="flex-wrap:wrap;">
+            <div class="txn-desc">${d.desc}${currentName ? `<div style="font-size:10px;color:var(--accent);margin-top:1px;">${currentName}</div>` : ''}<span class="txn-tooltip">${d.desc}</span></div>
+            <div class="txn-acct">${d.acct}</div>
+            <input type="text" value="${currentName}" placeholder="Name (e.g. Wooster loan)"
+              style="width:130px;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);"
+              onchange="updateLoanName('${d.recordId}', this.value)" />
+            <select class="txn-cat-select" style="max-width:120px;" onchange="changeCategory('${d.recordId}', this.value)">
+              ${buildCategoryOptions(d.currentType)}
+            </select>
+            <div class="txn-amount ${amtClass}">${amtStr}</div>
+          </div>`;
       } else {
         // Real record with category dropdown
-        const options = ALL_CATEGORIES.map(c =>
-          `<option value="${c}" ${c === d.currentType ? 'selected' : ''}>${c}</option>`
-        ).join('');
         html += `
           <div class="txn-row">
             <div class="txn-desc">${d.desc}<span class="txn-tooltip">${d.desc}</span></div>
             <div class="txn-acct">${d.acct}</div>
             <select class="txn-cat-select" onchange="changeCategory('${d.recordId}', this.value)">
-              ${options}
+              ${buildCategoryOptions(d.currentType)}
             </select>
             <div class="txn-amount ${amtClass}">${amtStr}</div>
           </div>`;
@@ -1625,11 +1697,7 @@ function openDrilldown(type, cssClass) {
   document.getElementById('drilldown').classList.add('show');
   document.getElementById('incomeSection').style.display = 'none';
   document.getElementById('opexSection').style.display = 'none';
-  document.getElementById('distroSection').style.display = 'none';
-  document.getElementById('investSection').style.display = 'none';
-  document.getElementById('loanSection').style.display = 'none';
-  document.getElementById('depositSection').style.display = 'none';
-  document.getElementById('loanPaybackSection').style.display = 'none';
+  document.getElementById('bsItemsSection').style.display = 'none';
   saveStateToHash();
   // Push history so browser back button closes drilldown
   history.pushState({ drilldown: type }, '', location.hash);
@@ -1641,11 +1709,7 @@ function closeDrilldown(skipHistoryBack) {
   document.getElementById('drilldown').classList.remove('show');
   document.getElementById('incomeSection').style.display = '';
   document.getElementById('opexSection').style.display = '';
-  document.getElementById('distroSection').style.display = '';
-  document.getElementById('investSection').style.display = '';
-  document.getElementById('loanSection').style.display = '';
-  document.getElementById('depositSection').style.display = '';
-  document.getElementById('loanPaybackSection').style.display = '';
+  document.getElementById('bsItemsSection').style.display = '';
   saveStateToHash();
 }
 
@@ -1680,6 +1744,113 @@ async function changeCategory(recordId, newCategory) {
     }
   } catch(e) {
     console.error('Failed to save override:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+}
+
+async function updateLoanName(recordId, newName) {
+  const trimmed = newName.trim();
+  if (trimmed) {
+    categoryNames[recordId] = trimmed;
+  } else {
+    delete categoryNames[recordId];
+  }
+  showToast(trimmed ? `Name → ${trimmed}` : 'Name cleared');
+  // Persist to Supabase
+  try {
+    await supaWrite('exec_transactions', 'PATCH', { category_name: trimmed || null }, `?id=eq.${recordId}`);
+  } catch(e) {
+    console.error('Failed to save loan name:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+  // Re-render balance sheet sidebar to reflect new name
+  renderPeriodDashboard();
+}
+
+async function linkToInvestment(recordId, investmentId, selectEl) {
+  if (investmentId === '__new__') {
+    // Prompt for new investment name
+    const name = prompt('New investment name:');
+    if (!name || !name.trim()) {
+      selectEl.value = investmentLinks[recordId] || '';
+      return;
+    }
+    const ownershipStr = prompt('Ownership % (e.g. 7.47):', '100');
+    const ownership = parseFloat(ownershipStr) || 100;
+    // Create new investment in Supabase
+    try {
+      const newInv = await supaWrite('exec_investments', 'POST', {
+        name: name.trim(),
+        ownership_pct: ownership,
+        contributed: 0,
+        distributed: 0,
+        valuation: 0,
+        status: 'Active'
+      });
+      if (newInv && newInv.length > 0) {
+        const created = newInv[0];
+        // Add to local bsInvestments array
+        bsInvestments.push({
+          id: created.id,
+          name: created.name,
+          ownership: created.ownership_pct,
+          committed: 0,
+          contributed: 0,
+          distributed: 0,
+          unreturned: 0,
+          netEquity: 0,
+          valuation: 0,
+          capRate: null,
+          propertyId: null,
+          propertyName: null,
+          propertyValuation: null,
+          propertyNOI: 0,
+          propertyDebt: 0,
+          status: 'Active',
+          membershipClass: ''
+        });
+        investmentId = created.id;
+        showToast(`Created: ${name.trim()}`);
+      } else {
+        showToast('⚠️ Failed to create investment', 'error');
+        selectEl.value = investmentLinks[recordId] || '';
+        return;
+      }
+    } catch(e) {
+      console.error('Create investment failed:', e);
+      showToast(`⚠️ ${e.message}`, 'error');
+      selectEl.value = investmentLinks[recordId] || '';
+      return;
+    }
+  }
+
+  // Save link locally
+  if (investmentId) {
+    investmentLinks[recordId] = investmentId;
+  } else {
+    delete investmentLinks[recordId];
+  }
+
+  const invName = investmentId ? (bsInvestments.find(i => i.id === investmentId) || {}).name : 'Unlinked';
+  showToast(`Linked → ${invName || 'Unlinked'}`);
+
+  // Re-render drilldown to update labels
+  if (currentDrilldownType) {
+    openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  }
+
+  // Persist to Supabase
+  try {
+    const result = await supaWrite('exec_transactions', 'PATCH',
+      { investment_id: investmentId || null },
+      `?id=eq.${recordId}`
+    );
+    if (!result || result.length === 0) {
+      console.error(`Investment link: no rows updated for id=${recordId}. Column may not exist — run: ALTER TABLE exec_transactions ADD COLUMN IF NOT EXISTS investment_id UUID REFERENCES exec_investments(id);`);
+      showToast('⚠️ Link not saved — check console', 'error');
+    }
+  } catch(e) {
+    console.error('Failed to save investment link:', e);
     showToast(`⚠️ Save failed: ${e.message}`, 'error');
   }
 }

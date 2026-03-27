@@ -78,6 +78,26 @@ The embedded Claude chat has access to these tools:
 - PACE payments = Marketing (expense)
 - FM Red Member LLC removed from tracked accounts
 - Balance sheet: Assets (green box) split into Investments (left) and Loans Out + Deposits (right); Liabilities (red box) below
+- XShore payments = Contractors category (not Other Operating)
+- "Acquisition Fee Income" is a separate income category (🔑 icon)
+- "Contractors" is a separate expense category (🔨 icon)
+- Investment Contributions (pass-through and direct) are merged into one "Investment Contributions" bucket — drilldown shows individual wires with full descriptions
+- Owner Distributions, Investment Contributions, Loans Out, Deposits, and Loan Paybacks are grouped under "Balance Sheet Transactions" card (not separate sections)
+- Each investment contribution wire can be linked to a specific investment via `investment_id` on `exec_transactions` — dropdown in drilldown shows all investments + "Add New" option
+- When adding a new investment from the wire linking dropdown, user enters name + ownership % → creates unlinked investment on balance sheet
+- exec.html defaults to Yearly view (not Monthly)
+- URL hash state persistence: mode, period, drilldown type all saved to hash so page refresh keeps your view
+- Browser back button closes drilldown (uses History API pushState/popstate)
+- Linked investments show subtle ↗ arrow icon (not "Linked" text badge) — clicking navigates to Property Financials module via `target="_top"` (breaks out of iframe)
+- PM Fee Income and Payroll rows show NET values (display only — doesn't affect totals). PM Fee shows "Gross | Less payroll" sub-note. Payroll shows "Out | In" sub-note.
+- 132-40 Metropolitan Ave: 7.47% ownership, $400K contributed, ~$1.35M NOI, 6% cap rate
+- SQL migrations should be run via the admin website (admin.firstmilecap.com), NOT via Supabase dashboard directly
+
+## Database Schema Notes
+- `exec_transactions`: main bank transaction table. Key columns: `category_override` (TEXT), `category_name` (TEXT), `investment_id` (UUID FK → exec_investments)
+- `exec_investments`: investment/asset tracking. Columns: name, ownership_pct, contributed, distributed, valuation, cap_rate, property_id (FK → properties), status
+- `budget_line_items`: property budgets by GL code/month
+- `properties`: property master table with Airtable record IDs as primary keys
 
 ## Preferences
 - Morris works fast — keep things concise, skip unnecessary explanation
@@ -85,3 +105,5 @@ The embedded Claude chat has access to these tools:
 - CLAUDE.md should be kept in git (not gitignored) so it syncs across laptops
 - When testing integrations, just do it — don't over-ask for confirmation on dev/test actions
 - Claude should proactively update CLAUDE.md with business logic, decisions, and context that wouldn't be obvious from reading the codebase alone — no need to ask permission each time
+- ALL decisions, feature specs, and business logic MUST be written to CLAUDE.md immediately — don't rely on conversation memory across sessions
+- Run SQL queries via the admin website's built-in tools, not the Supabase dashboard
