@@ -1423,10 +1423,10 @@ function renderInvestmentRows(containerId, buckets, total) {
       data.records.forEach(r => {
         const amount = Math.abs(getAmount(r));
         const desc = getDescription(r);
-        // Use friendly name from categoryNames if set, otherwise clean up bank description
         const label = categoryNames[r.id] || desc.slice(0, 60);
+        const fullDesc = desc; // full description for tooltip
         const date = getDate(r);
-        allRecords.push({ label, amount, date, recordId: r.id });
+        allRecords.push({ label, fullDesc, amount, date, recordId: r.id });
       });
     }
   });
@@ -1439,7 +1439,7 @@ function renderInvestmentRows(containerId, buckets, total) {
     const barWidth = Math.max((r.amount / maxVal) * 100, 3);
     const dateStr = r.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     return `
-      <div class="cat-row expense" style="cursor:default;">
+      <div class="cat-row expense" style="cursor:default;" title="${r.fullDesc}">
         <div class="cat-icon">🏗️</div>
         <div class="cat-info">
           <div class="cat-name" style="font-size:12px;">${r.label}</div>
@@ -1447,7 +1447,7 @@ function renderInvestmentRows(containerId, buckets, total) {
         </div>
         <div class="cat-bar-wrap">
           <div class="cat-bar" style="width:${barWidth}%">
-            <span class="cat-bar-label">${r.label}</span>
+            <span class="cat-bar-label">Investment Contributions</span>
           </div>
         </div>
         <div class="cat-amount">${fmtFull(r.amount)} (${pct.toFixed(1)}%)</div>
