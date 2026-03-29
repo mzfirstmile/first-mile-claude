@@ -2022,12 +2022,15 @@ function getLiabField(r, key) { return r[key] !== undefined ? r[key] : null; }
 let bsProperties = []; // properties for linking to investments
 let propertyNOI = {};  // { propertyId -> annualNOI } — received from parent via postMessage
 let propertyDebt = {}; // { propertyId -> totalDebt }
+let noiReceived = false;   // true once parent sends NOI data
+const isInIframe = window.parent !== window;
 
 // Listen for data from parent index.html
 window.addEventListener('message', function(e) {
   if (!e.data || !e.data.type) return;
   if (e.data.type === 'propertyNOI') {
     propertyNOI = e.data.data;
+    noiReceived = true;
     console.log('Received NOI from parent:', propertyNOI);
     // Re-run full loadBalanceSheet to rebuild bsInvestments with updated NOI values
     loadBalanceSheet();
@@ -2037,8 +2040,10 @@ window.addEventListener('message', function(e) {
   }
 });
 // Request NOI from parent when iframe loads
-if (window.parent !== window) {
+if (isInIframe) {
   try { window.parent.postMessage({ type: 'requestNOI' }, '*'); } catch(e) {}
+  // Fallback: if NOI doesn't arrive within 3s, show whatever we have
+  setTimeout(() => { if (!noiReceived) { noiReceived = true; loadBalanceSheet(); } }, 3000);
 }
 
 async function loadBalanceSheet() {
@@ -2249,6 +2254,9 @@ function renderBalanceSheet() {
   console.log(`%c═══ TOTAL ASSETS = Cash $${cash.toLocaleString('en-US', {minimumFractionDigits:2})} + Investments $${investmentsTotal.toLocaleString('en-US', {minimumFractionDigits:2})} = $${totalAssets.toLocaleString('en-US', {minimumFractionDigits:2})} ═══`, 'color:#f90;font-weight:bold;font-size:13px');
 
   // Render summary bar — swap loading for values
+  // If in iframe and NOI hasn't arrived yet, keep loading state visible (don't flash wrong numbers)
+  const awaitingNOI = isInIframe && !noiReceived;
+
   document.getElementById('bsTotalAssets').textContent = fmt(totalAssets);
   document.getElementById('bsTotalLiabilities').textContent = fmt(liabilitiesTotal);
   const bsTotalAssetsInline = document.getElementById('bsTotalAssetsInline');
@@ -2260,8 +2268,14 @@ function renderBalanceSheet() {
   npEl.className = 'bs-net-value ' + (netPosition >= 0 ? 'green' : 'red');
   const loadingEl = document.getElementById('bsNetLoading');
   const valuesEl = document.getElementById('bsNetValues');
-  if (loadingEl) loadingEl.style.display = 'none';
-  if (valuesEl) valuesEl.style.display = '';
+  if (awaitingNOI) {
+    // Keep showing loading state until NOI data arrives
+    if (loadingEl) loadingEl.style.display = '';
+    if (valuesEl) valuesEl.style.display = 'none';
+  } else {
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (valuesEl) valuesEl.style.display = '';
+  }
 
   // Stacked bar
   const barTotal = cash + investmentsTotal + loansOutTotal + depositsTotal + liabilitiesTotal;

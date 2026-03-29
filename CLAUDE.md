@@ -46,13 +46,17 @@ The embedded Claude chat has access to these tools:
 - **Accounting:** Calendar and deadline tracking imported from Google Sheets.
 - **Executive Dashboard (exec.html):** WORKING. P&L, cash flow, balance sheet, drilldowns, category overrides, investment linking all functional. Last major update 2026-03-27.
 
-## Monthly Financial Digest
-- **What:** Automated monthly email to Morris summarizing YTD financials — net position, net income, cash flow, P&L breakdown, balance sheet, and narrative highlights (positives + areas to watch)
-- **PDF:** Generated via `scripts/build_monthly_digest.py` using reportlab — 3 pages: executive summary + P&L, balance sheet + cash flow, footer
+## Quarterly Financial Report
+- **What:** Quarterly email + PDF to Morris summarizing YTD financials — net position, net income, cash flow, P&L breakdown, balance sheet, investments, and narrative highlights (positives + areas to watch)
+- **PDF:** Generated via `scripts/build_monthly_digest.py` using reportlab — 3 pages: executive summary + P&L, balance sheet + cash flow, footer. Named `First_Mile_Capital_Q1_2026_Report.pdf` etc.
 - **Email:** Sent via send-email edge function to mz@firstmilecap.com with HTML summary + PDF attachment
-- **Timing:** Run after Morris closes the books each month (not on a fixed schedule yet — triggered manually or via scheduled task)
+- **Timing:** Run after Morris closes the books each quarter (Q1–Q4). Not on a fixed schedule — triggered manually or via scheduled task.
+- **Output:** Saved to `~/First Mile Dropbox/Morris Zeitouni/FM Quarterly Reports/` (falls back to `reports/` in workspace). `reports/` is gitignored.
 - **Attachment support:** send-email edge function updated locally to accept `attachments` array (each: `{name, contentType, contentBytes}` where contentBytes is base64). Needs `supabase functions deploy send-email` to go live.
-- **Test email sent:** 2026-03-29 (HTML only, no attachment — attachment support not yet deployed)
+- **Test email sent:** 2026-03-29 (Q1 test, HTML only — attachment support not yet deployed)
+- **Cash note:** ~$4M in SAVINGS account is investor capital held for deployment (Six Fields/Lifetime AZ loan), NOT discretionary FM cash. Operating cash is only ~$346K. Report calls this out explicitly.
+- **Other Assets:** ReWyre (Rasheq Zarif salary, ~$104K) tracked as asset on books
+- **NOI dependency:** Balance sheet investment valuations depend on NOI data from budget module. exec.html now waits for NOI before showing net position (no more flash of wrong -$4M number).
 
 ## Pending / Known Issues
 - **132-40 Metropolitan NOI not showing on balance sheet:** Property exists in exec_investments but shows $0 valuation. FB_PROP_META updated in index.html code, but live site needs git push. Also `fbGlAccounts` was null when trying to recompute budget data — GL accounts may not have loaded. Budget rows DO exist in Supabase (confirmed).
@@ -82,6 +86,8 @@ The embedded Claude chat has access to these tools:
 ## Business Logic & Domain Knowledge
 *(Things that live in Morris's head, not in the code — add here as we learn them)*
 - Payroll reimbursements are structured as deductions to the property management fee (not separate line items)
+- ~$4M in FM Capital SAVINGS account is investor capital held for deployment (Six Fields loan for Lifetime AZ) — NOT discretionary FM cash. Will be deployed into an asset soon. Operating cash is only ~$346K across other accounts.
+- ReWyre (Rasheq Zarif salary, ~$104K) is an asset on books — salary advance/investment
 - Biweekly payroll reimbursement transfers (~$16,287, $20,200, $19,939, $2,011.36) between management and main accounts are categorized as "Payroll Reimbursement" — known amounts in PAYROLL_REIMB_AMOUNTS array with $5 tolerance matching
 - AM Partner Payouts (~$4,333/mo from FM Paramus Member account) are deductions against Asset Management Fee Income, not separate distributions — shown as "Less: AM Partner Payout" in the AM Fee drilldown
 - Email auto-reply is instant via Graph webhook (email-webhook) with 5-min cron fallback (check-inbox); dedup via atomic `replied_at` lock in auto-reply function

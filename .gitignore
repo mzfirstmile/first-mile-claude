@@ -3,3 +3,4 @@ first-mile-capital-*.json
 *.pyc
 config.js
 budgets/
+reports/

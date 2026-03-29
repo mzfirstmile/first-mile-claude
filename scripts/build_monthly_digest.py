@@ -10,25 +10,37 @@ from reportlab.lib import colors
 import os
 from datetime import datetime
 
-# Output path
-OUTPUT = "/sessions/charming-focused-newton/mnt/first-mile-claude/Monthly_Financial_Digest_YTD_2026.pdf"
+# Output path — save to Dropbox quarterly reports folder, fallback to workspace
+DROPBOX_DIR = os.path.expanduser("~/First Mile Dropbox/Morris Zeitouni/FM Quarterly Reports")
+WORKSPACE_DIR = "/sessions/charming-focused-newton/mnt/first-mile-claude/reports"
+QUARTER = "Q1"
+YEAR = 2026
+OUTPUT_FILENAME = f"First_Mile_Capital_{QUARTER}_{YEAR}_Report.pdf"
+if os.path.isdir(DROPBOX_DIR):
+    OUTPUT = os.path.join(DROPBOX_DIR, OUTPUT_FILENAME)
+else:
+    os.makedirs(WORKSPACE_DIR, exist_ok=True)
+    OUTPUT = os.path.join(WORKSPACE_DIR, OUTPUT_FILENAME)
 LOGO = "/sessions/charming-focused-newton/mnt/first-mile-claude/assets/First_Mile_Capital_Logo_RGB.png"
 
 # ─── Financial Data (captured from exec.html) ───
 data = {
-    "period": "Year-to-Date 2026",
+    "period": f"{QUARTER} {YEAR}",
     "report_date": "March 29, 2026",
     "note": "Note: March books are not yet closed. Figures reflect data through most recent bank sync.",
 
-    # Balance Sheet
-    "net_position": -4253224,
-    "total_assets": 7284135,
+    # Balance Sheet (with NOI-based investment valuations)
+    "net_position": 7065240,
+    "total_assets": 18602599,
     "total_liabilities": 11537359,
 
     # Cash
+    # NOTE: ~$4M in SAVINGS is held for investor (Six Fields loan for Lifetime AZ) — not discretionary FM cash
     "total_cash": 4370264,
+    "investor_hold_cash": 4023898,  # SAVINGS account = investor capital pending deployment
+    "operating_cash": 4370264 - 4023898,  # ~$346K actual operating cash
     "cash_accounts": [
-        ("First Mile Capital SAVINGS", 4023898),
+        ("First Mile Capital SAVINGS*", 4023898),
         ("First Mile Management LLC", 163946),
         ("FIRST MILE CAPITAL LLC", 74707),
         ("FM PARAMUS MEMBER LLC", 54640),
@@ -36,16 +48,21 @@ data = {
         ("FM Plaza Member LLC", 10454),
     ],
 
-    # Investments
+    # Investments (NOI/cap-rate valued where applicable)
     "investments": [
+        ("61 South Paramus", 6720802),
+        ("FM 340 Kemble LLC", 2944314),
         ("Lifetime Paradise Valley", 2500000),
-        ("FM Pref Fund II - 61 S Paramus", 220371),
+        ("Paramus Plaza", 992372),
+        ("60-18 Metropolitan", 571429),
+        ("FM Pref Fund II - 61 S Paramus", 309918),
         ("132-40 Metropolitan Ave", 0),
-        ("60-18 Metropolitan", 0),
-        ("61 South Paramus", 0),
-        ("FM 340 Kemble LLC", 0),
         ("FV Oakmanor JV", 0),
-        ("Paramus Plaza", 0),
+    ],
+
+    # Other Assets
+    "other_assets": [
+        ("ReWyre — Rasheq Zarif Salary", 104000),
     ],
 
     # Loans Out
@@ -167,12 +184,15 @@ def build_pdf():
 
     # ─── HEADER ───
     if os.path.exists(LOGO):
-        logo = Image(LOGO, width=1.8*inch, height=0.5*inch)
+        # Logo is 5.25:1 aspect ratio (1844x351) — preserve proportions
+        logo_w = 2.2*inch
+        logo_h = logo_w / 5.25
+        logo = Image(LOGO, width=logo_w, height=logo_h)
         logo.hAlign = 'LEFT'
         story.append(logo)
         story.append(Spacer(1, 8))
 
-    story.append(Paragraph("Monthly Financial Digest", title_style))
+    story.append(Paragraph("Quarterly Financial Report", title_style))
     story.append(Paragraph(f"{data['period']}  |  Generated {data['report_date']}", subtitle_style))
     story.append(Paragraph(data['note'], note_style))
     story.append(HRFlowable(width="100%", thickness=1.5, color=ACCENT, spaceAfter=14))
@@ -194,21 +214,27 @@ def build_pdf():
     story.append(Paragraph("Key Highlights", h3_style))
 
     positives = f"""
-    <b>Positives:</b> Revenue is diversified across six income streams, led by Development Fee Income
-    ({fmt(data['income'][0][1])}, {pct(data['income'][0][2])} of total) and PM Fee Income
-    ({fmt(data['income'][1][1])}, {pct(data['income'][1][2])}). Cash reserves remain healthy at
-    <b>{fmt(data['total_cash'])}</b> across {len(data['cash_accounts'])} accounts, with the primary savings
-    account holding {fmt(data['cash_accounts'][0][1])}. Investment income contributed {fmt(data['income'][3][1])}
-    from portfolio returns.
+    <b>Positives:</b> Net position is strong at <b>{fmt(data['net_position'])}</b>. Revenue is diversified across
+    six income streams, led by Development Fee Income ({fmt(data['income'][0][1])}, {pct(data['income'][0][2])}
+    of total) and PM Fee Income ({fmt(data['income'][1][1])}, {pct(data['income'][1][2])}). Portfolio investments
+    are valued at {fmt(sum(i[1] for i in data['investments']))} across {len([i for i in data['investments'] if i[1] > 0])}
+    active positions. Investment income contributed {fmt(data['income'][3][1])} from portfolio returns.
     """
     story.append(Paragraph(positives.strip(), body_style))
+
+    cash_note = f"""
+    <b>Cash Note:</b> Total cash on books is {fmt(data['total_cash'])}, however <b>{fmt(data['investor_hold_cash'])}</b>
+    in the savings account is investor capital held for deployment (Six Fields/Lifetime AZ loan). Operating cash
+    available to the firm is approximately <b>{fmt(data['operating_cash'])}</b>.
+    """
+    story.append(Paragraph(cash_note.strip(), body_style))
 
     negatives = f"""
     <b>Areas to Watch:</b> Payroll remains the largest expense at {fmt(data['expenses'][0][1])} ({pct(data['expenses'][0][2])}
     of expenses). Finders fees of {fmt(data['expenses'][1][1])} are elevated. Cash flow is negative at
     <b>{fmt(data['cash_flow'])}</b> YTD, driven by {fmt(abs(data['owner_distros']))} in owner distributions and
-    {fmt(abs(data['loans_out_flow']))} in loans out (primarily the Wooster loan of $187,500). Several investment
-    positions (Metropolitan Ave, Kemble, Oakmanor, Plaza) show $0 valuation pending NOI data.
+    {fmt(abs(data['loans_out_flow']))} in loans out (primarily the Wooster loan of $187,500). 132-40 Metropolitan Ave
+    and FV Oakmanor JV still pending NOI data for valuation.
     """
     story.append(Paragraph(negatives.strip(), body_style))
     story.append(Spacer(1, 10))
@@ -392,7 +418,38 @@ def build_pdf():
         ('ROWBACKGROUNDS', (0,1), (-1,-1), [white, LIGHT_BG]),
     ]))
     story.append(cash_table)
-    story.append(Spacer(1, 10))
+    cash_footnote = ParagraphStyle('CashFootnote', parent=styles['Normal'],
+        fontSize=8, textColor=ORANGE, leading=11, spaceAfter=4, fontName='Helvetica-Oblique')
+    story.append(Paragraph(
+        f"* SAVINGS account ({fmt(data['investor_hold_cash'])}) is investor capital held for deployment "
+        "(Six Fields/Lifetime AZ). Operating cash: ~{fmt(data['operating_cash'])}.",
+        cash_footnote
+    ))
+    story.append(Spacer(1, 8))
+
+    # Other Assets
+    if data.get('other_assets'):
+        other_total = sum(a[1] for a in data['other_assets'])
+        story.append(Paragraph(f"Other Assets — {fmt(other_total)}", h3_style))
+        oa_data = [["Description", "Value"]]
+        for name, val in data['other_assets']:
+            oa_data.append([name, fmt(val)])
+        oa_table = Table(oa_data, colWidths=[page_w*0.65, page_w*0.35])
+        oa_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), NAVY),
+            ('TEXTCOLOR', (0,0), (-1,0), white),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 9),
+            ('ALIGN', (1,0), (1,-1), 'RIGHT'),
+            ('GRID', (0,0), (-1,-1), 0.5, BORDER),
+            ('TOPPADDING', (0,0), (-1,-1), 4),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+            ('LEFTPADDING', (0,0), (-1,-1), 6),
+            ('RIGHTPADDING', (0,0), (-1,-1), 6),
+            ('ROWBACKGROUNDS', (0,1), (-1,-1), [white, LIGHT_BG]),
+        ]))
+        story.append(oa_table)
+        story.append(Spacer(1, 10))
 
     # Liabilities
     story.append(Paragraph(f"Liabilities — {fmt(data['total_liabilities'])}", h3_style))
