@@ -899,6 +899,14 @@ function categorize(record) {
     return { category: 'payroll_offset', type: 'Payroll Reimbursement' };
   }
 
+  // PM account — payroll reimbursement transfers (biweekly known amounts)
+  if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT')) && isTransfer) {
+    const absAmt = Math.abs(amount);
+    const isPayrollReimb = PAYROLL_REIMB_AMOUNTS.some(a => Math.abs(absAmt - a) < PAYROLL_REIMB_TOLERANCE);
+    if (isPayrollReimb) return { category: 'payroll_offset', type: 'Payroll Reimbursement' };
+    return { category: 'excluded', type: 'Internal Transfer' };
+  }
+
   // PM Fees — credits in Management account
   if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT')) && amount > 0 && !isTransfer) {
     return { category: 'income', type: 'Property Management Fee Income' };
