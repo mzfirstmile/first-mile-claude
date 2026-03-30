@@ -1,0 +1,4367 @@
+// ═══════════════════════════════════════════════════════════════
+// Executive Financials v2 — Native Module
+// Ported from exec.html to run inline in index.html
+// ═══════════════════════════════════════════════════════════════
+(function() {
+'use strict';
+
+let _exec2Inited = false;
+
+// ── Inject scoped CSS ──
+function _injectCSS() {
+  const style = document.createElement('style');
+  style.textContent = `
+  
+  #exec2Root { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  .loading-bar { height:3px; background:var(--accent); position:fixed; top:0; left:0; width:0; transition:width .3s; z-index:500; }
+  .loading-bar.active { width:60%; }
+  .loading-bar.done { width:100%; opacity:0; transition:width .2s, opacity .5s .3s; }
+
+  /* ── Password Gate ── */
+
+  /* ── Header ── */
+  header { padding:20px 40px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; background:var(--surface); border-bottom:1px solid var(--border); }
+  header h1 { font-size:18px; font-weight:600; }
+  header h1 span { color:var(--accent); }
+  .header-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .logo-icon { height:24px; width:auto; margin-right:8px; vertical-align:middle; }
+  .btn { padding:7px 14px; border-radius:7px; font-size:12px; font-weight:600; text-decoration:none; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .2s; }
+  .btn:hover { background:var(--surface2); color:var(--text); }
+  .btn.accent { color:var(--accent); border-color:rgba(0,176,212,.3); background:var(--accent-dim); }
+
+  /* ── Dashboard ── */
+  .dashboard { padding:0 40px 40px; display:none; margin:0 auto; }
+  .dashboard.show { display:block; }
+
+  /* Two-column layout — balance sheet fixed width, cash flow stretches */
+  .dashboard-grid { display:grid; grid-template-columns:420px 1fr; gap:24px; margin-top:24px; }
+  @media (max-width:1000px) { .dashboard-grid { grid-template-columns:1fr; } }
+
+  /* ── Cash Flow Section ── */
+  .cf-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:24px; }
+  .cf-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; }
+  .cf-header h2 { font-size:18px; font-weight:700; }
+  .cf-toggle { display:flex; gap:0; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .cf-toggle button { padding:7px 16px; font-size:12px; font-weight:600; border:none; background:var(--surface); color:var(--text-dim); cursor:pointer; transition:all .15s; border-right:1px solid var(--border); }
+  .cf-toggle button:last-child { border-right:none; }
+  .cf-toggle button.active { background:var(--text); color:#fff; }
+  .cf-toggle button:hover:not(.active) { background:var(--surface2); }
+  .cf-chart { position:relative; width:100%; overflow-x:auto; }
+  .cf-chart svg { display:block; }
+
+  /* ── Period Header ── */
+  .period-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; margin-top:8px; }
+  .period-header h2 { font-size:22px; font-weight:700; }
+  .period-nav { display:flex; gap:8px; align-items:center; }
+  .period-nav button { width:32px; height:32px; border-radius:50%; border:1px solid var(--border); background:var(--surface); cursor:pointer; font-size:16px; color:var(--text-dim); display:flex; align-items:center; justify-content:center; transition:all .15s; }
+  .period-nav button:hover { background:var(--surface2); color:var(--text); }
+
+  /* Summary Sections */
+  .summary-section { margin-bottom:20px; }
+  .summary-section-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; padding:0 4px; }
+  .summary-section-title { font-size:11px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:1px; }
+  .summary-section-line { flex:1; height:1px; background:var(--border); }
+  .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
+  .summary-grid.cf-grid { grid-template-columns:repeat(6,1fr); }
+  .summary-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 12px; text-align:center; position:relative; transition:box-shadow .15s; }
+  .summary-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+  .summary-card .value { font-size:22px; font-weight:700; margin-bottom:4px; }
+  .summary-card .value.green { color:var(--green-dark); }
+  .summary-card .value.red { color:var(--red-dark); }
+  .summary-card .value.orange { color:#e67e22; }
+  .summary-card .label { font-size:10px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; }
+  .summary-card.highlight { border-color:var(--accent); background:linear-gradient(135deg, #f0f7ff 0%, var(--surface) 100%); }
+  .summary-card .cf-operator { position:absolute; top:50%; right:-10px; transform:translateY(-50%); font-size:14px; font-weight:700; color:var(--text-dim); z-index:1; }
+  .summary-row-label { grid-column:1/-1; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; padding:4px 0 0; }
+
+  /* ── Category Sections ── */
+  .cat-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:20px; }
+  .cat-section-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .cat-section-header h3 { font-size:16px; font-weight:700; }
+
+  .cat-row { display:flex; align-items:center; gap:12px; padding:10px 0; cursor:pointer; border-radius:8px; transition:background .15s; margin:0 -8px; padding-left:8px; padding-right:8px; }
+  .cat-row:hover { background:var(--surface2); }
+  .cat-row .cat-icon { width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+  .cat-row .cat-info { flex:1; min-width:0; }
+  .cat-row .cat-name { font-size:14px; font-weight:500; }
+  .cat-row .cat-bar-wrap { flex:1; height:28px; background:transparent; border-radius:6px; position:relative; min-width:60px; }
+  .cat-row .cat-bar { height:100%; border-radius:6px; transition:width .4s ease; min-width:4px; display:flex; align-items:center; padding-left:10px; }
+  .cat-row .cat-bar .cat-bar-label { font-size:12px; font-weight:600; white-space:nowrap; }
+  .cat-row.income .cat-bar { background:var(--income-bar); }
+  .cat-row.income .cat-bar .cat-bar-label { color:var(--green-dark); }
+  .cat-row.income .cat-icon { background:var(--green-dim); color:var(--green-dark); }
+  .cat-row.expense .cat-bar { background:var(--expense-bar); }
+  .cat-row.expense .cat-bar .cat-bar-label { color:var(--red-dark); }
+  .cat-row.expense .cat-icon { background:var(--red-dim); color:var(--red-dark); }
+  .cat-row .cat-amount { font-size:13px; font-weight:600; white-space:nowrap; text-align:right; min-width:140px; }
+
+  /* ── Drill-down ── */
+  .drilldown { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:20px; display:none; }
+  .drilldown.show { display:block; }
+  .drilldown-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  .drilldown-header h3 { font-size:16px; font-weight:700; }
+  .drilldown-back { padding:6px 14px; border-radius:7px; font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .15s; }
+  .drilldown-back:hover { background:var(--surface2); color:var(--text); }
+
+  .txn-list { }
+  .txn-date-group { font-size:12px; font-weight:600; color:var(--text-dim); padding:10px 0 6px; border-bottom:1px solid var(--border); margin-bottom:4px; }
+  .txn-row { display:grid; grid-template-columns:1fr 180px 180px 120px; gap:12px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .txn-row:last-child { border-bottom:none; }
+  .txn-desc { font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; position:relative; cursor:default; }
+  .txn-desc:hover { overflow:visible; white-space:normal; z-index:10; }
+  .txn-desc .txn-tooltip { display:none; position:absolute; left:0; top:100%; background:var(--text); color:#fff; padding:10px 14px; border-radius:8px; font-size:12px; font-weight:400; white-space:pre-wrap; word-break:break-all; max-width:500px; min-width:280px; z-index:20; box-shadow:0 8px 24px rgba(0,0,0,.2); line-height:1.5; pointer-events:none; }
+  .txn-desc:hover .txn-tooltip { display:block; }
+  .txn-acct { color:var(--text-dim); font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .txn-cat-select {
+    padding:6px 10px; border-radius:8px; border:1px solid var(--border);
+    background:var(--surface2); font-size:12px; color:var(--text);
+    cursor:pointer; max-width:180px; width:100%;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23999'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 8px center;
+    padding-right:24px; transition:all .15s ease;
+  }
+  .txn-cat-select:hover { border-color:var(--accent); background:var(--bg); }
+  .txn-cat-select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 2px rgba(0,122,255,.15); }
+  .txn-cat-select optgroup { font-weight:700; font-size:11px; color:#666; padding:6px 0 3px; background:#f5f5f5; }
+  .txn-cat-select option { font-weight:400; font-size:12px; color:#333; padding:4px 12px; }
+  .txn-amount { text-align:right; font-weight:600; font-family:'SF Mono','Fira Code',monospace; font-size:13px; }
+  .txn-amount.green { color:var(--green-dark); }
+  .txn-amount.red { color:var(--red-dark); }
+
+  /* ── Excluded section ── */
+  .excluded-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:20px; }
+  .excluded-section h3 { font-size:14px; font-weight:600; color:var(--text-dim); margin-bottom:12px; }
+  .excluded-row { display:flex; justify-content:space-between; padding:8px 8px; margin:0 -8px; font-size:13px; color:var(--text-dim); border-bottom:1px solid var(--border); border-radius:6px; cursor:pointer; transition:background .15s; }
+  .excluded-row:hover { background:var(--surface2); color:var(--text); }
+  .excluded-row:last-child { border-bottom:none; }
+
+  /* ── Upload Modal ── */
+  .upload-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); z-index:800; justify-content:center; align-items:center; }
+  .upload-overlay.show { display:flex; }
+  .upload-modal { background:var(--surface); border-radius:16px; padding:32px; width:680px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2); }
+  .upload-modal h2 { font-size:20px; font-weight:700; margin-bottom:16px; }
+  .upload-dropzone { border:2px dashed var(--border); border-radius:12px; padding:40px; text-align:center; cursor:pointer; transition:all .2s; margin-bottom:20px; }
+  .upload-dropzone:hover, .upload-dropzone.dragover { border-color:var(--accent); background:var(--accent-dim); }
+  .upload-dropzone p { font-size:14px; color:var(--text-dim); margin-top:8px; }
+  .upload-dropzone .upload-icon { font-size:36px; margin-bottom:8px; }
+  .upload-progress { margin:16px 0; }
+  .upload-progress-bar { height:4px; background:var(--border); border-radius:4px; overflow:hidden; }
+  .upload-progress-bar .fill { height:100%; background:var(--accent); transition:width .3s; width:0; }
+  .upload-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:16px 0; }
+  .upload-stat { text-align:center; padding:12px; background:var(--surface2); border-radius:8px; }
+  .upload-stat .num { font-size:22px; font-weight:700; font-family:'SF Mono','Fira Code',monospace; }
+  .upload-stat .lbl { font-size:10px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; margin-top:2px; }
+  .upload-stat .num.green { color:var(--green-dark); }
+  .upload-stat .num.red { color:var(--red-dark); }
+  .upload-stat .num.orange { color:var(--orange); }
+
+  /* ── Upload Review Screen ── */
+  .upload-review { display:none; padding:0 40px 40px; margin:0 auto; }
+  .upload-review.show { display:block; }
+  .upload-review-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; padding:12px 0; flex-wrap:wrap; gap:12px; }
+  .upload-review-header h2 { font-size:20px; font-weight:700; }
+  .upload-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
+  .upload-section h3 { font-size:15px; font-weight:700; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+  .upload-section h3 .badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; }
+  .upload-section h3 .badge.low { background:var(--orange-dim); color:var(--orange); }
+  .upload-section h3 .badge.high { background:var(--green-dim); color:var(--green-dark); }
+  .upload-txn-row { display:grid; grid-template-columns:80px 1fr 160px 160px 120px; gap:8px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .upload-txn-row:last-child { border-bottom:none; }
+  .upload-txn-row .txn-date { font-size:12px; color:var(--text-dim); white-space:nowrap; }
+  .upload-txn-row .txn-desc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; position:relative; cursor:help; }
+  .upload-txn-row .txn-desc:hover { overflow:visible; }
+  .upload-txn-row .txn-desc .txn-tooltip { display:none; position:absolute; left:0; top:calc(100% + 4px); background:var(--text); color:#fff; padding:10px 14px; border-radius:8px; font-size:12px; white-space:normal; word-break:break-word; max-width:600px; min-width:300px; z-index:200; box-shadow:0 4px 16px rgba(0,0,0,.25); line-height:1.5; }
+  .upload-txn-row .txn-desc:hover .txn-tooltip { display:block; }
+  .upload-txn-row .txn-amount { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .upload-txn-row .txn-amount.green { color:var(--green-dark); }
+  .upload-txn-row .txn-amount.red { color:var(--red-dark); }
+  .upload-txn-row select { font-size:11px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; background:var(--surface2); }
+  .confidence-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .confidence-dot.high { background:var(--green); }
+  .confidence-dot.medium { background:var(--orange); }
+  .confidence-dot.low { background:var(--red); }
+  .upload-actions { display:flex; gap:12px; justify-content:flex-end; margin-top:20px; }
+  .upload-actions .btn-primary { padding:10px 24px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:none; background:var(--accent); color:#fff; transition:all .15s; }
+  .upload-actions .btn-primary:hover { background:#0095b3; }
+  .upload-actions .btn-primary:disabled { opacity:.4; cursor:default; }
+  @media (max-width:900px) {
+    .upload-txn-row { grid-template-columns:60px 1fr 140px 100px; }
+    .upload-txn-row select:nth-of-type(2) { display:none; }
+  }
+
+  /* ── Review Uncategorized Panel ── */
+  .review-panel { display:none; padding:0 40px 40px; margin:0 auto; }
+  .review-panel.show { display:block; }
+  .review-filters { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .review-filter-btn { padding:6px 14px; border-radius:20px; font-size:12px; font-weight:600; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); cursor:pointer; transition:all .15s; }
+  .review-filter-btn:hover { background:var(--surface2); color:var(--text); }
+  .review-filter-btn.active { background:var(--text); color:#fff; border-color:var(--text); }
+  .review-group { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px; }
+  .review-group-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; cursor:pointer; }
+  .review-group-header h4 { font-size:14px; font-weight:700; }
+  .review-group-header .review-group-count { font-size:12px; color:var(--text-dim); }
+  .review-group-rows { display:none; }
+  .review-group-rows.open { display:block; }
+  .review-txn { display:grid; grid-template-columns:1fr 140px 140px 130px 100px 36px; gap:6px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .review-txn .review-link { font-size:10px; }
+  .review-txn .review-link-slot { display:contents; }
+  .review-txn .review-ok-btn { width:30px; height:30px; border-radius:50%; border:1px solid var(--border); background:var(--surface); cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; transition:all .15s; color:var(--text-dim); }
+  .review-txn .review-ok-btn:hover { background:var(--green);color:#fff;border-color:var(--green); }
+  .review-txn:last-child { border-bottom:none; }
+  .review-txn .review-desc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help; position:relative; }
+  .review-txn .review-desc:hover { overflow:visible; }
+  .review-txn .review-desc .txn-tooltip { display:none; position:absolute; left:0; top:calc(100% + 4px); background:var(--text); color:#fff; padding:10px 14px; border-radius:8px; font-size:12px; white-space:normal; word-break:break-word; max-width:600px; min-width:300px; z-index:200; box-shadow:0 4px 16px rgba(0,0,0,.25); line-height:1.5; pointer-events:none; }
+  .review-txn .review-desc:hover .txn-tooltip { display:block; }
+  .review-txn .review-acct { font-size:11px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .review-txn .review-amt { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .review-txn .review-amt.green { color:var(--green-dark); }
+  .review-txn .review-amt.red { color:var(--red-dark); }
+  .review-back-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; padding:12px 0; }
+  .review-back-bar h2 { font-size:20px; font-weight:700; }
+  @media (max-width:900px) {
+    .review-panel { padding-left:20px; padding-right:20px; }
+    .review-txn { grid-template-columns:1fr 140px 100px 36px; }
+    .review-txn .review-acct { display:none; }
+  }
+
+  /* Responsive */
+  @media (max-width:900px) {
+    .summary-grid { grid-template-columns:repeat(2,1fr); }
+    .summary-grid.cf-grid { grid-template-columns:repeat(3,1fr); }
+    .summary-card .cf-operator { display:none; }
+    .bs-assets-columns { grid-template-columns:1fr; }
+    header, .dashboard { padding-left:20px; padding-right:20px; }
+    .txn-row { grid-template-columns:1fr 120px 100px; }
+    .txn-acct { display:none; }
+  }
+  @media (max-width:600px) {
+    .summary-grid { grid-template-columns:1fr 1fr; }
+    .txn-row { grid-template-columns:1fr 100px; }
+    .txn-cat-select { display:none; }
+  }
+
+  /* Loading spinner */
+  .spinner { display:inline-block; width:16px; height:16px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin .6s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .loading-state { text-align:center; padding:60px 20px; color:var(--text-dim); font-size:14px; }
+  .loading-state .spinner { width:24px; height:24px; margin-bottom:12px; }
+
+  /* ── Chat Widget ── */
+  .chat-fab { position:fixed; bottom:24px; right:24px; width:52px; height:52px; border-radius:50%; background:var(--text); color:#fff; border:none; cursor:pointer; font-size:22px; box-shadow:0 4px 16px rgba(0,0,0,.15); z-index:200; display:flex; align-items:center; justify-content:center; transition:transform .2s; }
+  .chat-fab:hover { transform:scale(1.08); }
+  .chat-fab.hidden { display:none; }
+
+  .chat-panel { position:fixed; bottom:24px; right:24px; width:480px; height:680px; background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:0 12px 40px rgba(0,0,0,.12); z-index:300; display:none; flex-direction:column; overflow:hidden; }
+  .chat-panel.open { display:flex; }
+
+  .chat-panel-header { padding:14px 18px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .chat-panel-header h4 { font-size:14px; font-weight:700; }
+  .chat-close { background:none; border:none; font-size:18px; cursor:pointer; color:var(--text-dim); padding:4px; }
+
+  .chat-messages { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .chat-msg { max-width:90%; padding:14px 18px; border-radius:14px; font-size:14px; line-height:1.6; word-wrap:break-word; }
+  .chat-msg.user { align-self:flex-end; background:var(--text); color:#fff; border-bottom-right-radius:4px; }
+  .chat-msg.assistant { align-self:flex-start; background:var(--surface2); color:var(--text); border-bottom-left-radius:4px; }
+  .chat-msg.system { align-self:center; background:var(--green-dim); color:var(--green-dark); font-size:12px; font-weight:500; text-align:center; }
+
+  .chat-input-row { padding:12px; border-top:1px solid var(--border); display:flex; gap:8px; }
+  .chat-input { flex:1; padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--surface2); font-size:13px; color:var(--text); resize:none; font-family:inherit; }
+  .chat-input:focus { outline:none; border-color:var(--accent); }
+  .chat-send { padding:10px 16px; border-radius:10px; border:none; background:var(--text); color:#fff; font-size:13px; font-weight:600; cursor:pointer; transition:background .15s; }
+  .chat-send:hover { background:#333; }
+  .chat-send:disabled { opacity:.4; cursor:default; }
+
+  @media (max-width:500px) {
+    .chat-panel { width:calc(100vw - 16px); right:8px; bottom:8px; height:80vh; }
+  }
+
+  /* Save toast */
+  .toast { position:fixed; bottom:24px; right:24px; padding:10px 20px; background:var(--text); color:#fff; border-radius:8px; font-size:13px; font-weight:500; opacity:0; transform:translateY(10px); transition:all .3s; z-index:600; pointer-events:none; }
+  .toast.show { opacity:1; transform:translateY(0); }
+
+  /* ── Balance Sheet ── */
+  .bs-section { margin-bottom:20px; }
+  .bs-section-title { font-size:18px; font-weight:700; margin-bottom:16px; display:flex; align-items:center; gap:10px; }
+  .bs-section-title .bs-badge { font-size:10px; font-weight:600; padding:2px 8px; border-radius:20px; background:var(--accent-dim); color:var(--accent); text-transform:uppercase; letter-spacing:.5px; }
+
+  /* Net position bar — vertical stack for sidebar */
+  .bs-net-bar { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px; margin-bottom:16px; position:relative; overflow:hidden; }
+  .bs-net-bar::before { content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, var(--green), var(--accent)); }
+  .bs-net-row { display:flex; flex-direction:column; gap:16px; }
+  .bs-net-side { text-align:center; }
+  .bs-net-side .bs-net-label { font-size:10px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+  .bs-net-side .bs-net-value { font-size:22px; font-weight:700; font-family:'SF Mono','Fira Code',monospace; }
+  .bs-net-side .bs-net-value.green { color:var(--green-dark); }
+  .bs-net-side .bs-net-value.red { color:var(--red-dark); }
+  .bs-net-divider { height:1px; width:100%; background:var(--border); }
+  .bs-net-center { text-align:center; padding:8px 0; }
+  .bs-net-center .bs-net-label { font-size:10px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+  .bs-net-center .bs-net-value { font-size:28px; font-weight:800; }
+
+  /* Stacked bar */
+  .bs-stack-bar { margin-top:20px; height:10px; border-radius:5px; background:var(--surface2); overflow:hidden; display:flex; }
+  .bs-stack-bar .bs-bar-seg { height:100%; transition:width .5s ease; }
+  .bs-stack-bar .bs-bar-cash { background:var(--accent); }
+  .bs-stack-bar .bs-bar-inv { background:var(--green); }
+  .bs-stack-bar .bs-bar-liab { background:var(--red); }
+  .bs-stack-legend { display:flex; gap:20px; margin-top:10px; justify-content:center; }
+  .bs-stack-legend span { font-size:11px; color:var(--text-dim); display:flex; align-items:center; gap:5px; }
+  .bs-stack-legend .dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+
+  /* Investment cards */
+  .bs-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:16px; }
+  .bs-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; transition:box-shadow .2s; cursor:pointer; }
+  .bs-card-collapsed { padding:10px 14px; }
+  .bs-card-collapsed .bs-card-header { margin-bottom:0; }
+  .bs-card-chevron { color:var(--text-dim); transition:transform .2s; flex-shrink:0; }
+  .bs-card:not(.bs-card-collapsed) .bs-card-chevron { transform:rotate(90deg); }
+  .bs-card-collapsed-value { font-size:14px; font-weight:600; color:var(--green); white-space:nowrap; }
+  .bs-card:hover { box-shadow:0 4px 20px rgba(0,0,0,.06); }
+  .bs-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .bs-card-title { font-size:13px; font-weight:600; }
+  .bs-card-ownership { font-size:10px; font-weight:600; color:var(--accent); background:var(--accent-dim); padding:2px 7px; border-radius:12px; white-space:nowrap; }
+  .bs-card-metrics { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .bs-card-asset-row { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+  .bs-metric { }
+  .bs-metric-label { font-size:9px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; margin-bottom:2px; }
+  .bs-metric-value { font-size:13px; font-weight:600; font-family:'SF Mono','Fira Code',monospace; }
+  .bs-metric-value.green { color:var(--green-dark); }
+  .bs-metric-value.red { color:var(--red-dark); }
+  .bs-asset-value { font-size:14px; font-weight:700; font-family:'SF Mono','Fira Code',monospace; color:var(--accent); }
+  .bs-edit-btn { background:none; border:none; cursor:pointer; font-size:13px; color:var(--text-dim); padding:2px 4px; border-radius:4px; transition:all .15s; }
+  .bs-edit-btn:hover { background:var(--surface2); color:var(--text); }
+  .bs-edit-input { width:120px; padding:4px 8px; border:1px solid var(--accent); border-radius:6px; font-size:13px; font-family:'SF Mono','Fira Code',monospace; font-weight:700; color:var(--accent); background:var(--accent-dim); outline:none; }
+  .bs-edit-input:focus { box-shadow:0 0 0 2px rgba(0,176,212,0.2); }
+  .bs-add-btn { background:none; border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:12px; color:var(--text-dim); padding:2px 8px; transition:all .15s; display:inline-flex; align-items:center; gap:4px; }
+  .bs-add-btn:hover { background:var(--surface2); color:var(--text); border-color:var(--accent); }
+  .bs-card-actions { display:flex; gap:2px; margin-left:8px; }
+  .bs-card-actions button { background:none; border:none; cursor:pointer; font-size:12px; color:var(--text-dim); padding:2px 4px; border-radius:4px; transition:all .15s; opacity:0; }
+  .bs-card:hover .bs-card-actions button, .bs-liab-card:hover .bs-card-actions button { opacity:1; }
+  .bs-card-actions button:hover { background:var(--surface2); color:var(--text); }
+  .bs-card-actions button.delete:hover { color:var(--red); }
+
+  /* Liabilities */
+  .bs-liab-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:10px; cursor:pointer; }
+  .bs-liab-card.bs-card-collapsed { padding:10px 14px; }
+  .bs-liab-card.bs-card-collapsed .bs-liab-header { margin-bottom:0; }
+  .bs-liab-card:not(.bs-card-collapsed) .bs-card-chevron { transform:rotate(90deg); }
+  .bs-liab-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:8px; gap:8px; }
+  .bs-liab-title { font-size:13px; font-weight:600; }
+  .bs-liab-amount { font-size:14px; font-weight:700; font-family:'SF Mono','Fira Code',monospace; color:var(--red-dark); white-space:nowrap; }
+  .bs-liab-details { display:flex; gap:16px; flex-wrap:wrap; }
+  .bs-liab-detail { }
+  .bs-liab-detail-label { font-size:9px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; }
+  .bs-liab-detail-value { font-size:12px; font-weight:500; margin-top:2px; }
+  .bs-maturity-badge { display:inline-block; font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; }
+  .bs-maturity-badge.far { background:var(--green-dim); color:var(--green-dark); }
+  .bs-maturity-badge.mid { background:var(--orange-dim); color:var(--orange); }
+  .bs-maturity-badge.near { background:var(--red-dim); color:var(--red-dark); }
+
+  .bs-assets-box { border:2px solid var(--green); border-radius:12px; padding:16px; margin-bottom:16px; background:rgba(76,175,80,0.03); }
+  .bs-assets-box-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .bs-assets-box-title { font-size:14px; font-weight:700; color:var(--green); text-transform:uppercase; letter-spacing:.5px; }
+  .bs-assets-box-total { font-size:16px; font-weight:700; }
+  .bs-assets-columns { display:grid; grid-template-columns:1fr; gap:16px; overflow:hidden; }
+  .bs-assets-col { min-width:0; overflow:hidden; }
+  .bs-liab-box { border:2px solid var(--red); border-radius:12px; padding:16px; background:rgba(244,67,54,0.03); }
+  .bs-liab-box-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .bs-liab-box-title { font-size:14px; font-weight:700; color:var(--red); text-transform:uppercase; letter-spacing:.5px; }
+  .bs-liab-box-total { font-size:16px; font-weight:700; }
+  .bs-sub-total { font-size:12px; font-weight:600; color:var(--text-dim); margin-left:auto; }
+  .bs-sub-header { font-size:12px; font-weight:700; color:var(--text-dim); margin-bottom:10px; text-transform:uppercase; letter-spacing:.5px; display:flex; align-items:center; gap:8px; }
+  .bs-sub-header::after { content:''; flex:1; height:1px; background:var(--border); }
+
+  /* ── Modal ── */
+  .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:500; display:flex; align-items:center; justify-content:center; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .modal-overlay.open { opacity:1; pointer-events:auto; }
+  .modal { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:28px; max-width:480px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,.12); transform:translateY(10px); transition:transform .2s; }
+  .modal-overlay.open .modal { transform:translateY(0); }
+  .modal h3 { font-size:16px; font-weight:700; margin-bottom:16px; }
+  .modal label { display:block; font-size:11px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; margin-bottom:4px; margin-top:12px; }
+  .modal input, .modal select { width:100%; padding:9px 12px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; }
+  .modal input:focus, .modal select:focus { outline:none; border-color:var(--accent); }
+  .modal-actions { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; }
+  .modal-actions button { padding:9px 18px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:1px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .15s; }
+  .modal-actions button:hover { background:var(--surface2); }
+  .modal-actions button.primary { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .modal-actions button.primary:hover { background:#009ab8; }
+  .modal-actions button.danger { background:var(--red); border-color:var(--red); color:#fff; }
+  .modal-actions button.danger:hover { background:var(--red-dark); }`;
+  document.head.appendChild(style);
+}
+
+// ── Inject HTML into #exec2Root ──
+function _injectHTML() {
+  const root = document.getElementById('exec2Root');
+  if (!root) return;
+  root.innerHTML = `
+<div class="toast" id="toast">Category updated</div>
+
+
+
+
+<!-- Dashboard -->
+<header id="mainHeader">
+  <h1><img src="assets/favicon.png" class="logo-icon" alt="">Executive <span>Financials</span></h1>
+  <div class="header-right">
+    <button class="btn accent" onclick="openUploadModal()">📤 Upload Transactions</button>
+    <button class="btn" onclick="openReviewUncategorized()" id="reviewBtn" style="display:none;">⚠️ Review <span id="reviewCount" style="background:var(--red);color:#fff;padding:1px 6px;border-radius:10px;font-size:10px;margin-left:4px;">0</span></button>
+    <button class="btn" onclick="refreshData()">Refresh</button>
+    <a href="index.html" class="btn">Calendar</a>
+  </div>
+</header>
+
+<div class="dashboard" id="dashboard">
+  <div class="dashboard-grid">
+  <!-- LEFT: Balance Sheet -->
+  <div class="dashboard-left">
+  <div class="bs-section" id="balanceSheet">
+    <div class="bs-section-title">Balance Sheet <span class="bs-badge">Live</span></div>
+
+    <!-- Net Position Summary -->
+    <div class="bs-net-bar" id="bsNetBar">
+      <!-- Loading state — shown until balance sheet is fully calculated -->
+      <div id="bsNetLoading" style="text-align:center;padding:12px 0;">
+        <div style="display:inline-flex;align-items:center;gap:8px;color:var(--text-dim);font-size:13px;">
+          <svg width="16" height="16" viewBox="0 0 16 16" style="animation:spin 1s linear infinite;"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="28" stroke-dashoffset="8" stroke-linecap="round"/></svg>
+          Calculating...
+        </div>
+      </div>
+      <!-- Actual values — hidden until ready -->
+      <div id="bsNetValues" style="display:none;">
+        <div class="bs-net-row">
+          <div class="bs-net-center">
+            <div class="bs-net-label">Net Position</div>
+            <div class="bs-net-value" id="bsNetPosition">—</div>
+          </div>
+          <div class="bs-net-divider"></div>
+          <div class="bs-net-side">
+            <div class="bs-net-label">Total Assets</div>
+            <div class="bs-net-value green" id="bsTotalAssets">—</div>
+          </div>
+          <div class="bs-net-side">
+            <div class="bs-net-label">Total Liabilities</div>
+            <div class="bs-net-value red" id="bsTotalLiabilities">—</div>
+          </div>
+        </div>
+        <div class="bs-stack-bar" id="bsStackBar"></div>
+        <div class="bs-stack-legend">
+          <span><span class="dot" style="background:var(--accent)"></span> Cash</span>
+          <span><span class="dot" style="background:var(--green)"></span> Investments</span>
+          <span><span class="dot" style="background:#f59e0b"></span> Loans Out</span>
+          <span><span class="dot" style="background:#8b5cf6"></span> Deposits</span>
+          <span><span class="dot" style="background:var(--red)"></span> Liabilities</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ASSETS wrapper -->
+    <div class="bs-assets-box">
+      <div class="bs-assets-box-header">
+        <span class="bs-assets-box-title">Assets</span>
+        <span class="bs-assets-box-total green" id="bsTotalAssetsInline"></span>
+      </div>
+      <div class="bs-assets-columns">
+        <!-- Left: Investments -->
+        <div class="bs-assets-col">
+          <div class="bs-sub-header">Investments <button class="bs-add-btn" onclick="openAddInvestment()">+ Add</button></div>
+          <div class="bs-grid" id="bsInvestments">
+            <div class="loading-state"><div class="spinner"></div><br>Loading…</div>
+          </div>
+        </div>
+        <!-- Right: Cash + Loans Out + Deposits -->
+        <div class="bs-assets-col">
+          <div class="bs-sub-header">Cash <span class="bs-sub-total" id="bsCashTotal"></span></div>
+          <div id="bsCashAccounts">
+            <p style="color:var(--text-dim);padding:8px 16px;font-size:13px;">Loading...</p>
+          </div>
+          <div class="bs-sub-header" style="margin-top:12px;">Loans Out <span class="bs-sub-total" id="bsLoansOutTotal"></span> <button class="bs-add-btn" onclick="openAddManualAsset('Loan Out')">+ Add</button></div>
+          <div id="bsLoansOut">
+            <p style="color:var(--text-dim);padding:8px 16px;font-size:13px;">No outstanding loans.</p>
+          </div>
+          <div class="bs-sub-header" style="margin-top:12px;">Deposits <span class="bs-sub-total" id="bsDepositsTotal"></span> <button class="bs-add-btn" onclick="openAddManualAsset('Deposit')">+ Add</button></div>
+          <div id="bsDeposits">
+            <p style="color:var(--text-dim);padding:8px 16px;font-size:13px;">No deposits held.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LIABILITIES wrapper -->
+    <div class="bs-liab-box">
+      <div class="bs-liab-box-header">
+        <span class="bs-liab-box-title">Liabilities</span>
+        <span class="bs-liab-box-total red" id="bsTotalLiabInline"></span>
+      </div>
+      <div class="bs-sub-header"><button class="bs-add-btn" onclick="openAddLiability()">+ Add</button></div>
+      <div id="bsLiabilities">
+        <div class="loading-state"><div class="spinner"></div><br>Loading…</div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <!-- RIGHT: Cash Flow & Period Details -->
+  <div class="dashboard-right">
+  <!-- Net Income Chart -->
+  <div class="cf-section">
+    <div class="cf-header">
+      <h2>Net Income</h2>
+      <div class="cf-toggle">
+        <button class="active" onclick="setCfMode('monthly')">Monthly</button>
+        <button onclick="setCfMode('quarterly')">Quarterly</button>
+        <button onclick="setCfMode('yearly')">Yearly</button>
+      </div>
+    </div>
+    <div class="cf-chart" id="cfChart"></div>
+  </div>
+
+  <!-- Period Header -->
+  <div class="period-header">
+    <h2 id="periodTitle">March 2026</h2>
+    <div class="period-nav">
+      <button onclick="prevPeriod()">&#8592;</button>
+      <button onclick="nextPeriod()">&#8594;</button>
+    </div>
+  </div>
+
+  <!-- P&L Summary -->
+  <div class="summary-section">
+    <div class="summary-section-header">
+      <span class="summary-section-title">Profit & Loss</span>
+      <div class="summary-section-line"></div>
+    </div>
+    <div class="summary-grid">
+      <div class="summary-card"><div class="value green" id="totalIncome">—</div><div class="label">Revenue</div><span class="cf-operator">−</span></div>
+      <div class="summary-card"><div class="value red" id="totalExpenses">—</div><div class="label">Operating Expenses</div><span class="cf-operator">=</span></div>
+      <div class="summary-card highlight"><div class="value" id="netIncome">—</div><div class="label">Net Income</div></div>
+    </div>
+  </div>
+
+  <!-- Cash Flow Summary -->
+  <div class="summary-section">
+    <div class="summary-section-header">
+      <span class="summary-section-title">Cash Flow</span>
+      <div class="summary-section-line"></div>
+    </div>
+    <div class="summary-grid cf-grid">
+      <div class="summary-card"><div class="value orange" id="totalDistros">—</div><div class="label">Owner Distros</div><span class="cf-operator">−</span></div>
+      <div class="summary-card"><div class="value orange" id="totalInvest">—</div><div class="label">Investments</div><span class="cf-operator">−</span></div>
+      <div class="summary-card"><div class="value orange" id="totalLoans">—</div><div class="label">Loans Out</div><span class="cf-operator">−</span></div>
+      <div class="summary-card"><div class="value orange" id="totalDeposits">—</div><div class="label">Deposits</div><span class="cf-operator">+</span></div>
+      <div class="summary-card"><div class="value green" id="totalLoanPaybacks">—</div><div class="label">Loan Paybacks</div><span class="cf-operator">=</span></div>
+      <div class="summary-card highlight"><div class="value" id="cashFlow">—</div><div class="label">Cash Flow</div></div>
+    </div>
+  </div>
+
+  <!-- Income Breakdown -->
+  <div class="cat-section" id="incomeSection">
+    <div class="cat-section-header" style="display:flex;align-items:center;justify-content:space-between;">
+      <h3>Revenue</h3>
+      <select id="revenuePropertyFilter" style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);max-width:180px;" onchange="filterRevenueByProperty(this.value)">
+        <option value="">All Properties</option>
+      </select>
+    </div>
+    <div id="incomeRows"></div>
+  </div>
+
+  <!-- Operating Expenses -->
+  <div class="cat-section" id="opexSection">
+    <div class="cat-section-header">
+      <h3>Operating Expenses</h3>
+    </div>
+    <div id="opexRows"></div>
+  </div>
+
+  <!-- Balance Sheet Transactions (merged: distributions, investments, loans, deposits, paybacks) -->
+  <div class="cat-section" id="bsItemsSection">
+    <div class="cat-section-header">
+      <h3>Balance Sheet Transactions</h3>
+    </div>
+    <div id="bsItemsRows"></div>
+  </div>
+
+  <!-- Drill-down -->
+  <div class="drilldown" id="drilldown">
+    <div class="drilldown-header">
+      <h3 id="drilldownTitle">Transactions</h3>
+      <button class="drilldown-back" onclick="history.back()">&#8592; Back</button>
+    </div>
+    <div class="txn-list" id="txnList"></div>
+  </div>
+
+  <!-- Excluded Transfers -->
+  <div class="excluded-section">
+    <h3>Internal Transfers &amp; Excluded <span id="excludedBadge" style="font-weight:400;font-size:12px;color:var(--text-dim)"></span></h3>
+    <div id="excludedRows"></div>
+  </div>
+  </div><!-- /dashboard-right -->
+  </div><!-- /dashboard-grid -->
+</div>
+
+<!-- Upload Modal -->
+<div class="upload-overlay" id="uploadOverlay" onclick="if(event.target===this)closeUploadModal()">
+  <div class="upload-modal">
+    <h2>📤 Upload Bank Transactions</h2>
+    <div class="upload-dropzone" id="uploadDropzone" onclick="document.getElementById('csvFileInput').click()">
+      <div class="upload-icon">📁</div>
+      <strong>Drop CSV file here or click to browse</strong>
+      <p>Supports Chase BAI2 format CSV exports (weekly 30-day reports)</p>
+    </div>
+    <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCsvUpload(this.files[0])">
+    <div class="upload-progress" id="uploadProgress" style="display:none;">
+      <div style="font-size:13px;margin-bottom:6px;" id="uploadStatusText">Parsing CSV...</div>
+      <div class="upload-progress-bar"><div class="fill" id="uploadProgressFill"></div></div>
+    </div>
+    <div class="upload-stats" id="uploadStats" style="display:none;">
+      <div class="upload-stat"><div class="num" id="statTotal">0</div><div class="lbl">Total Rows</div></div>
+      <div class="upload-stat"><div class="num green" id="statNew">0</div><div class="lbl">New</div></div>
+      <div class="upload-stat"><div class="num orange" id="statDupes">0</div><div class="lbl">Duplicates Skipped</div></div>
+    </div>
+    <div id="uploadModalActions" style="display:none;">
+      <div class="upload-actions">
+        <button class="btn" onclick="closeUploadModal()">Cancel</button>
+        <button class="btn-primary" id="btnProceedReview" onclick="proceedToUploadReview()">Review & Import →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Review Screen -->
+<div class="upload-review" id="uploadReview">
+  <div class="upload-review-header">
+    <h2>Review Uploaded Transactions</h2>
+    <div style="display:flex;gap:10px;">
+      <button class="btn" onclick="closeUploadReview()">← Back to Dashboard</button>
+      <button class="btn-primary" id="btnConfirmImport" onclick="confirmImport()" style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:var(--accent);color:#fff;">Confirm Import</button>
+    </div>
+  </div>
+  <div id="uploadReviewContent"></div>
+</div>
+
+<!-- Review Uncategorized Panel -->
+<div class="review-panel" id="reviewPanel">
+  <div class="review-back-bar">
+    <h2>Review Transactions</h2>
+    <button class="btn" onclick="closeReviewPanel()">← Back to Dashboard</button>
+  </div>
+  <div class="review-filters" id="reviewFilters"></div>
+  <div id="reviewContent"></div>
+</div>
+
+<!-- Chat FAB + Panel -->
+<button class="chat-fab" id="chatFab" onclick="toggleChat()">💬</button>
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-panel-header">
+    <h4>FMC Assistant</h4>
+    <button class="chat-close" onclick="toggleChat()">&times;</button>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-msg assistant">Hi Morris — I can help categorize transactions, explain entries, or look up data. Try telling me things like "The $1.2M wire on Jan 15 is an investor contribution" or "Show me uncategorized transactions".</div>
+  </div>
+  <div class="chat-input-row">
+    <textarea class="chat-input" id="chatInput" rows="1" placeholder="Tell me about a transaction..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+    <button class="chat-send" id="chatSend" onclick="sendChat()">Send</button>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<!-- Local dev: config.js sets Supabase vars (gitignored, won't exist in prod) -->
+<script src="config.js" onerror=""></script>`;
+}
+
+// ── All module JS ──
+// ── Supabase (provided by parent) ──
+const supaFetch = window.supaFetch;
+const supaWrite = window.supaWrite;
+
+// ── Constants ──
+const MAIN_ACCT = '483101560383';
+
+// ── Corporate accounts to INCLUDE (everything else is excluded) ──
+const INCLUDE_ACCOUNTS = {
+  '483101560383': 'FIRST MILE CAPITAL LLC',       // Main checking
+  '483110283091': 'First Mile Capital SAVINGS',    // Savings
+  '483110897814': 'FIRST MILE MANAGEMENT LLC',     // PM fees
+  '483103381719': 'FM PARAMUS MEMBER LLC',         // AM fees
+  '483108155623': 'FM Plaza Member LLC',            // AM fees
+  '483107673423': 'FM Kemble Membe',               // AM fees (truncated)
+};
+
+// Account classifications
+const MEMBER_ACCOUNTS = ['FM PARAMUS MEMBER LLC', 'FM Paramus Member LLC', 'FM Plaza Member LLC', 'FM Kemble Membe', 'FM Kemble Member LLC'];
+const MGMT_ACCOUNT = 'First Mile Management LLC';
+const INVESTOR_ACCOUNTS = ['FM 340 Kemble LLC Investors'];
+
+// Biweekly payroll reimbursement amounts
+const PAYROLL_REIMB_AMOUNTS = [20200, 19939, 16287, 2011.36];
+const PAYROLL_REIMB_TOLERANCE = 0.50;
+
+// Income categories (user-defined)
+const INCOME_CATEGORIES = [
+  'Asset Management Fee Income',
+  'Property Management Fee Income',
+  'Development Fee Income',
+  'Investment Income',
+  'Interest Income',
+  'Acquisition Fee Income',
+  'Other Income'
+];
+
+// Category icons
+const CAT_ICONS = {
+  'Asset Management Fee Income': '💰',
+  'Property Management Fee Income': '🏢',
+  'Development Fee Income': '🏗️',
+  'Investment Income': '📈',
+  'Interest Income': '🏦',
+  'Acquisition Fee Income': '🔑',
+  'Other Income': '💵',
+  'Payroll': '👥',
+  'Credit Cards': '💳',
+  'Legal/Corp Services': '⚖️',
+  'Taxes': '🏛️',
+  'Wire Payments': '🔄',
+  'Banking': '🏦',
+  'Checks': '📝',
+  'AM Partner Payout': '🤝',
+  'PM Expenses': '🔧',
+  'Software/Services': '💻',
+  'Other Operating': '📋',
+  'Rent': '🏠',
+  'Owner Distributions': '💸',
+  'Investment Contributions': '🏗️',
+  'Travel/Parking/Auto': '✈️',
+  'Finders Fee': '🔍',
+  'Interest Expense': '💲',
+  'Loan Out': '🏦',
+  'Loan Payback': '🏦',
+  'Deposit': '🔒',
+  'Marketing': '📣',
+  'Contractors': '🔨'
+};
+
+// Grouped categories for the dropdown (with optgroup sections)
+const CATEGORY_GROUPS = [
+  { label: '💰 Revenue', items: INCOME_CATEGORIES },
+  { label: '📋 Expenses', items: [
+    'Payroll', 'Finders Fee', 'Interest Expense', 'Legal/Corp Services',
+    'Credit Cards', 'Other Operating', 'Marketing', 'Rent', 'Travel/Parking/Auto',
+    'Banking', 'Software/Services', 'Contractors', 'Taxes', 'Checks',
+    'PM Expenses', 'Wire Payments'
+  ]},
+  { label: '📊 Balance Sheet', items: [
+    'Owner Distributions', 'Investment Contributions', 'Loan Out', 'Loan Payback', 'Deposit'
+  ]},
+  { label: '🔄 Other', items: [
+    'AM Partner Payout', 'Internal Transfer', 'Payroll Reimbursement'
+  ]}
+];
+// Flat list for backwards compat
+const ALL_CATEGORIES = CATEGORY_GROUPS.flatMap(g => g.items);
+
+// Build grouped <option> HTML for category selects
+function buildCategoryOptions(selectedValue) {
+  return CATEGORY_GROUPS.map(g =>
+    `<optgroup label="${g.label}">${g.items.map(c =>
+      `<option value="${c}" ${c === selectedValue ? 'selected' : ''}>${c}</option>`
+    ).join('')}</optgroup>`
+  ).join('');
+}
+
+// Claude API key not needed in v2 (no embedded chat widget)
+
+// Known payroll reimbursement splits within PM fee payments (Appfolio CORPTRDEXC)
+// Matched by amount since record IDs changed after Supabase migration
+const KNOWN_PAYROLL_SPLITS_BY_AMOUNT = [
+  { txnAmount: 176771.00, splitAmount: 115290.93 },  // Jan 2026 CORPTRDEXC
+  { txnAmount: 108165.44, splitAmount: 53305.93 },    // Feb 2026 CORPTRDEXC
+  { txnAmount: 94508.25,  splitAmount: 54601.60 }     // Mar 2026 CORPTRDEXC
+];
+const KNOWN_PAYROLL_SPLITS = {}; // populated by matchPayrollSplits() after data loads
+
+// State
+let allRecords = [];
+let categoryOverrides = {}; // recordId -> category (persisted in Supabase)
+let categoryNames = {};     // recordId -> friendly name for balance sheet display (persisted in Supabase)
+let loanStartDates = {};    // recordId -> loan start date string (for Loan Out — affects cash flow period)
+let loanMaturityDates = {}; // recordId -> loan maturity date string (optional)
+let investmentLinks = {};   // recordId -> investment_id (links transaction to an investment)
+let propertyLinks = {};     // recordId -> property_id (links income to a property)
+let liabilityLinks = {};    // recordId -> liability_id (links interest expense to a liability)
+let reviewedItems = {};     // recordId -> true (dismissed from review as OK)
+let payrollSplits = {};     // recordId -> payroll amount to deduct from PM fee
+let cfMode = 'monthly';
+let selectedPeriodIndex = -1; // -1 means latest
+let periods = [];
+let lastPeriodComp = null; // Store latest computePeriod result for balance sheet
+
+// ── URL State Persistence ──
+// Saves cfMode, period, and drilldown to URL hash so refresh keeps your place
+function saveStateToHash() {
+  // In v2 native module, don't overwrite parent's hash routing
+  // State persistence will be handled differently in future
+}
+function loadStateFromHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return {};
+  const params = new URLSearchParams(hash);
+  return { mode: params.get('m'), periodLabel: params.get('p'), drillType: params.get('d'), drillCss: params.get('dc') };
+}
+
+// Browser back button: close drilldown if one is open
+window.addEventListener('popstate', function(e) {
+  if (currentDrilldownType) {
+    closeDrilldown(true); // true = don't go back again
+  }
+});
+
+// Auth handled by parent site's Microsoft SSO; Supabase uses anon key
+
+// Auto-init (auth handled by parent site's Microsoft SSO)
+initDashboard();
+
+// ── Init ──
+function initDashboard() {
+  // Category overrides loaded from Supabase in loadData()
+  // Payroll splits matched by amount after data loads (see matchPayrollSplits)
+  payrollSplits = {};
+  loadData();
+}
+
+// Redraw chart on resize
+let resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { if (allRecords.length) renderChart(); }, 200); });
+
+// ── Data Fetch ──
+async function loadData() {
+  const bar = document.getElementById('loadBar');
+  bar.className = 'loading-bar active';
+  document.getElementById('dashboard').classList.add('show');
+
+  try {
+    // Fetch transactions from Supabase, filter to 2026+ corporate accounts
+    const includeNums = new Set(Object.keys(INCLUDE_ACCOUNTS));
+    const includeNames = new Set(Object.values(INCLUDE_ACCOUNTS).map(n => n.toUpperCase()));
+    const raw = await supaFetch('exec_transactions', '?date=gte.2026-01-01&order=date.asc');
+    // Build category overrides from Supabase column + map to legacy record format
+    categoryOverrides = {};
+    allRecords = raw.filter(r => {
+      const acctNum = String(r.account_number || '').trim();
+      const acctName = (r.account_name || '').toUpperCase().trim();
+      return includeNums.has(acctNum) || includeNames.has(acctName);
+    }).map(r => {
+      if (r.category_override) categoryOverrides[r.id] = r.category_override;
+      if (r.category_name) categoryNames[r.id] = r.category_name;
+      if (r.investment_id) investmentLinks[r.id] = r.investment_id;
+      if (r.property_id) propertyLinks[r.id] = r.property_id;
+      if (r.liability_id) liabilityLinks[r.id] = r.liability_id;
+      if (r.reviewed) reviewedItems[r.id] = true;
+      if (r.loan_start_date) loanStartDates[r.id] = r.loan_start_date;
+      if (r.loan_maturity_date) loanMaturityDates[r.id] = r.loan_maturity_date;
+      return {
+        id: r.id,
+        fields: {
+          Date: r.date,
+          Description: r.description,
+          Amount: r.amount,
+          'Ledger Balance': r.ledger_balance,
+          'Transaction Type': r.transaction_type,
+          'Credit/Debit': r.credit_debit,
+          'Account Name': r.account_name,
+          'Account Number': r.account_number
+        }
+      };
+    });
+    console.log(`Loaded ${raw.length} rows, filtered to ${allRecords.length} corporate accounts, ${Object.keys(categoryOverrides).length} overrides`);
+    // Match known payroll splits to actual Supabase record IDs by transaction amount
+    matchPayrollSplits();
+    bar.className = 'loading-bar done';
+
+    // Restore view state from URL hash (survives page refresh)
+    const saved = loadStateFromHash();
+    if (saved.mode && saved.mode !== cfMode) {
+      cfMode = saved.mode;
+      document.querySelectorAll('.cf-toggle button').forEach(b => b.classList.remove('active'));
+      const modeBtn = document.querySelector(`.cf-toggle button[onclick="setCfMode('${cfMode}')"]`);
+      if (modeBtn) modeBtn.classList.add('active');
+    }
+    buildPeriods();
+    // Restore period by label match (so "2026" or "March 2026" survives even if index changes)
+    if (saved.periodLabel) {
+      const idx = periods.findIndex(p => p.label === saved.periodLabel);
+      selectedPeriodIndex = idx >= 0 ? idx : periods.length - 1;
+    } else {
+      selectedPeriodIndex = periods.length - 1;
+    }
+    renderAll();
+    updateReviewBadge();
+    // Restore drilldown if one was open
+    if (saved.drillType) {
+      openDrilldown(saved.drillType, saved.drillCss || '');
+    }
+    loadBalanceSheet();
+  } catch (e) {
+    bar.className = 'loading-bar';
+    console.error(e);
+    alert('Failed to load data: ' + e.message);
+  }
+}
+
+function matchPayrollSplits() {
+  // Match CORPTRDEXC transactions by amount to assign payroll split portions
+  for (const rule of KNOWN_PAYROLL_SPLITS_BY_AMOUNT) {
+    const match = allRecords.find(r => {
+      const desc = (r.fields.Description || '').toUpperCase();
+      const amt = Math.abs(parseFloat(r.fields.Amount) || 0);
+      return desc.includes('CORPTRDEXC') && Math.abs(amt - rule.txnAmount) < 1;
+    });
+    if (match && !(match.id in payrollSplits)) {
+      payrollSplits[match.id] = rule.splitAmount;
+    }
+  }
+}
+
+function refreshData() {
+  loadData();
+}
+
+// ── Helpers ──
+function getDate(record) {
+  const f = record.fields;
+  const dateVal = f.Date || f.fldgQFXI2kPiBQOdT;
+  return dateVal ? new Date(dateVal) : new Date(0);
+}
+
+function getField(record, name) {
+  const f = record.fields;
+  if (f[name] !== undefined) return f[name];
+  const map = {
+    'Description': 'fldlJucnQS8E5dFYG', 'Date': 'fldgQFXI2kPiBQOdT',
+    'Amount': 'fld4aW3FyVbUmgFVf', 'Ledger Balance': 'fldTMmHSCfpwHqP3J',
+    'Transaction Type': 'fldngEmDXwYGhijcY', 'Credit/Debit': 'fld4vsI6lQ4zgYA43',
+    'Account Name': 'fldNG9VQSGRB3tdBI', 'Account Number': 'fldQx16vpxLlf0X7O'
+  };
+  const fid = map[name];
+  return (fid && f[fid] !== undefined) ? f[fid] : null;
+}
+
+function getAccountName(r) { const v = getField(r, 'Account Name'); return !v ? '' : (typeof v === 'object' ? (v.name||'') : v); }
+function getDescription(r) { return getField(r, 'Description') || ''; }
+function getAmount(r) { return getField(r, 'Amount') || 0; }
+function getAccountNumber(r) { const v = getField(r, 'Account Number'); return !v ? '' : (typeof v === 'object' ? (v.name||'') : String(v)); }
+
+function fmt(n) {
+  const abs = Math.abs(n);
+  const s = abs.toLocaleString('en-US', { style:'currency', currency:'USD', minimumFractionDigits:0, maximumFractionDigits:0 });
+  return n < 0 ? `-${s}` : s;
+}
+
+function fmtFull(n) {
+  const abs = Math.abs(n);
+  const s = abs.toLocaleString('en-US', { style:'currency', currency:'USD' });
+  return n < 0 ? `-${s}` : s;
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+// ── Categorization ──
+function categorize(record) {
+  // Check for user override
+  if (categoryOverrides[record.id]) {
+    const oc = categoryOverrides[record.id];
+    const isIncome = INCOME_CATEGORIES.includes(oc);
+    const isExcluded = oc === 'Internal Transfer' || oc === 'Payroll Reimbursement';
+    const isDistribution = oc === 'AM Partner Payout' || oc === 'Owner Distributions';
+    const isInvestment = oc === 'Investment Contributions' || oc === 'Investor Contribution (Pass-Through)';
+    const isLoan = oc === 'Loan Out';
+    const isLoanPayback = oc === 'Loan Payback';
+    const isDeposit = oc === 'Deposit';
+    if (isExcluded) return { category: oc === 'Payroll Reimbursement' ? 'payroll_offset' : 'excluded', type: oc };
+    if (isDistribution) return { category: 'distribution', type: oc };
+    if (isInvestment) return { category: 'investment', type: 'Investment Contributions' };
+    if (isLoan) return { category: 'loan', type: oc };
+    if (isLoanPayback) return { category: 'loan_payback', type: oc };
+    if (isDeposit) return { category: 'deposit', type: oc };
+    return { category: isIncome ? 'income' : 'expense', type: oc };
+  }
+
+  const desc = getDescription(record).toUpperCase();
+  const amount = getAmount(record);
+  const acctName = getAccountName(record);
+  const acctNum = getAccountNumber(record);
+
+  if (desc.startsWith('DUPLICATE')) return { category: 'excluded', type: 'Duplicate' };
+
+  const isTransfer = desc.includes('ACCOUNT TRANSFER TRSF');
+
+  // AM Fees — credits in Member accounts
+  if (MEMBER_ACCOUNTS.some(m => acctName.toUpperCase().includes(m.toUpperCase())) && amount > 0 && !isTransfer) {
+    return { category: 'income', type: 'Asset Management Fee Income' };
+  }
+
+  // AM Partner payout from Member accounts → Owner Distribution
+  if (MEMBER_ACCOUNTS.some(m => acctName.toUpperCase().includes(m.toUpperCase())) && amount < 0 && !isTransfer) {
+    return { category: 'distribution', type: 'AM Partner Payout' };
+  }
+
+  // PM account — payroll reimbursement BILLPAY (pa-mgmt in description)
+  if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT'))
+      && desc.includes('PA-MGMT') && amount > 0) {
+    return { category: 'payroll_offset', type: 'Payroll Reimbursement' };
+  }
+
+  // PM account — payroll reimbursement transfers (biweekly known amounts)
+  if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT')) && isTransfer) {
+    const absAmt = Math.abs(amount);
+    const isPayrollReimb = PAYROLL_REIMB_AMOUNTS.some(a => Math.abs(absAmt - a) < PAYROLL_REIMB_TOLERANCE);
+    if (isPayrollReimb) return { category: 'payroll_offset', type: 'Payroll Reimbursement' };
+    // Credits into Management = PM Fee Income (not internal transfer)
+    if (amount > 0) return { category: 'income', type: 'Property Management Fee Income' };
+    return { category: 'excluded', type: 'Internal Transfer' };
+  }
+
+  // PM Fees — credits in Management account (non-transfers)
+  if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT')) && amount > 0 && !isTransfer) {
+    return { category: 'income', type: 'Property Management Fee Income' };
+  }
+
+  // PM account expenses
+  if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT')) && amount < 0 && !isTransfer) {
+    return { category: 'expense', type: 'PM Expenses' };
+  }
+
+  // Investment Income — Kemble Investors
+  if (INVESTOR_ACCOUNTS.some(a => acctName.toUpperCase().includes(a.toUpperCase())) && amount > 0 && !isTransfer) {
+    return { category: 'income', type: 'Investment Income' };
+  }
+
+  // Appfolio distributions (description contains APPFOLIO or SIGONFILE for property deposits)
+  if (desc.includes('APPFOLIO') && amount > 0) {
+    return { category: 'income', type: 'Investment Income' };
+  }
+
+  // PACE payments = Marketing
+  if (desc.includes('PACE') && amount < 0) {
+    return { category: 'expense', type: 'Marketing' };
+  }
+
+  // Elyse $20K payments = Finders Fee
+  if (desc.includes('ELYSE') && amount < 0 && Math.abs(Math.abs(amount) - 20000) < 500) {
+    return { category: 'expense', type: 'Finders Fee' };
+  }
+
+  // Crown Acquisitions rent payments (~$8,089)
+  if (desc.includes('CROWN ACQUISITIONS') && amount < 0 && Math.abs(Math.abs(amount) - 8089) < 100) {
+    return { category: 'expense', type: 'Rent' };
+  }
+
+  // Main operating account logic
+  if (acctNum === MAIN_ACCT) {
+    if (desc.includes('JUSTWORK')) return { category: 'expense', type: 'Payroll' };
+    if (desc.includes('X SHORE') || desc.includes('XSHORE')) return { category: 'expense', type: 'Contractors' };
+    if (desc.includes('LEVINE') && desc.includes('JACOBS')) return { category: 'expense', type: 'Legal/Corp Services' };
+
+    if (isTransfer && amount > 0) {
+      const isPayrollReimb = PAYROLL_REIMB_AMOUNTS.some(a => Math.abs(amount - a) < PAYROLL_REIMB_TOLERANCE);
+      if (isPayrollReimb) return { category: 'payroll_offset', type: 'Payroll Reimbursement' };
+      return { category: 'excluded', type: 'Internal Transfer' };
+    }
+
+    if (isTransfer && amount < 0) return { category: 'excluded', type: 'Internal Transfer' };
+
+    // Sigonfile deposits
+    if (desc.includes('SIGONFILE') && amount > 0) return { category: 'income', type: 'Investment Income' };
+
+    // Wire in
+    if (desc.includes('WIRE') && amount > 0) return { category: 'income', type: 'Other Income' };
+
+    // Billpay credits
+    if (desc.includes('BILLPAY') && amount > 0) return { category: 'income', type: 'Other Income' };
+
+    // JLL CAS = Asset Management Fee Income; other JLL = Other Income
+    if (desc.includes('JLL') && desc.includes('CAS') && amount > 0) return { category: 'income', type: 'Asset Management Fee Income' };
+    if (desc.includes('JLL') && amount > 0) return { category: 'income', type: 'Other Income' };
+
+    // Other credits
+    if (amount > 0) return { category: 'income', type: 'Other Income' };
+
+    // Operating expenses
+    if (desc.includes('CHASE CREDIT') || desc.includes('CITI AUTOPAY')) return { category: 'expense', type: 'Credit Cards' };
+    if (desc.includes('CORPORATION SERV') || desc.includes('LEGAL')) return { category: 'expense', type: 'Legal/Corp Services' };
+    if (desc.includes('NYS DTF') || desc.includes('NJ WEB PMT') || desc.includes('TAX')) return { category: 'expense', type: 'Taxes' };
+    if (desc.includes('JPMORGAN') || (desc.includes('CHASE') && !desc.includes('CREDIT'))) return { category: 'expense', type: 'Banking' };
+    // Appfolio settlement — owner distributions (~$80K/mo via "Checking ...0383 DES:Settlement")
+    if (desc.includes('SETTLEMENT') && amount < 0) return { category: 'distribution', type: 'Owner Distributions' };
+
+    // Outbound wires — classify by description
+    if (desc.includes('WIRE') && amount < 0) {
+      // Investment contributions: wires to deals/properties/funds
+      if (desc.includes('PARAMUS') || desc.includes('KEMBLE') || desc.includes('LIFETIME') || desc.includes('PLAZA') || desc.includes('RED') || desc.includes('CAPITAL CALL') || desc.includes('CONTRIBUTION') || desc.includes('INVESTMENT')) {
+        return { category: 'investment', type: 'Investment Contributions' };
+      }
+      // Distribution wires: partner payouts
+      if (desc.includes('DISTRIBUTION') || desc.includes('DISTRIB') || desc.includes('PAYOUT') || desc.includes('PARTNER')) {
+        return { category: 'distribution', type: 'Owner Distributions' };
+      }
+      return { category: 'expense', type: 'Wire Payments' };
+    }
+    if (desc.includes('CHECK') || desc.includes('Check')) return { category: 'expense', type: 'Checks' };
+    if (desc.includes('APPFOLIO') && amount < 0) return { category: 'expense', type: 'Software/Services' };
+
+    return { category: 'expense', type: 'Other Operating' };
+  }
+
+  // Non-main accounts: internal transfers
+  if (isTransfer) return { category: 'excluded', type: 'Internal Transfer' };
+
+  // Other property accounts
+  if (amount > 0) return { category: 'income', type: 'Other Income' };
+  if (amount < 0) return { category: 'expense', type: 'Other Operating' };
+
+  return { category: 'excluded', type: 'Uncategorized' };
+}
+
+// ── Periods ──
+function buildPeriods() {
+  periods = [];
+  if (allRecords.length === 0) return;
+
+  const dates = allRecords.map(r => getDate(r)).filter(d => d.getFullYear() > 2000);
+  const minDate = new Date(Math.min(...dates));
+  const maxDate = new Date(Math.max(...dates));
+
+  if (cfMode === 'monthly') {
+    let d = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+    while (d <= maxDate) {
+      periods.push({
+        label: d.toLocaleDateString('en-US', { month:'long', year:'numeric' }),
+        shortLabel: d.toLocaleDateString('en-US', { month:'short' }),
+        year: d.getFullYear(),
+        start: new Date(d),
+        end: new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59)
+      });
+      d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+    }
+  } else if (cfMode === 'quarterly') {
+    let d = new Date(minDate.getFullYear(), Math.floor(minDate.getMonth() / 3) * 3, 1);
+    while (d <= maxDate) {
+      const q = Math.floor(d.getMonth() / 3) + 1;
+      periods.push({
+        label: `Q${q} ${d.getFullYear()}`,
+        shortLabel: `Q${q}`,
+        year: d.getFullYear(),
+        start: new Date(d),
+        end: new Date(d.getFullYear(), d.getMonth() + 3, 0, 23, 59, 59)
+      });
+      d = new Date(d.getFullYear(), d.getMonth() + 3, 1);
+    }
+  } else {
+    let y = minDate.getFullYear();
+    while (y <= maxDate.getFullYear()) {
+      periods.push({
+        label: `${y}`,
+        shortLabel: `${y}`,
+        year: y,
+        start: new Date(y, 0, 1),
+        end: new Date(y, 11, 31, 23, 59, 59)
+      });
+      y++;
+    }
+  }
+}
+
+function getRecordsForPeriod(p) {
+  return allRecords.filter(r => {
+    const d = getDate(r);
+    return d >= p.start && d <= p.end;
+  });
+}
+
+function setCfMode(mode) {
+  cfMode = mode;
+  document.querySelectorAll('.cf-toggle button').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.cf-toggle button[onclick="setCfMode('${mode}')"]`).classList.add('active');
+  buildPeriods();
+  selectedPeriodIndex = periods.length - 1;
+  renderAll();
+  saveStateToHash();
+}
+
+function prevPeriod() {
+  if (selectedPeriodIndex > 0) { selectedPeriodIndex--; renderAll(); saveStateToHash(); }
+}
+
+function nextPeriod() {
+  if (selectedPeriodIndex < periods.length - 1) { selectedPeriodIndex++; renderAll(); saveStateToHash(); }
+}
+
+// ── Compute period financials ──
+function computePeriod(records, period) {
+  let totalIncome = 0, totalOpex = 0, totalDistributions = 0, totalInvestments = 0, totalLoans = 0, totalLoanPaybacks = 0, totalDeposits = 0, payrollReimb = 0, payrollSplitTotal = 0;
+  const incomeBuckets = {};
+  const opexBuckets = {};       // Operating expenses
+  const distroBuckets = {};     // Owner distributions
+  const investBuckets = {};     // Investment contributions
+  const loanBuckets = {};       // Loans out (balance sheet asset)
+  const loanPaybackBuckets = {}; // Loan paybacks (not operating income)
+  const depositBuckets = {};    // Deposits (balance sheet asset)
+  const excludedBuckets = {};
+
+  INCOME_CATEGORIES.forEach(c => incomeBuckets[c] = { total: 0, count: 0, records: [] });
+
+  records.forEach(r => {
+    const { category, type } = categorize(r);
+    let amount = getAmount(r);
+
+    // Track payroll splits for display purposes (not used in P&L math)
+    const splitAmt = payrollSplits[r.id];
+    if (splitAmt && splitAmt > 0 && category === 'income') {
+      payrollSplitTotal += splitAmt;
+    }
+
+    // AM Partner Payouts: net against AM Fee Income (show as deduction, not separate distribution)
+    if (category === 'distribution' && type === 'AM Partner Payout') {
+      totalIncome += amount; // amount is negative (debit)
+      if (!incomeBuckets['Asset Management Fee Income']) incomeBuckets['Asset Management Fee Income'] = { total: 0, count: 0, records: [] };
+      incomeBuckets['Asset Management Fee Income'].total += amount;
+      incomeBuckets['Asset Management Fee Income'].records.push(r);
+      return; // skip adding to distributions
+    }
+
+    if (category === 'income') {
+      totalIncome += amount;
+      if (!incomeBuckets[type]) incomeBuckets[type] = { total: 0, count: 0, records: [] };
+      incomeBuckets[type].total += amount;
+      incomeBuckets[type].count++;
+      incomeBuckets[type].records.push(r);
+    } else if (category === 'expense') {
+      totalOpex += amount;
+      if (!opexBuckets[type]) opexBuckets[type] = { total: 0, count: 0, records: [] };
+      opexBuckets[type].total += amount;
+      opexBuckets[type].count++;
+      opexBuckets[type].records.push(r);
+    } else if (category === 'distribution') {
+      totalDistributions += amount;
+      if (!distroBuckets[type]) distroBuckets[type] = { total: 0, count: 0, records: [] };
+      distroBuckets[type].total += amount;
+      distroBuckets[type].count++;
+      distroBuckets[type].records.push(r);
+    } else if (category === 'investment') {
+      totalInvestments += amount;
+      if (!investBuckets[type]) investBuckets[type] = { total: 0, count: 0, records: [] };
+      investBuckets[type].total += amount;
+      investBuckets[type].count++;
+      investBuckets[type].records.push(r);
+    } else if (category === 'loan') {
+      // Check loan_start_date: if before period start, exclude from cash flow totals
+      const loanStart = loanStartDates[r.id] ? new Date(loanStartDates[r.id]) : getDate(r);
+      const inPeriodCashFlow = !period || loanStart >= period.start;
+      if (inPeriodCashFlow) totalLoans += amount;
+      if (!loanBuckets[type]) loanBuckets[type] = { total: 0, count: 0, records: [], prePeriodTotal: 0 };
+      loanBuckets[type].total += amount;
+      loanBuckets[type].count++;
+      loanBuckets[type].records.push(r);
+      if (!inPeriodCashFlow) loanBuckets[type].prePeriodTotal += amount;
+    } else if (category === 'loan_payback') {
+      totalLoanPaybacks += amount;
+      if (!loanPaybackBuckets[type]) loanPaybackBuckets[type] = { total: 0, count: 0, records: [] };
+      loanPaybackBuckets[type].total += amount;
+      loanPaybackBuckets[type].count++;
+      loanPaybackBuckets[type].records.push(r);
+    } else if (category === 'deposit') {
+      totalDeposits += amount;
+      if (!depositBuckets[type]) depositBuckets[type] = { total: 0, count: 0, records: [] };
+      depositBuckets[type].total += amount;
+      depositBuckets[type].count++;
+      depositBuckets[type].records.push(r);
+    } else if (category === 'payroll_offset') {
+      payrollReimb += amount;
+      if (!excludedBuckets[type]) excludedBuckets[type] = { total: 0, count: 0, records: [] };
+      excludedBuckets[type].total += amount;
+      excludedBuckets[type].count++;
+      excludedBuckets[type].records.push(r);
+    } else if (category === 'excluded') {
+      if (!excludedBuckets[type]) excludedBuckets[type] = { total: 0, count: 0, records: [] };
+      excludedBuckets[type].total += amount;
+      excludedBuckets[type].count++;
+      excludedBuckets[type].records.push(r);
+    }
+  });
+
+  // Net payroll: add reimbursement offset to opex
+  const netOpex = totalOpex + payrollReimb;
+  // Net Income = Income - Operating Expenses
+  const netIncome = totalIncome + netOpex;
+  // Cash Flow = Net Income - Distributions - Investments - Loans Out - Deposits + Loan Paybacks
+  const cashFlow = netIncome + totalDistributions + totalInvestments + totalLoans + totalDeposits + totalLoanPaybacks;
+
+  return {
+    totalIncome, totalOpex: Math.abs(totalOpex), netOpex, payrollReimb, payrollSplitTotal,
+    totalDistributions: Math.abs(totalDistributions), totalInvestments: Math.abs(totalInvestments),
+    totalLoans: Math.abs(totalLoans), totalLoanPaybacks, totalDeposits: Math.abs(totalDeposits),
+    netIncome, cashFlow,
+    incomeBuckets, opexBuckets, distroBuckets, investBuckets, loanBuckets, loanPaybackBuckets, depositBuckets, excludedBuckets
+  };
+}
+
+// ── Render All ──
+function renderAll() {
+  closeDrilldown();
+  renderChart();
+  renderPeriodDashboard();
+}
+
+// ── Render Net Income (P&L) Chart ──
+function renderChart() {
+  const container = document.getElementById('cfChart');
+  if (periods.length === 0) { container.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:40px;">No data</p>'; return; }
+
+  // Compute net income per period
+  const periodData = periods.map((p, i) => {
+    const recs = getRecordsForPeriod(p);
+    const comp = computePeriod(recs, p);
+    return { ...p, income: comp.totalIncome, expense: comp.totalOpex, net: comp.netIncome, idx: i };
+  });
+
+  // Cumulative net income line
+  let cumulative = 0;
+  periodData.forEach(p => { cumulative += p.net; p.cumulative = cumulative; });
+
+  // Use container width for full-stretch chart
+  const containerWidth = document.getElementById('cfChart').clientWidth || 900;
+  const W = Math.max(containerWidth, 400);
+  const H = 260;
+  const padL = 65, padR = 25, padT = 35, padB = 45;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  // Y scale
+  const allVals = periodData.flatMap(p => [p.income, -p.expense, p.net, p.cumulative]);
+  const maxY = Math.max(...allVals, 0) * 1.15;
+  const minY = Math.min(...allVals, 0) * 1.15;
+  const rangeY = maxY - minY || 1;
+
+  const y = v => padT + chartH - ((v - minY) / rangeY * chartH);
+  const gap = chartW / periods.length;
+  const barW = Math.min(gap * 0.55, 50);
+
+  let svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+
+  // Zero line
+  const zeroY = y(0);
+  svg += `<line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#ccc" stroke-width="1"/>`;
+
+  // Y axis labels
+  const steps = 5;
+  for (let i = 0; i <= steps; i++) {
+    const val = minY + (rangeY / steps) * i;
+    const yp = y(val);
+    const label = Math.abs(val) >= 1000 ? `${val < 0 ? '-' : ''}$${Math.round(Math.abs(val)/1000)}K` : `$${Math.round(val)}`;
+    svg += `<text x="${padL-8}" y="${yp+4}" font-size="10" fill="#999" text-anchor="end" font-family="sans-serif">${label}</text>`;
+    if (i > 0 && i < steps) svg += `<line x1="${padL}" y1="${yp}" x2="${W-padR}" y2="${yp}" stroke="#f0f0f0" stroke-width="1"/>`;
+  }
+
+  // Year separators
+  let lastYear = null;
+  periodData.forEach((p, i) => {
+    if (p.year !== lastYear) {
+      const x = padL + i * gap;
+      if (lastYear !== null) svg += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${H-padB}" stroke="#ddd" stroke-width="1" stroke-dasharray="4,3"/>`;
+      // Year label
+      const nextYearIdx = periodData.findIndex((pp, j) => j > i && pp.year !== p.year);
+      const endIdx = nextYearIdx === -1 ? periodData.length : nextYearIdx;
+      const midX = padL + ((i + endIdx) / 2) * gap;
+      svg += `<text x="${midX}" y="${padT-8}" font-size="11" fill="#999" text-anchor="middle" font-family="sans-serif" font-weight="600">${p.year}</text>`;
+      lastYear = p.year;
+    }
+  });
+
+  // Bars — revenue (green, above zero) and operating expenses (red, below zero)
+  periodData.forEach((p, i) => {
+    const cx = padL + i * gap + gap / 2;
+    const selected = i === selectedPeriodIndex;
+    const opacity = selected ? 1 : 0.7;
+
+    // Full-height clickable hit area for the entire column
+    svg += `<rect x="${padL + i * gap}" y="${padT}" width="${gap}" height="${chartH + padB}" fill="transparent" style="cursor:pointer" onclick="selectPeriod(${i})"/>`;
+
+    // Selection highlight
+    if (selected) {
+      svg += `<rect x="${padL + i * gap + 2}" y="${padT}" width="${gap - 4}" height="${chartH}" fill="rgba(0,0,0,0.04)" rx="4"/>`;
+    }
+
+    // Income bar (green, going up)
+    if (p.income > 0) {
+      const barH = (p.income / rangeY) * chartH;
+      svg += `<rect x="${cx - barW/2}" y="${zeroY - barH}" width="${barW/2 - 1}" height="${barH}" fill="var(--green)" rx="2" opacity="${opacity}" pointer-events="none"/>`;
+    }
+    // Expense bar (red, going down)
+    if (p.expense > 0) {
+      const barH = (p.expense / rangeY) * chartH;
+      svg += `<rect x="${cx}" y="${zeroY}" width="${barW/2 - 1}" height="${barH}" fill="var(--red)" rx="2" opacity="${opacity}" pointer-events="none"/>`;
+    }
+  });
+
+  // Cumulative line
+  let linePath = '';
+  periodData.forEach((p, i) => {
+    const cx = padL + i * gap + gap / 2;
+    const cy = y(p.cumulative);
+    linePath += (i === 0 ? 'M' : 'L') + `${cx},${cy}`;
+  });
+  svg += `<path d="${linePath}" fill="none" stroke="#1a1a1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  // Dots on cumulative net income line
+  periodData.forEach((p, i) => {
+    const cx = padL + i * gap + gap / 2;
+    const cy = y(p.cumulative);
+    svg += `<circle cx="${cx}" cy="${cy}" r="3" fill="#1a1a1a" style="cursor:pointer" onclick="selectPeriod(${i})"/>`;
+  });
+
+  // X axis labels
+  periodData.forEach((p, i) => {
+    const cx = padL + i * gap + gap / 2;
+    svg += `<text x="${cx}" y="${H - padB + 16}" font-size="10" fill="#999" text-anchor="middle" font-family="sans-serif">${p.shortLabel}</text>`;
+  });
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+function selectPeriod(idx) {
+  selectedPeriodIndex = idx;
+  renderAll();
+  saveStateToHash();
+}
+
+// ── Render Period Dashboard ──
+function renderPeriodDashboard() {
+  if (periods.length === 0) return;
+  const period = periods[selectedPeriodIndex];
+  const records = getRecordsForPeriod(period);
+  const comp = computePeriod(records, period);
+  lastPeriodComp = comp;
+
+  // Period title
+  document.getElementById('periodTitle').textContent = period.label;
+
+  // Summary cards — Row 1
+  // Show net values so Income − OpEx = Net Income adds up visually
+  // Income is already net of AM Partner Payouts, so show OpEx net of payroll reimbursements
+  document.getElementById('totalIncome').textContent = fmt(comp.totalIncome);
+  document.getElementById('totalExpenses').textContent = fmt(Math.abs(comp.netOpex));
+
+  const niEl = document.getElementById('netIncome');
+  niEl.textContent = fmt(comp.netIncome);
+  niEl.className = 'value ' + (comp.netIncome >= 0 ? 'green' : 'red');
+
+  // Summary cards — Row 2
+  document.getElementById('totalDistros').textContent = comp.totalDistributions > 0 ? fmt(-comp.totalDistributions) : '—';
+  document.getElementById('totalInvest').textContent = comp.totalInvestments > 0 ? fmt(-comp.totalInvestments) : '—';
+  document.getElementById('totalLoans').textContent = comp.totalLoans > 0 ? fmt(-comp.totalLoans) : '—';
+  document.getElementById('totalDeposits').textContent = comp.totalDeposits > 0 ? fmt(-comp.totalDeposits) : '—';
+  document.getElementById('totalLoanPaybacks').textContent = comp.totalLoanPaybacks > 0 ? fmt(comp.totalLoanPaybacks) : '—';
+
+  const cfEl = document.getElementById('cashFlow');
+  cfEl.textContent = fmt(comp.cashFlow);
+  cfEl.className = 'value ' + (comp.cashFlow >= 0 ? 'green' : 'red');
+
+  // Income rows — show PM Fee net of payroll splits (display only, totals unchanged)
+  const incDisplay = { ...comp.incomeBuckets };
+  if (incDisplay['Property Management Fee Income'] && comp.payrollSplitTotal > 0) {
+    const grossPM = incDisplay['Property Management Fee Income'].total;
+    const netPM = grossPM - comp.payrollSplitTotal;
+    incDisplay['Property Management Fee Income'] = {
+      ...incDisplay['Property Management Fee Income'],
+      total: netPM,
+      subNote: `Gross: ${fmtFull(grossPM)} | Less payroll: -${fmtFull(comp.payrollSplitTotal)}`
+    };
+  }
+  // Populate revenue property filter dropdown
+  populateRevenueFilter(comp);
+
+  // Apply revenue property filter if set
+  const revFilter = document.getElementById('revenuePropertyFilter');
+  const revFilterValue = revFilter ? revFilter.value : '';
+  let filteredIncDisplay = incDisplay;
+  let filteredIncTotal = comp.totalIncome;
+  if (revFilterValue) {
+    filteredIncDisplay = filterIncomeBucketsByPropInv(comp, revFilterValue);
+    filteredIncTotal = Object.values(filteredIncDisplay).reduce((s, v) => s + v.total, 0);
+  }
+  renderCategoryRows('incomeRows', filteredIncDisplay, 'income', filteredIncTotal);
+
+  // Operating expense rows — show Payroll net of ALL reimbursements (standalone + splits)
+  const opexDisplay = { ...comp.opexBuckets };
+  const totalPayrollOffset = comp.payrollReimb + comp.payrollSplitTotal;
+  if (opexDisplay['Payroll'] && totalPayrollOffset > 0) {
+    const grossPayroll = opexDisplay['Payroll'].total; // negative
+    const netPayroll = grossPayroll + totalPayrollOffset;
+    opexDisplay['Payroll'] = {
+      ...opexDisplay['Payroll'],
+      total: netPayroll,
+      subNote: `Out: ${fmtFull(grossPayroll)} | In: +${fmtFull(totalPayrollOffset)}`
+    };
+  }
+  renderCategoryRows('opexRows', opexDisplay, 'expense', comp.totalOpex);
+
+  // Balance Sheet Transactions — merged summary rows with click-to-drilldown
+  renderBsItems(comp);
+
+  // Excluded — clickable rows that open drilldowns
+  const exDiv = document.getElementById('excludedRows');
+  const excludedEntries = Object.entries(comp.excludedBuckets).sort((a,b) => b[1].count - a[1].count);
+  const excludedCount = excludedEntries.reduce((s, [,v]) => s + v.count, 0);
+  document.getElementById('excludedBadge').textContent = `(${excludedCount} transactions)`;
+  exDiv.innerHTML = excludedEntries.map(([type, data]) =>
+    `<div class="excluded-row" style="cursor:pointer;" onclick="openDrilldown('${type}', 'expense')"><span>${type} (${data.count})</span><span>${fmtFull(data.total)}</span></div>`
+  ).join('');
+}
+
+function populateRevenueFilter(comp) {
+  const filter = document.getElementById('revenuePropertyFilter');
+  if (!filter) return;
+  const currentVal = filter.value;
+  // Collect properties/investments that have linked income transactions
+  const linkedEntities = new Map(); // key -> label
+  const propIds = new Set(bsProperties.map(p => p.id));
+  allRecords.forEach(r => {
+    const { category } = categorize(r);
+    if (category !== 'income') return;
+    const propId = propertyLinks[r.id];
+    const invId = investmentLinks[r.id];
+    if (propId) {
+      const prop = bsProperties.find(p => p.id === propId);
+      if (prop) linkedEntities.set('prop:' + propId, prop.property_name);
+    }
+    if (invId) {
+      const inv = bsInvestments.find(i => i.id === invId);
+      if (inv && (!inv.propertyId || !propIds.has(inv.propertyId))) linkedEntities.set('inv:' + invId, inv.name);
+    }
+  });
+  let optsHtml = '<option value="">All Properties</option>';
+  [...linkedEntities.entries()].sort((a,b) => a[1].localeCompare(b[1])).forEach(([key, label]) => {
+    optsHtml += `<option value="${key}" ${key === currentVal ? 'selected' : ''}>${label}</option>`;
+  });
+  filter.innerHTML = optsHtml;
+}
+
+function filterIncomeBucketsByPropInv(comp, filterValue) {
+  const [type, id] = filterValue.split(':');
+  const filtered = {};
+  // Re-bucket income records that match the filter
+  allRecords.forEach(r => {
+    const { category, type: catType } = categorize(r);
+    if (category !== 'income') return;
+    const amount = getAmount(r);
+    let matches = false;
+    if (type === 'prop' && propertyLinks[r.id] === id) matches = true;
+    if (type === 'inv' && investmentLinks[r.id] === id) matches = true;
+    if (!matches) return;
+    if (!filtered[catType]) filtered[catType] = { total: 0, count: 0, records: [] };
+    filtered[catType].total += amount;
+    filtered[catType].count++;
+    filtered[catType].records.push(r);
+  });
+  return filtered;
+}
+
+function filterRevenueByProperty(value) {
+  // Re-render just the revenue section without full refresh
+  if (typeof lastPeriodComp !== 'undefined' && lastPeriodComp) {
+    const comp = lastPeriodComp;
+    const incDisplay = { ...comp.incomeBuckets };
+    if (incDisplay['Property Management Fee Income'] && comp.payrollSplitTotal > 0) {
+      const grossPM = incDisplay['Property Management Fee Income'].total;
+      const netPM = grossPM - comp.payrollSplitTotal;
+      incDisplay['Property Management Fee Income'] = { ...incDisplay['Property Management Fee Income'], total: netPM, subNote: `Gross: ${fmtFull(grossPM)} | Less payroll: -${fmtFull(comp.payrollSplitTotal)}` };
+    }
+    let filteredIncDisplay = incDisplay;
+    let filteredIncTotal = comp.totalIncome;
+    if (value) {
+      filteredIncDisplay = filterIncomeBucketsByPropInv(comp, value);
+      filteredIncTotal = Object.values(filteredIncDisplay).reduce((s, v) => s + v.total, 0);
+    }
+    renderCategoryRows('incomeRows', filteredIncDisplay, 'income', filteredIncTotal);
+  }
+}
+
+function renderCategoryRows(containerId, buckets, cssClass, total) {
+  const container = document.getElementById(containerId);
+  const entries = Object.entries(buckets)
+    .filter(([, v]) => v.total !== 0)
+    .sort((a, b) => Math.abs(b[1].total) - Math.abs(a[1].total));
+
+  const maxVal = entries.length > 0 ? Math.max(...entries.map(([,v]) => Math.abs(v.total))) : 1;
+
+  container.innerHTML = entries.map(([type, data]) => {
+    const pct = total > 0 ? (Math.abs(data.total) / total * 100) : 0;
+    const barWidth = Math.max((Math.abs(data.total) / maxVal) * 100, 3);
+    const icon = CAT_ICONS[type] || (cssClass === 'income' ? '💵' : '📋');
+    const subNote = data.subNote ? `<div style="font-size:11px;color:var(--text-dim);margin-top:1px;">${data.subNote}</div>` : '';
+    return `
+      <div class="cat-row ${cssClass}" onclick="openDrilldown('${type}', '${cssClass}')">
+        <div class="cat-icon">${icon}</div>
+        <div class="cat-info">
+          <div class="cat-name">${type}</div>
+        </div>
+        <div class="cat-bar-wrap">
+          <div class="cat-bar" style="width:${barWidth}%">
+            <span class="cat-bar-label">${type}</span>
+          </div>
+        </div>
+        <div class="cat-amount">${fmtFull(Math.abs(data.total))} (${pct.toFixed(1)}%)${subNote}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderInvestmentRows(containerId, buckets, total) {
+  const container = document.getElementById(containerId);
+  // Flatten all records from all investment buckets into individual rows
+  const allRecords = [];
+  Object.entries(buckets).forEach(([type, data]) => {
+    if (data.records) {
+      data.records.forEach(r => {
+        const amount = Math.abs(getAmount(r));
+        const desc = getDescription(r);
+        const label = categoryNames[r.id] || desc.slice(0, 60);
+        const fullDesc = desc; // full description for tooltip
+        const date = getDate(r);
+        allRecords.push({ label, fullDesc, amount, date, recordId: r.id });
+      });
+    }
+  });
+  // Sort by amount descending
+  allRecords.sort((a, b) => b.amount - a.amount);
+  const maxVal = allRecords.length > 0 ? Math.max(...allRecords.map(r => r.amount)) : 1;
+
+  container.innerHTML = allRecords.map(r => {
+    const pct = total > 0 ? (r.amount / total * 100) : 0;
+    const barWidth = Math.max((r.amount / maxVal) * 100, 3);
+    const dateStr = r.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `
+      <div class="cat-row expense" style="cursor:default;" title="${r.fullDesc}">
+        <div class="cat-icon">🏗️</div>
+        <div class="cat-info">
+          <div class="cat-name" style="font-size:12px;">${r.label}</div>
+          <div style="font-size:10px;color:var(--text-dim);">${dateStr}</div>
+        </div>
+        <div class="cat-bar-wrap">
+          <div class="cat-bar" style="width:${barWidth}%">
+            <span class="cat-bar-label">Investment Contributions</span>
+          </div>
+        </div>
+        <div class="cat-amount">${fmtFull(r.amount)} (${pct.toFixed(1)}%)</div>
+      </div>`;
+  }).join('');
+}
+
+function renderBsItems(comp) {
+  const container = document.getElementById('bsItemsRows');
+  const items = [];
+  if (comp.totalDistributions > 0) {
+    const count = Object.values(comp.distroBuckets).reduce((s, b) => s + b.count, 0);
+    items.push({ label: 'Owner Distributions', icon: '💸', amount: comp.totalDistributions, count, drillType: 'Owner Distributions', cssClass: 'expense' });
+  }
+  if (comp.totalInvestments > 0) {
+    const count = Object.values(comp.investBuckets).reduce((s, b) => s + b.count, 0);
+    items.push({ label: 'Investment Contributions', icon: '🏗️', amount: comp.totalInvestments, count, drillType: 'Investment Contributions', cssClass: 'expense' });
+  }
+  if (comp.totalLoans > 0) {
+    const count = Object.values(comp.loanBuckets).reduce((s, b) => s + b.count, 0);
+    items.push({ label: 'Loans Out', icon: '🏦', amount: comp.totalLoans, count, drillType: 'Loan Out', cssClass: 'expense' });
+  }
+  if (comp.totalDeposits > 0) {
+    const count = Object.values(comp.depositBuckets).reduce((s, b) => s + b.count, 0);
+    items.push({ label: 'Deposits', icon: '🔒', amount: comp.totalDeposits, count, drillType: 'Deposit', cssClass: 'expense' });
+  }
+  if (comp.totalLoanPaybacks > 0) {
+    items.push({ label: 'Loan Paybacks', icon: '↩️', amount: comp.totalLoanPaybacks, count: Object.values(comp.loanPaybackBuckets).reduce((s, b) => s + b.count, 0), drillType: 'Loan Payback', cssClass: 'income' });
+  }
+  const maxVal = items.length > 0 ? Math.max(...items.map(i => i.amount)) : 1;
+  const totalAll = items.reduce((s, i) => s + i.amount, 0);
+
+  container.innerHTML = items.map(item => {
+    const barWidth = Math.max((item.amount / maxVal) * 100, 5);
+    const pct = totalAll > 0 ? (item.amount / totalAll * 100).toFixed(1) : 0;
+    return `
+      <div class="cat-row ${item.cssClass}" onclick="openDrilldown('${item.drillType}', '${item.cssClass}')" style="cursor:pointer;">
+        <div class="cat-icon">${item.icon}</div>
+        <div class="cat-info">
+          <div class="cat-name">${item.label}</div>
+          <div style="font-size:10px;color:var(--text-dim);">${item.count} payment${item.count !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="cat-bar-wrap">
+          <div class="cat-bar" style="width:${barWidth}%">
+            <span class="cat-bar-label">${item.label}</span>
+          </div>
+        </div>
+        <div class="cat-amount">${fmtFull(item.amount)} (${pct}%)</div>
+      </div>`;
+  }).join('');
+
+  if (items.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-dim);padding:12px;text-align:center;font-size:13px;">No balance sheet transactions this period.</p>';
+  }
+}
+
+// ── Drill-down ──
+let currentDrilldownType = null;
+let currentDrilldownCssClass = null;
+
+function openDrilldown(type, cssClass) {
+  currentDrilldownType = type;
+  currentDrilldownCssClass = cssClass;
+  const period = periods[selectedPeriodIndex];
+  const records = getRecordsForPeriod(period);
+
+  // For Payroll drilldown, also include reimbursements (payroll_offset) and PM fee splits
+  let drillItems = []; // { date, desc, acct, amount, recordId, currentType, isSynthetic }
+
+  if (type === 'Payroll') {
+    // 1. Justworks debits (negative)
+    records.forEach(r => {
+      const { type: t } = categorize(r);
+      if (t === 'Payroll') {
+        drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: t, isSynthetic: false });
+      }
+    });
+    // 2. Payroll Reimbursement records (transfers + pa-mgmt BILLPAY) — positive
+    records.forEach(r => {
+      const { category, type: t } = categorize(r);
+      if (category === 'payroll_offset') {
+        drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: t, isSynthetic: false });
+      }
+    });
+    // 3. PM fee payroll splits — synthetic positive entries
+    records.forEach(r => {
+      const splitAmt = payrollSplits[r.id];
+      if (splitAmt && splitAmt > 0 && categorize(r).category === 'income') {
+        drillItems.push({ date: getDate(r), desc: `Payroll reimb. split from: ${getDescription(r).slice(0,60)}…`, acct: getAccountName(r), amount: splitAmt, recordId: null, currentType: 'Payroll Reimbursement', isSynthetic: true });
+      }
+    });
+  } else if (type === 'Asset Management Fee Income') {
+    // AM Fee: show each income transaction, then show partner payouts as deductions
+    records.forEach(r => {
+      const { category, type: t } = categorize(r);
+      if (t === 'Asset Management Fee Income' && category === 'income') {
+        drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: t, isSynthetic: false });
+      } else if (t === 'AM Partner Payout' && category === 'distribution') {
+        // Partner payout — show as deduction within AM Fee, with editable category
+        drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: 'AM Partner Payout', isSynthetic: false, isAmPayout: true });
+      }
+    });
+  } else if (type === 'Property Management Fee Income') {
+    // PM Fee: show each transaction, then subtract payroll splits as deductions
+    records.forEach(r => {
+      const { type: t } = categorize(r);
+      if (t === type) {
+        drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: t, isSynthetic: false });
+        // If this transaction has a payroll split, add a synthetic deduction line
+        const splitAmt = payrollSplits[r.id];
+        if (splitAmt && splitAmt > 0) {
+          drillItems.push({ date: getDate(r), desc: `Less: Payroll Reimbursement`, acct: getAccountName(r), amount: -splitAmt, recordId: null, currentType: 'Payroll Reimbursement', isSynthetic: true });
+        }
+      }
+    });
+  } else {
+    // Standard: find records matching this category
+    records.forEach(r => {
+      const { type: t } = categorize(r);
+      if (t === type) {
+        drillItems.push({ date: getDate(r), desc: getDescription(r), acct: getAccountName(r), amount: getAmount(r), recordId: r.id, currentType: t, isSynthetic: false });
+      }
+    });
+  }
+
+  // Sort by date descending
+  drillItems.sort((a, b) => b.date - a.date);
+
+  document.getElementById('drilldownTitle').textContent = `${type} — ${period.label}`;
+
+  // Summary bars for special drilldowns
+  let summaryHtml = '';
+  if (type === 'Asset Management Fee Income') {
+    const gross = drillItems.filter(d => !d.isAmPayout).reduce((s, d) => s + d.amount, 0);
+    const deductions = drillItems.filter(d => d.isAmPayout).reduce((s, d) => s + d.amount, 0);
+    const net = gross + deductions;
+    if (deductions !== 0) {
+      summaryHtml = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;padding:16px;background:var(--surface2);border-radius:10px;">
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Gross AM Fee</div><div style="font-size:18px;font-weight:700;color:var(--green-dark);">${fmtFull(gross)}</div></div>
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Partner Payout</div><div style="font-size:18px;font-weight:700;color:var(--red-dark);">${fmtFull(deductions)}</div></div>
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Net AM Fee</div><div style="font-size:18px;font-weight:700;color:var(--accent);">${fmtFull(net)}</div></div>
+      </div>`;
+    }
+  } else if (type === 'Property Management Fee Income') {
+    const gross = drillItems.filter(d => !d.isSynthetic).reduce((s, d) => s + d.amount, 0);
+    const deductions = drillItems.filter(d => d.isSynthetic).reduce((s, d) => s + d.amount, 0);
+    const net = gross + deductions;
+    if (deductions !== 0) {
+      summaryHtml = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;padding:16px;background:var(--surface2);border-radius:10px;">
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Gross PM Fee</div><div style="font-size:18px;font-weight:700;color:var(--green-dark);">${fmtFull(gross)}</div></div>
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Payroll Deductions</div><div style="font-size:18px;font-weight:700;color:var(--red-dark);">${fmtFull(deductions)}</div></div>
+        <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Net PM Fee</div><div style="font-size:18px;font-weight:700;color:var(--accent);">${fmtFull(net)}</div></div>
+      </div>`;
+    }
+  } else if (type === 'Payroll') {
+    const debits = drillItems.filter(d => d.amount < 0).reduce((s, d) => s + d.amount, 0);
+    const credits = drillItems.filter(d => d.amount > 0).reduce((s, d) => s + d.amount, 0);
+    const net = debits + credits;
+    summaryHtml = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;padding:16px;background:var(--surface2);border-radius:10px;">
+      <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Debits (Out)</div><div style="font-size:18px;font-weight:700;color:var(--red-dark);">${fmtFull(debits)}</div></div>
+      <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Credits (In)</div><div style="font-size:18px;font-weight:700;color:var(--green-dark);">+${fmtFull(credits)}</div></div>
+      <div style="text-align:center;"><div style="font-size:10px;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.3px;margin-bottom:4px;">Net Payroll</div><div style="font-size:18px;font-weight:700;color:${net >= 0 ? 'var(--green-dark)' : 'var(--red-dark)'};">${fmtFull(net)}</div></div>
+    </div>`;
+  }
+
+  // Group by date
+  const groups = {};
+  drillItems.forEach(d => {
+    const key = d.date.toLocaleDateString('en-US', { month:'long', day:'numeric', year:'numeric' });
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(d);
+  });
+
+  let html = summaryHtml;
+  Object.entries(groups).forEach(([dateStr, items]) => {
+    const dayTotal = items.reduce((s, d) => s + d.amount, 0);
+    html += `<div class="txn-date-group">${dateStr}<span style="float:right">${dayTotal >= 0 ? '+' : ''}${fmtFull(dayTotal)}</span></div>`;
+    items.forEach(d => {
+      const amtClass = d.amount >= 0 ? 'green' : 'red';
+      const amtStr = (d.amount >= 0 ? '+' : '') + fmtFull(d.amount);
+
+      if (d.isSynthetic) {
+        // Synthetic row (no category dropdown)
+        html += `
+          <div class="txn-row">
+            <div class="txn-desc" style="color:var(--green-dark);font-style:italic;">${d.desc}<span class="txn-tooltip">${d.desc}</span></div>
+            <div class="txn-acct">${d.acct}</div>
+            <div class="txn-cat-select" style="border:none;background:none;font-size:12px;color:var(--text-dim);">PM Split</div>
+            <div class="txn-amount ${amtClass}">${amtStr}</div>
+          </div>`;
+      } else if (type === 'Investment Contributions') {
+        // Investment Contributions: show investment dropdown + category dropdown
+        const linkedInvId = investmentLinks[d.recordId] || '';
+        const invOptions = [
+          `<option value="">— Unlinked —</option>`,
+          ...bsInvestments.map(inv =>
+            `<option value="${inv.id}" ${inv.id === linkedInvId ? 'selected' : ''}>${inv.name}</option>`
+          ),
+          `<option value="__new__">+ Add New Investment…</option>`
+        ].join('');
+        const linkedInv = linkedInvId ? bsInvestments.find(i => i.id === linkedInvId) : null;
+        const invLabel = linkedInv ? `<div style="font-size:10px;color:var(--accent);margin-top:1px;">${linkedInv.name}</div>` : '';
+        html += `
+          <div class="txn-row" style="flex-wrap:wrap;">
+            <div class="txn-desc">${d.desc}${invLabel}<span class="txn-tooltip">${d.desc}</span></div>
+            <div class="txn-acct">${d.acct}</div>
+            <select class="txn-cat-select" style="max-width:120px;font-size:10px;" onchange="linkToInvestment('${d.recordId}', this.value, this)">
+              ${invOptions}
+            </select>
+            <select class="txn-cat-select" style="max-width:120px;font-size:10px;" onchange="changeCategory('${d.recordId}', this.value)">
+              ${buildCategoryOptions(d.currentType)}
+            </select>
+            <div class="txn-amount ${amtClass}">${amtStr}</div>
+          </div>`;
+      } else if ((type === 'Loan Out' || type === 'Deposit') && d.recordId) {
+        // Loan Out / Deposit: show editable friendly name + category dropdown
+        const currentName = categoryNames[d.recordId] || '';
+        html += `
+          <div class="txn-row" style="flex-wrap:wrap;">
+            <div class="txn-desc">${d.desc}${currentName ? `<div style="font-size:10px;color:var(--accent);margin-top:1px;">${currentName}</div>` : ''}<span class="txn-tooltip">${d.desc}</span></div>
+            <div class="txn-acct">${d.acct}</div>
+            <input type="text" value="${currentName}" placeholder="Name (e.g. Wooster loan)"
+              style="width:130px;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);"
+              onchange="updateLoanName('${d.recordId}', this.value)" />
+            <select class="txn-cat-select" style="max-width:120px;" onchange="changeCategory('${d.recordId}', this.value)">
+              ${buildCategoryOptions(d.currentType)}
+            </select>
+            <div class="txn-amount ${amtClass}">${amtStr}</div>
+          </div>`;
+      } else {
+        // Real record with category dropdown + optional linking dropdown
+        const linkableIncomeTypes = ['Asset Management Fee Income', 'Property Management Fee Income', 'Development Fee Income', 'Acquisition Fee Income'];
+        const isLinkableIncome = linkableIncomeTypes.includes(d.currentType);
+        const isInvestmentIncome = d.currentType === 'Investment Income';
+        const isInterestExpense = d.currentType === 'Interest Expense';
+
+        let linkHtml = '';
+        if (isLinkableIncome && d.recordId) {
+          // Combined Property + Investment dropdown for fee income (deduped by name)
+          const currentPropId = propertyLinks[d.recordId] || '';
+          const currentInvId = investmentLinks[d.recordId] || '';
+          const propIds = new Set(bsProperties.map(p => p.id));
+          let optsHtml = `<option value="">— Property / Investment —</option>`;
+          optsHtml += `<optgroup label="Properties">`;
+          bsProperties.forEach(p => { optsHtml += `<option value="prop:${p.id}" ${p.id === currentPropId ? 'selected' : ''}>${p.property_name}</option>`; });
+          optsHtml += `</optgroup><optgroup label="Investments">`;
+          bsInvestments.forEach(inv => { if (!inv.propertyId || !propIds.has(inv.propertyId)) optsHtml += `<option value="inv:${inv.id}" ${inv.id === currentInvId ? 'selected' : ''}>${inv.name}</option>`; });
+          optsHtml += `</optgroup>`;
+          linkHtml = `<select class="txn-cat-select" style="max-width:130px;font-size:10px;" onchange="linkToPropOrInv('${d.recordId}', this.value)">${optsHtml}</select>`;
+        } else if (isInvestmentIncome && d.recordId) {
+          // Investment dropdown for investment income (to track distributions)
+          const linkedInvId = investmentLinks[d.recordId] || '';
+          const invOpts = [`<option value="">— Investment —</option>`];
+          bsInvestments.forEach(inv => { invOpts.push(`<option value="${inv.id}" ${inv.id === linkedInvId ? 'selected' : ''}>${inv.name}</option>`); });
+          invOpts.push(`<option value="__new__">+ Add New…</option>`);
+          linkHtml = `<select class="txn-cat-select" style="max-width:130px;font-size:10px;" onchange="linkToInvestment('${d.recordId}', this.value, this)">${invOpts.join('')}</select>`;
+        } else if (isInterestExpense && d.recordId) {
+          // Liability dropdown for interest expense
+          const currentLiabId = liabilityLinks[d.recordId] || '';
+          const liabOpts = [`<option value="">— Loan —</option>`];
+          bsLiabilities.forEach(l => { liabOpts.push(`<option value="${l.id}" ${l.id === currentLiabId ? 'selected' : ''}>${l.lender}${l.relatedDeal ? ' — ' + l.relatedDeal : ''}</option>`); });
+          linkHtml = `<select class="txn-cat-select" style="max-width:130px;font-size:10px;" onchange="linkToLiability('${d.recordId}', this.value)">${liabOpts.join('')}</select>`;
+        } else if (d.currentType === 'Loan Payback' && d.recordId) {
+          // Loan dropdown for loan payback — link to existing Loan Out names
+          const loanNames = getExistingLoanNames();
+          const currentLoan = categoryNames[d.recordId] || '';
+          const loanOpts = [`<option value="">— Apply to Loan —</option>`];
+          loanNames.forEach((ids, name) => { loanOpts.push(`<option value="${name}" ${name === currentLoan ? 'selected' : ''}>${name}</option>`); });
+          linkHtml = `<select class="txn-cat-select" style="max-width:130px;font-size:10px;" onchange="linkToLoan('${d.recordId}', this.value)">${loanOpts.join('')}</select>`;
+        }
+
+        html += `
+          <div class="txn-row"${linkHtml ? ' style="flex-wrap:wrap;"' : ''}>
+            <div class="txn-desc">${d.desc}<span class="txn-tooltip">${d.desc}</span></div>
+            <div class="txn-acct">${d.acct}</div>
+            ${linkHtml}
+            <select class="txn-cat-select" onchange="changeCategory('${d.recordId}', this.value)">
+              ${buildCategoryOptions(d.currentType)}
+            </select>
+            <div class="txn-amount ${amtClass}">${amtStr}</div>
+          </div>`;
+      }
+    });
+  });
+
+  if (drillItems.length === 0) {
+    html = '<p style="color:var(--text-dim);padding:20px;text-align:center;">No transactions in this category for this period.</p>';
+  }
+
+  document.getElementById('txnList').innerHTML = html;
+
+  // Show drilldown, hide category sections
+  document.getElementById('drilldown').classList.add('show');
+  document.getElementById('incomeSection').style.display = 'none';
+  document.getElementById('opexSection').style.display = 'none';
+  document.getElementById('bsItemsSection').style.display = 'none';
+  document.querySelector('.excluded-section').style.display = 'none';
+  saveStateToHash();
+  // Push history so browser back button closes drilldown
+  history.pushState({ drilldown: type }, '', location.hash);
+}
+
+function closeDrilldown(skipHistoryBack) {
+  currentDrilldownType = null;
+  currentDrilldownCssClass = null;
+  document.getElementById('drilldown').classList.remove('show');
+  document.getElementById('incomeSection').style.display = '';
+  document.getElementById('opexSection').style.display = '';
+  document.getElementById('bsItemsSection').style.display = '';
+  document.querySelector('.excluded-section').style.display = '';
+  saveStateToHash();
+}
+
+async function changeCategory(recordId, newCategory) {
+  categoryOverrides[recordId] = newCategory;
+
+  // For Loan Out / Deposit, prompt for a friendly name for the balance sheet
+  let friendlyName = null;
+  if (newCategory === 'Loan Out' || newCategory === 'Deposit') {
+    friendlyName = prompt(`Enter a short name for this ${newCategory.toLowerCase()} (shown on Balance Sheet):`, '');
+    if (friendlyName && friendlyName.trim()) {
+      categoryNames[recordId] = friendlyName.trim();
+    }
+  }
+  // For Loan Out, default loan_start_date to the transaction date
+  let loanStartDate = null;
+  if (newCategory === 'Loan Out') {
+    const rec = allRecords.find(r => r.id === recordId);
+    if (rec) {
+      const txnDate = getDate(rec);
+      loanStartDate = txnDate.toISOString().slice(0, 10);
+      loanStartDates[recordId] = loanStartDate;
+    }
+  }
+
+  showToast(`Category → ${newCategory}`);
+  updateReviewBadge();
+  renderPeriodDashboard();
+  // Re-render the drilldown if it's open so recategorized items drop off
+  if (currentDrilldownType) {
+    openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  }
+  // Persist to Supabase
+  try {
+    const patchData = { category_override: newCategory };
+    if (friendlyName && friendlyName.trim()) patchData.category_name = friendlyName.trim();
+    if (loanStartDate) patchData.loan_start_date = loanStartDate;
+    const result = await supaWrite('exec_transactions', 'PATCH', patchData, `?id=eq.${recordId}`);
+    if (!result || result.length === 0) {
+      console.error(`Category override: no rows updated for id=${recordId}. Column may not exist — run: ALTER TABLE exec_transactions ADD COLUMN IF NOT EXISTS category_override TEXT; ALTER TABLE exec_transactions ADD COLUMN IF NOT EXISTS category_name TEXT;`);
+      showToast('⚠️ Override not saved — check console', 'error');
+    } else {
+      console.log(`Category override saved: ${recordId} → ${newCategory}${friendlyName ? ' (' + friendlyName + ')' : ''}`);
+    }
+  } catch(e) {
+    console.error('Failed to save override:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+}
+
+async function updateLoanName(recordId, newName) {
+  const trimmed = newName.trim();
+  if (trimmed) {
+    categoryNames[recordId] = trimmed;
+  } else {
+    delete categoryNames[recordId];
+  }
+  showToast(trimmed ? `Name → ${trimmed}` : 'Name cleared');
+  // Persist to Supabase
+  try {
+    await supaWrite('exec_transactions', 'PATCH', { category_name: trimmed || null }, `?id=eq.${recordId}`);
+  } catch(e) {
+    console.error('Failed to save loan name:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+  // Re-render balance sheet sidebar to reflect new name
+  renderPeriodDashboard();
+}
+
+// Recompute distributed amounts: base (editable, for historical) + linked Investment Income transactions
+function recomputeDistributed() {
+  const distByInv = {};
+  allRecords.forEach(r => {
+    const invId = investmentLinks[r.id];
+    if (!invId) return;
+    const cat = categorize(r);
+    if (cat.type === 'Investment Income') {
+      distByInv[invId] = (distByInv[invId] || 0) + Math.abs(getAmount(r));
+    }
+  });
+  bsInvestments.forEach(inv => {
+    inv.distributed = (inv.distributedBase || 0) + (distByInv[inv.id] || 0);
+  });
+}
+
+async function linkToInvestment(recordId, investmentId, selectEl) {
+  if (investmentId === '__new__') {
+    // Prompt for new investment name
+    const name = prompt('New investment name:');
+    if (!name || !name.trim()) {
+      selectEl.value = investmentLinks[recordId] || '';
+      return;
+    }
+    const ownershipStr = prompt('Ownership % (e.g. 7.47):', '100');
+    const ownership = parseFloat(ownershipStr) || 100;
+    // Create new investment in Supabase
+    try {
+      const newInv = await supaWrite('exec_investments', 'POST', {
+        name: name.trim(),
+        ownership_pct: ownership,
+        contributed: 0,
+        distributed: 0,
+        valuation: 0,
+        status: 'Active'
+      });
+      if (newInv && newInv.length > 0) {
+        const created = newInv[0];
+        // Add to local bsInvestments array
+        bsInvestments.push({
+          id: created.id,
+          name: created.name,
+          ownership: created.ownership_pct,
+          committed: 0,
+          contributed: 0,
+          distributed: 0,
+          unreturned: 0,
+          netEquity: 0,
+          valuation: 0,
+          capRate: null,
+          propertyId: null,
+          propertyName: null,
+          propertyValuation: null,
+          propertyNOI: 0,
+          propertyDebt: 0,
+          status: 'Active',
+          membershipClass: ''
+        });
+        investmentId = created.id;
+        showToast(`Created: ${name.trim()}`);
+      } else {
+        showToast('⚠️ Failed to create investment', 'error');
+        selectEl.value = investmentLinks[recordId] || '';
+        return;
+      }
+    } catch(e) {
+      console.error('Create investment failed:', e);
+      showToast(`⚠️ ${e.message}`, 'error');
+      selectEl.value = investmentLinks[recordId] || '';
+      return;
+    }
+  }
+
+  // Save link locally
+  if (investmentId) {
+    investmentLinks[recordId] = investmentId;
+  } else {
+    delete investmentLinks[recordId];
+  }
+
+  const invName = investmentId ? (bsInvestments.find(i => i.id === investmentId) || {}).name : 'Unlinked';
+  showToast(`Linked → ${invName || 'Unlinked'}`);
+
+  // Re-render drilldown to update labels
+  if (currentDrilldownType) {
+    openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  }
+
+  // Recompute distributed totals and re-render balance sheet
+  recomputeDistributed();
+  renderBalanceSheet();
+
+  // Persist to Supabase
+  try {
+    const result = await supaWrite('exec_transactions', 'PATCH',
+      { investment_id: investmentId || null },
+      `?id=eq.${recordId}`
+    );
+    if (!result || result.length === 0) {
+      console.error(`Investment link: no rows updated for id=${recordId}. Column may not exist — run: ALTER TABLE exec_transactions ADD COLUMN IF NOT EXISTS investment_id UUID REFERENCES exec_investments(id);`);
+      showToast('⚠️ Link not saved — check console', 'error');
+    }
+  } catch(e) {
+    console.error('Failed to save investment link:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+}
+
+// Link transaction to a property (income items)
+async function linkToProperty(recordId, propertyId) {
+  if (propertyId) {
+    propertyLinks[recordId] = propertyId;
+  } else {
+    delete propertyLinks[recordId];
+  }
+  const propName = propertyId ? (bsProperties.find(p => p.id === propertyId) || {}).property_name : 'Unlinked';
+  showToast(`Property → ${propName || 'Unlinked'}`);
+  if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  try {
+    await supaWrite('exec_transactions', 'PATCH', { property_id: propertyId || null }, `?id=eq.${recordId}`);
+  } catch(e) {
+    console.error('Failed to save property link:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+}
+
+// Combined property/investment linker — value format: "prop:ID" or "inv:ID"
+async function linkToPropOrInv(recordId, value) {
+  if (!value) {
+    delete propertyLinks[recordId];
+    delete investmentLinks[recordId];
+    showToast('Unlinked');
+    if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+    recomputeDistributed(); renderBalanceSheet();
+    try { await supaWrite('exec_transactions', 'PATCH', { property_id: null, investment_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
+    return;
+  }
+  const [type, id] = value.split(':');
+  if (type === 'prop') {
+    propertyLinks[recordId] = id;
+    delete investmentLinks[recordId];
+    const name = (bsProperties.find(p => p.id === id) || {}).property_name || id;
+    showToast(`Linked → ${name}`);
+    if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+    recomputeDistributed(); renderBalanceSheet();
+    try { await supaWrite('exec_transactions', 'PATCH', { property_id: id, investment_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
+  } else if (type === 'inv') {
+    investmentLinks[recordId] = id;
+    delete propertyLinks[recordId];
+    const name = (bsInvestments.find(i => i.id === id) || {}).name || id;
+    showToast(`Linked → ${name}`);
+    if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+    recomputeDistributed(); renderBalanceSheet();
+    try { await supaWrite('exec_transactions', 'PATCH', { investment_id: id, property_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
+  }
+}
+
+// Link interest expense to a liability
+async function linkToLoan(recordId, loanName) {
+  if (loanName) categoryNames[recordId] = loanName;
+  else delete categoryNames[recordId];
+  showToast(loanName ? `Applied to: ${loanName}` : 'Unlinked');
+  if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  try {
+    await supaWrite('exec_transactions', 'PATCH', { category_name: loanName || null }, `?id=eq.${recordId}`);
+  } catch(e) {
+    console.error('Failed to save loan link:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+}
+
+async function linkToLiability(recordId, liabilityId) {
+  if (liabilityId) {
+    liabilityLinks[recordId] = liabilityId;
+  } else {
+    delete liabilityLinks[recordId];
+  }
+  const liabName = liabilityId ? (bsLiabilities.find(l => l.id === liabilityId) || {}).lender : 'Unlinked';
+  showToast(`Loan → ${liabName || 'Unlinked'}`);
+  if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  try {
+    await supaWrite('exec_transactions', 'PATCH', { liability_id: liabilityId || null }, `?id=eq.${recordId}`);
+  } catch(e) {
+    console.error('Failed to save liability link:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+}
+
+// ── CSV Upload & Import System ──
+
+// Account number → name mapping (includes all known accounts)
+const ACCOUNT_NAME_MAP = {
+  '483101560383': 'FIRST MILE CAPITAL LLC',
+  '483110283091': 'First Mile Capital SAVINGS',
+  '483110897814': 'FIRST MILE MANAGEMENT LLC',
+  '483103381719': 'FM PARAMUS MEMBER LLC',
+  '483108155623': 'FM Plaza Member LLC',
+  '483107673423': 'FM Kemble Membe',
+  '483103204524': 'FM SIXTYONE PARAMUS LLC',
+  '483106854065': 'FM PLAZA MANAGER LLC',
+  '483107226809': 'FM 340 KEMBLE LLC Operating',
+  '483108416715': 'FM 340 Kemble LLC Investors',
+  '483107740039': 'FM Kemble JV LLC',
+  '483107689514': 'FM Paramus Member LLC',
+  '483112607604': 'FM GREENWICH OWNER LLC',
+  '483112182514': '132 40 METRO OWNER LLC',
+  '483103381654': 'First Mile Pref Fund I',
+  '483108735247': 'FM Capital Account',
+};
+
+// Learned patterns — loaded from Supabase exec_learned_patterns table
+let learnedPatterns = []; // { description_pattern, amount_min, amount_max, account_number, category, property_id, investment_id, liability_id, confidence, occurrences }
+
+// Staged upload data
+let uploadStagedTxns = []; // parsed + deduped, ready for review
+let uploadReviewChoices = {}; // idx -> { category, property_id, investment_id, liability_id }
+
+async function loadLearnedPatterns() {
+  try {
+    const data = await supaFetch('exec_learned_patterns', '?order=occurrences.desc&limit=500');
+    learnedPatterns = data || [];
+    console.log(`Loaded ${learnedPatterns.length} learned patterns`);
+  } catch(e) {
+    // Table may not exist yet — that's ok
+    console.log('Learned patterns table not found (will be created on first pattern save)');
+    learnedPatterns = [];
+  }
+}
+
+// Load patterns on startup
+loadLearnedPatterns();
+
+function openUploadModal() {
+  document.getElementById('uploadOverlay').classList.add('show');
+  document.getElementById('uploadProgress').style.display = 'none';
+  document.getElementById('uploadStats').style.display = 'none';
+  document.getElementById('uploadModalActions').style.display = 'none';
+  document.getElementById('csvFileInput').value = '';
+  uploadStagedTxns = [];
+}
+function closeUploadModal() {
+  document.getElementById('uploadOverlay').classList.remove('show');
+}
+
+// Drag and drop
+const dropzone = document.getElementById('uploadDropzone');
+if (dropzone) {
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', () => { dropzone.classList.remove('dragover'); });
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault(); dropzone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) handleCsvUpload(e.dataTransfer.files[0]);
+  });
+}
+
+function parseCsvLine(line) {
+  const result = [];
+  let inQuotes = false;
+  let current = '';
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && i + 1 < line.length && line[i+1] === '"') { current += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+async function handleCsvUpload(file) {
+  if (!file || !file.name.endsWith('.csv')) {
+    alert('Please upload a CSV file');
+    return;
+  }
+
+  const progress = document.getElementById('uploadProgress');
+  const statusText = document.getElementById('uploadStatusText');
+  const progressFill = document.getElementById('uploadProgressFill');
+  progress.style.display = 'block';
+  statusText.textContent = 'Parsing CSV...';
+  progressFill.style.width = '20%';
+
+  const text = await file.text();
+  // Remove BOM
+  const clean = text.replace(/^\uFEFF/, '');
+  const lines = clean.split(/\r?\n/).filter(l => l.trim());
+  const headers = parseCsvLine(lines[0]);
+
+  // Map header positions
+  const colIdx = {};
+  headers.forEach((h, i) => { colIdx[h.replace(/^"|"$/g, '')] = i; });
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    if (cols.length < 8) continue;
+
+    const date = (cols[colIdx['As Of']] || '').replace(/"/g, '');
+    const acctNum = (cols[colIdx['Account']] || '').replace(/"/g, '');
+    const dataType = (cols[colIdx['Data Type']] || '').replace(/"/g, '');
+    const shortDesc = (cols[colIdx['Description']] || '').replace(/"/g, '');
+    const rawAmount = parseFloat((cols[colIdx['Amount']] || '0').replace(/"/g, '')) || 0;
+    const textDesc = (cols[colIdx['Text']] || '').replace(/"/g, '');
+    const bankRef = (cols[colIdx['Bank Reference']] || '').replace(/"/g, '');
+
+    if (!date || !acctNum) continue;
+
+    // Use Text field if available (more descriptive), fallback to Description
+    const description = textDesc || shortDesc;
+    // Debits are positive in the CSV — make them negative
+    const amount = dataType === 'Debits' ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+    const acctName = ACCOUNT_NAME_MAP[acctNum] || `Account ${acctNum}`;
+    const creditDebit = dataType === 'Credits' ? 'Credit' : 'Debit';
+
+    rows.push({ date, description, amount, acctNum, acctName, creditDebit, bankRef, shortDesc });
+  }
+
+  progressFill.style.width = '50%';
+  statusText.textContent = `Parsed ${rows.length} transactions. Checking for duplicates...`;
+
+  // Deduplication: check against existing allRecords by date + amount + description fuzzy match
+  const existingSet = new Set();
+  allRecords.forEach(r => {
+    const d = getDate(r);
+    const dateStr = d.toISOString().slice(0, 10);
+    const amt = getAmount(r);
+    const desc = getDescription(r).toUpperCase().slice(0, 40);
+    existingSet.add(`${dateStr}|${amt.toFixed(2)}|${desc}`);
+    // Also add with just date + amount for extra safety
+    existingSet.add(`${dateStr}|${amt.toFixed(2)}`);
+  });
+
+  const newTxns = [];
+  let dupeCount = 0;
+  rows.forEach(r => {
+    const key1 = `${r.date}|${r.amount.toFixed(2)}|${r.description.toUpperCase().slice(0, 40)}`;
+    const key2 = `${r.date}|${r.amount.toFixed(2)}`;
+    // Check for exact match first (date + amount + desc prefix)
+    if (existingSet.has(key1)) { dupeCount++; return; }
+    // For same date + amount, check if there's already one — but allow if amounts differ
+    // Don't skip on just date+amount since there can be multiple txns on same date with same amount
+    // Instead use a stricter dedup: date + amount + first 30 chars of description
+    newTxns.push(r);
+  });
+
+  // Additional dedup within the upload itself (same file can have dupes)
+  const seen = new Set();
+  const finalNew = [];
+  newTxns.forEach(r => {
+    const key = `${r.date}|${r.amount.toFixed(2)}|${r.description.toUpperCase().slice(0, 40)}`;
+    if (seen.has(key)) { dupeCount++; return; }
+    seen.add(key);
+    finalNew.push(r);
+  });
+
+  progressFill.style.width = '100%';
+  statusText.textContent = 'Ready for review';
+
+  // Show stats
+  document.getElementById('uploadStats').style.display = 'grid';
+  document.getElementById('statTotal').textContent = rows.length;
+  document.getElementById('statNew').textContent = finalNew.length;
+  document.getElementById('statDupes').textContent = dupeCount;
+
+  uploadStagedTxns = finalNew;
+
+  if (finalNew.length > 0) {
+    document.getElementById('uploadModalActions').style.display = 'block';
+  } else {
+    statusText.textContent = 'No new transactions to import (all duplicates).';
+  }
+}
+
+// Confidence scoring for categorization
+function categorizeWithConfidence(txn) {
+  // txn: { date, description, amount, acctNum, acctName, creditDebit }
+  // Returns: { category, type, confidence: 'high'|'medium'|'low', reason }
+
+  const desc = txn.description.toUpperCase();
+  const amount = txn.amount;
+  const acctName = txn.acctName;
+  const acctNum = txn.acctNum;
+
+  // First check learned patterns
+  for (const pat of learnedPatterns) {
+    if (pat.description_pattern && desc.includes(pat.description_pattern.toUpperCase())) {
+      if (pat.account_number && pat.account_number !== acctNum) continue;
+      if (pat.amount_min != null && Math.abs(amount) < pat.amount_min) continue;
+      if (pat.amount_max != null && Math.abs(amount) > pat.amount_max) continue;
+      return {
+        category: pat.category,
+        type: pat.category,
+        confidence: pat.occurrences >= 3 ? 'high' : 'medium',
+        reason: `Learned pattern (${pat.occurrences}x match)`,
+        patternId: pat.id,
+        property_id: pat.property_id,
+        investment_id: pat.investment_id,
+        liability_id: pat.liability_id
+      };
+    }
+  }
+
+  // Build a pseudo-record to reuse existing categorize() function
+  const pseudoRecord = {
+    id: 'upload_temp',
+    fields: {
+      Date: txn.date,
+      Description: txn.description,
+      Amount: amount,
+      'Ledger Balance': null,
+      'Transaction Type': desc.includes('ACCOUNT TRANSFER TRSF') ? 'Transfer' : (txn.creditDebit === 'Credit' ? 'Credit' : 'Debit'),
+      'Credit/Debit': txn.creditDebit,
+      'Account Name': acctName,
+      'Account Number': acctNum
+    }
+  };
+
+  // Temporarily remove from overrides so categorize() uses rules
+  const result = categorize(pseudoRecord);
+
+  // Determine confidence based on category
+  let confidence = 'medium';
+  let reason = 'Auto-rule match';
+
+  // High confidence: specific known patterns
+  const highConfPatterns = [
+    { test: () => desc.includes('JUSTWORK'), cat: 'Payroll' },
+    { test: () => desc.includes('CROWN ACQUISITIONS'), cat: 'Rent' },
+    { test: () => desc.includes('PACE'), cat: 'Marketing' },
+    { test: () => desc.includes('ELYSE'), cat: 'Finders Fee' },
+    { test: () => desc.includes('X SHORE') || desc.includes('XSHORE'), cat: 'Contractors' },
+    { test: () => desc.includes('LEVINE') && desc.includes('JACOBS'), cat: 'Legal/Corp Services' },
+    { test: () => desc.includes('CORPORATION SERV'), cat: 'Legal/Corp Services' },
+    { test: () => desc.includes('NYS DTF') || desc.includes('NJ WEB PMT'), cat: 'Taxes' },
+    { test: () => desc.includes('CHASE CREDIT') || desc.includes('CITI AUTOPAY'), cat: 'Credit Cards' },
+    { test: () => desc.includes('PA-MGMT'), cat: 'Payroll Reimbursement' },
+    { test: () => PAYROLL_REIMB_AMOUNTS.some(a => Math.abs(Math.abs(amount) - a) < PAYROLL_REIMB_TOLERANCE) && desc.includes('ACCOUNT TRANSFER'), cat: 'Payroll Reimbursement' },
+    { test: () => desc.includes('SETTLEMENT') && amount < 0, cat: 'Owner Distributions' },
+    { test: () => desc.includes('APPFOLIO') && amount < 0, cat: 'Software/Services' },
+    { test: () => desc.includes('JLL') && desc.includes('CAS'), cat: 'Asset Management Fee Income' },
+    { test: () => desc.includes('ACCOUNT TRANSFER TRSF'), cat: 'Internal Transfer' },
+    { test: () => desc.includes('INTEREST CREDIT'), cat: 'Interest Income' },
+    { test: () => desc.includes('TAX PAYMNT') || desc.includes('TAX PMT'), cat: 'Taxes' },
+    { test: () => desc.includes('SIGONFILE') && amount > 0, cat: 'Investment Income' },
+  ];
+
+  for (const p of highConfPatterns) {
+    if (p.test()) { confidence = 'high'; reason = `Known pattern: ${p.cat}`; break; }
+  }
+
+  // Account-based high confidence
+  if (MEMBER_ACCOUNTS.some(m => acctName.toUpperCase().includes(m.toUpperCase())) && !desc.includes('ACCOUNT TRANSFER')) {
+    confidence = 'high';
+    reason = amount > 0 ? 'Member account credit = AM Fee' : 'Member account debit = AM Payout';
+  }
+  if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT'))) {
+    if (desc.includes('CORPTRDEXC') || desc.includes('APPFOLIO')) {
+      confidence = 'high'; reason = 'Management account Appfolio deposit = PM Fee';
+    }
+  }
+  // Internal transfers are always high confidence
+  if (result.type === 'Internal Transfer' || result.type === 'Payroll Reimbursement') {
+    confidence = 'high'; reason = 'Known transfer pattern';
+  }
+
+  // Low confidence: generic catch-all categories — but only if no high-confidence pattern already matched
+  if (confidence !== 'high' && GENERIC_CATEGORIES.has(result.type)) {
+    confidence = 'low';
+    reason = 'Generic category — needs manual review';
+  }
+
+  // If a high-confidence description pattern matched a category that differs from auto-categorize,
+  // override the result type with the pattern's category
+  for (const p of highConfPatterns) {
+    if (p.test() && result.type !== p.cat && GENERIC_CATEGORIES.has(result.type)) {
+      result.type = p.cat;
+      confidence = 'high';
+      reason = `Known pattern: ${p.cat}`;
+      break;
+    }
+  }
+
+  return { ...result, confidence, reason };
+}
+
+function proceedToUploadReview() {
+  closeUploadModal();
+  document.getElementById('dashboard').classList.remove('show');
+  document.getElementById('uploadReview').classList.add('show');
+
+  // Score all staged transactions
+  uploadReviewChoices = {};
+  const scored = uploadStagedTxns.map((txn, idx) => {
+    const result = categorizeWithConfidence(txn);
+    uploadReviewChoices[idx] = {
+      category: result.type,
+      property_id: result.property_id || null,
+      investment_id: result.investment_id || null,
+      liability_id: result.liability_id || null
+    };
+    return { ...txn, idx, ...result };
+  });
+
+  // Split into low and high confidence
+  const lowConf = scored.filter(s => s.confidence === 'low' || s.confidence === 'medium');
+  const highConf = scored.filter(s => s.confidence === 'high');
+
+  // Sort low confidence first by amount (largest first)
+  lowConf.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  highConf.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  let html = '';
+
+  // Low confidence section
+  if (lowConf.length > 0) {
+    html += `<div class="upload-section">
+      <h3><span class="confidence-dot low"></span> Needs Review <span class="badge low">${lowConf.length} transactions</span></h3>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">These transactions could not be confidently categorized. Please review and correct if needed.</p>`;
+    lowConf.forEach(t => { html += renderUploadTxnRow(t); });
+    html += `</div>`;
+  }
+
+  // High confidence section
+  if (highConf.length > 0) {
+    html += `<div class="upload-section">
+      <h3><span class="confidence-dot high"></span> High Confidence Matches <span class="badge high">${highConf.length} transactions</span></h3>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">These look correct based on known patterns. Glance through to verify — change any that are wrong.</p>`;
+    highConf.forEach(t => { html += renderUploadTxnRow(t); });
+    html += `</div>`;
+  }
+
+  if (scored.length === 0) {
+    html = '<div style="text-align:center;padding:40px;color:var(--text-dim);">No transactions to review.</div>';
+  }
+
+  document.getElementById('uploadReviewContent').innerHTML = html;
+}
+
+function renderUploadTxnRow(t) {
+  const amtClass = t.amount >= 0 ? 'green' : 'red';
+  const amtStr = (t.amount >= 0 ? '+' : '') + fmtFull(t.amount);
+  const dateStr = new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const isIncome = INCOME_CATEGORIES.includes(t.type);
+
+  // Income categories that can link to properties/investments
+  const linkableIncome = ['Asset Management Fee Income', 'Property Management Fee Income', 'Development Fee Income', 'Acquisition Fee Income'];
+  const isLinkableIncome = linkableIncome.includes(t.type);
+  const isInvestmentIncome = t.type === 'Investment Income';
+  const isInterestExpense = t.type === 'Interest Expense';
+  const isInvestmentContrib = t.type === 'Investment Contributions';
+
+  // Build linking dropdown HTML
+  let linkDropdownHtml = '';
+  if (isLinkableIncome) {
+    // Property dropdown
+    const propOptions = [`<option value="">— No Property —</option>`];
+    bsProperties.forEach(p => {
+      const selected = t.property_id === p.id ? 'selected' : '';
+      propOptions.push(`<option value="${p.id}" ${selected}>${p.property_name}</option>`);
+    });
+    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkProperty(${t.idx}, this.value)">
+      ${propOptions.join('')}
+    </select>`;
+  } else if (isInvestmentIncome || isInvestmentContrib) {
+    // Investment dropdown
+    const invOptions = [`<option value="">— No Investment —</option>`];
+    bsInvestments.forEach(inv => {
+      const selected = t.investment_id === inv.id ? 'selected' : '';
+      invOptions.push(`<option value="${inv.id}" ${selected}>${inv.name}</option>`);
+    });
+    invOptions.push(`<option value="__new__">+ Add New Investment…</option>`);
+    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkInvestment(${t.idx}, this.value, this)">
+      ${invOptions.join('')}
+    </select>`;
+  } else if (isInterestExpense) {
+    // Liability dropdown
+    const liabOptions = [`<option value="">— No Loan —</option>`];
+    bsLiabilities.forEach(l => {
+      const selected = t.liability_id === l.id ? 'selected' : '';
+      liabOptions.push(`<option value="${l.id}" ${selected}>${l.lender} — ${l.relatedDeal || ''}</option>`);
+    });
+    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkLiability(${t.idx}, this.value)">
+      ${liabOptions.join('')}
+    </select>`;
+  }
+
+  return `<div class="upload-txn-row" data-idx="${t.idx}">
+    <div class="txn-date">${dateStr}</div>
+    <div class="txn-desc">${t.description.slice(0, 80)}${t.description.length > 80 ? '…' : ''}
+      <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">${t.acctName}</div>
+      <span class="txn-tooltip">${t.description}</span>
+    </div>
+    <select class="txn-cat-select" style="font-size:11px;" onchange="uploadChangeCategory(${t.idx}, this.value, this)">
+      ${buildCategoryOptions(t.type)}
+    </select>
+    ${linkDropdownHtml}
+    <div class="txn-amount ${amtClass}">${amtStr}</div>
+  </div>`;
+}
+
+function uploadChangeCategory(idx, newCategory, selectEl) {
+  uploadReviewChoices[idx].category = newCategory;
+  // If category changed to one that needs a linking dropdown, re-render the row
+  // (simpler to just re-render the whole review screen)
+  const row = selectEl.closest('.upload-txn-row');
+  if (row) {
+    const txn = uploadStagedTxns[idx];
+    const result = categorizeWithConfidence(txn);
+    result.type = newCategory; // override with user choice
+    result.idx = idx;
+    Object.assign(result, txn);
+    result.property_id = uploadReviewChoices[idx].property_id;
+    result.investment_id = uploadReviewChoices[idx].investment_id;
+    result.liability_id = uploadReviewChoices[idx].liability_id;
+    row.outerHTML = renderUploadTxnRow(result);
+  }
+  showToast(`Category → ${newCategory}`);
+}
+
+function uploadLinkProperty(idx, propertyId) {
+  uploadReviewChoices[idx].property_id = propertyId || null;
+  const propName = propertyId ? (bsProperties.find(p => p.id === propertyId) || {}).property_name : 'None';
+  showToast(`Linked → ${propName}`);
+}
+
+function uploadLinkInvestment(idx, investmentId, selectEl) {
+  if (investmentId === '__new__') {
+    const name = prompt('New investment name:');
+    if (!name || !name.trim()) { selectEl.value = uploadReviewChoices[idx].investment_id || ''; return; }
+    const ownershipStr = prompt('Ownership % (e.g. 7.47):', '100');
+    const ownership = parseFloat(ownershipStr) || 100;
+    supaWrite('exec_investments', 'POST', { name: name.trim(), ownership_pct: ownership, contributed: 0, distributed: 0, valuation: 0, status: 'Active' })
+      .then(newInv => {
+        if (newInv && newInv.length > 0) {
+          const created = newInv[0];
+          bsInvestments.push({ id: created.id, name: created.name, ownership: created.ownership_pct, committed: 0, contributed: 0, distributedBase: 0, distributed: 0, unreturned: 0, netEquity: 0, valuation: 0, capRate: null, propertyId: null, propertyName: null, propertyValuation: null, propertyNOI: 0, propertyDebt: 0, status: 'Active', membershipClass: '' });
+          uploadReviewChoices[idx].investment_id = created.id;
+          showToast(`Created: ${name.trim()}`);
+          // Re-render review to update all investment dropdowns
+          proceedToUploadReview();
+        }
+      })
+      .catch(e => { showToast(`⚠️ ${e.message}`, 'error'); selectEl.value = ''; });
+    return;
+  }
+  uploadReviewChoices[idx].investment_id = investmentId || null;
+  const invName = investmentId ? (bsInvestments.find(i => i.id === investmentId) || {}).name : 'None';
+  showToast(`Linked → ${invName}`);
+}
+
+function uploadLinkLiability(idx, liabilityId) {
+  uploadReviewChoices[idx].liability_id = liabilityId || null;
+  const liabName = liabilityId ? (bsLiabilities.find(l => l.id === liabilityId) || {}).lender : 'None';
+  showToast(`Linked → ${liabName}`);
+}
+
+async function confirmImport() {
+  const btn = document.getElementById('btnConfirmImport');
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
+
+  let successCount = 0;
+  let errorCount = 0;
+
+  // Batch insert — build all rows first
+  const insertRows = uploadStagedTxns.map((txn, idx) => {
+    const choice = uploadReviewChoices[idx] || {};
+    const row = {
+      date: txn.date,
+      description: txn.description,
+      amount: txn.amount,
+      ledger_balance: null,
+      transaction_type: txn.creditDebit === 'Credit' ? 'Credit' : 'Debit',
+      credit_debit: txn.creditDebit,
+      account_name: txn.acctName,
+      account_number: txn.acctNum,
+    };
+    // Always include all optional columns (PostgREST requires uniform keys in batch insert)
+    row.category_override = choice.category || null;
+    row.investment_id = choice.investment_id || null;
+    row.property_id = choice.property_id || null;
+    row.liability_id = choice.liability_id || null;
+    row.category_name = null;
+    return row;
+  });
+
+  try {
+    // Insert in batches of 50
+    for (let i = 0; i < insertRows.length; i += 50) {
+      const batch = insertRows.slice(i, i + 50);
+      await supaWrite('exec_transactions', 'POST', batch);
+      successCount += batch.length;
+    }
+
+    // Learn patterns from user categorizations
+    await learnFromUpload();
+
+    showToast(`Imported ${successCount} transactions`);
+    closeUploadReview();
+    loadData(); // Refresh dashboard
+  } catch(e) {
+    console.error('Import error:', e);
+    showToast(`⚠️ Import error: ${e.message}`, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Confirm Import';
+  }
+}
+
+async function learnFromUpload() {
+  // Look at what users categorized manually (overrides) vs what auto-categorize suggested
+  // Build patterns from high-confidence user corrections
+  const patternsToSave = [];
+
+  uploadStagedTxns.forEach((txn, idx) => {
+    const choice = uploadReviewChoices[idx];
+    if (!choice || !choice.category) return;
+
+    const autoResult = categorizeWithConfidence(txn);
+    // If user changed the category, learn from it
+    const userChanged = choice.category !== autoResult.type;
+
+    // Extract description keywords (first significant word after stripping common prefixes)
+    const desc = txn.description.toUpperCase();
+    let pattern = null;
+
+    // Try to extract a meaningful pattern from description
+    // Look for company names, DES: fields, etc.
+    const desMatch = desc.match(/DES:([A-Z0-9 ]+?)(?:\s+ID:|\s+INDN:)/);
+    if (desMatch) { pattern = desMatch[1].trim(); }
+    else {
+      // First 20 chars of description as pattern
+      const words = desc.split(/\s+/).filter(w => w.length > 3 && !['ACCOUNT','TRANSFER','TRSF','CREDIT','DEBIT','PREAUTHORIZED','CORPORATE','TRADE','PAYMENT'].includes(w));
+      if (words.length > 0) pattern = words.slice(0, 2).join(' ');
+    }
+
+    if (pattern && pattern.length >= 3) {
+      patternsToSave.push({
+        description_pattern: pattern,
+        account_number: txn.acctNum,
+        category: choice.category,
+        amount_min: Math.abs(txn.amount) * 0.8,
+        amount_max: Math.abs(txn.amount) * 1.2,
+        property_id: choice.property_id || null,
+        investment_id: choice.investment_id || null,
+        liability_id: choice.liability_id || null,
+        confidence: userChanged ? 0.9 : 0.7,
+        occurrences: 1
+      });
+    }
+  });
+
+  // Save patterns (upsert — increment occurrences if pattern already exists)
+  for (const pat of patternsToSave) {
+    try {
+      // Check if pattern already exists
+      const existing = await supaFetch('exec_learned_patterns',
+        `?description_pattern=eq.${encodeURIComponent(pat.description_pattern)}&category=eq.${encodeURIComponent(pat.category)}&limit=1`);
+      if (existing && existing.length > 0) {
+        // Increment occurrences
+        await supaWrite('exec_learned_patterns', 'PATCH',
+          { occurrences: existing[0].occurrences + 1, confidence: Math.min(1, existing[0].confidence + 0.05) },
+          `?id=eq.${existing[0].id}`);
+      } else {
+        await supaWrite('exec_learned_patterns', 'POST', pat);
+      }
+    } catch(e) {
+      // Table might not exist yet — try to create it silently
+      console.log('Pattern save skipped:', e.message);
+    }
+  }
+}
+
+function closeUploadReview() {
+  document.getElementById('uploadReview').classList.remove('show');
+  document.getElementById('dashboard').classList.add('show');
+  renderPeriodDashboard();
+}
+
+// ── Review Panel ──
+// Generic/catch-all categories that indicate a transaction needs manual review
+const GENERIC_CATEGORIES = new Set([
+  'Other Income', 'Other Operating', 'Wire Payments', 'Checks',
+  'Credit Cards', 'Banking'
+]);
+
+// Categories that should be linked to a property, investment, or liability
+const LINKABLE_TO_PROPERTY = new Set(['Asset Management Fee Income', 'Property Management Fee Income', 'Development Fee Income', 'Acquisition Fee Income']);
+const LINKABLE_TO_INVESTMENT = new Set(['Investment Income']);
+const LINKABLE_TO_LIABILITY = new Set(['Interest Expense']);
+const LINKABLE_TO_LOAN = new Set(['Loan Payback']);
+
+function getExistingLoanNames() {
+  // Collect unique loan names from Loan Out transactions
+  const names = new Map(); // name -> [recordIds]
+  allRecords.forEach(r => {
+    const { category } = categorize(r);
+    if (category === 'loan' && categoryNames[r.id]) {
+      const name = categoryNames[r.id];
+      if (!names.has(name)) names.set(name, []);
+      names.get(name).push(r.id);
+    }
+  });
+  return names;
+}
+
+let reviewFilterMode = 'all-review'; // 'all-review', 'uncategorized', 'unlinked', or specific account
+
+function getReviewItems() {
+  // Returns items that need review: uncategorized (generic) OR unlinked (missing property/investment/liability link)
+  const items = [];
+  allRecords.forEach(r => {
+    if (reviewedItems[r.id]) return; // dismissed
+    const id = r.id;
+    const effectiveCat = categoryOverrides[id] || categorize(r).type;
+    const isGeneric = !categoryOverrides[id] && GENERIC_CATEGORIES.has(effectiveCat);
+    const needsPropLink = LINKABLE_TO_PROPERTY.has(effectiveCat) && !propertyLinks[id] && !investmentLinks[id];
+    const needsInvLink = LINKABLE_TO_INVESTMENT.has(effectiveCat) && !investmentLinks[id];
+    const needsLiabLink = LINKABLE_TO_LIABILITY.has(effectiveCat) && !liabilityLinks[id];
+    const needsLoanLink = LINKABLE_TO_LOAN.has(effectiveCat) && !categoryNames[id];
+    const needsLink = needsPropLink || needsInvLink || needsLiabLink || needsLoanLink;
+
+    if (isGeneric || needsLink) {
+      items.push({
+        id, date: getDate(r), desc: getDescription(r), acct: getAccountName(r),
+        amount: getAmount(r), autoCategory: effectiveCat,
+        isGeneric, needsLink, needsPropLink, needsInvLink, needsLiabLink, needsLoanLink,
+        reason: isGeneric ? 'uncategorized' : 'unlinked'
+      });
+    }
+  });
+  return items;
+}
+
+function getReviewCount() { return getReviewItems().length; }
+
+function updateReviewBadge() {
+  const count = getReviewCount();
+  const btn = document.getElementById('reviewBtn');
+  const badge = document.getElementById('reviewCount');
+  if (count > 0) { btn.style.display = ''; badge.textContent = count; }
+  else { btn.style.display = 'none'; }
+}
+
+function openReviewUncategorized() {
+  document.getElementById('dashboard').classList.remove('show');
+  document.getElementById('reviewPanel').classList.add('show');
+  renderReviewPanel();
+}
+
+function closeReviewPanel() {
+  document.getElementById('reviewPanel').classList.remove('show');
+  document.getElementById('dashboard').classList.add('show');
+  renderPeriodDashboard();
+}
+
+let reviewOpenGroups = new Set(); // track which category groups are expanded
+
+function setReviewFilter(mode) { reviewFilterMode = mode; renderReviewPanel(); }
+
+function renderReviewPanel() {
+  const allItems = getReviewItems();
+  const uncategorizedItems = allItems.filter(t => t.isGeneric);
+  const unlinkedItems = allItems.filter(t => t.needsLink && !t.isGeneric);
+
+  // Build filter buttons
+  let filtersHtml = `
+    <button class="review-filter-btn ${reviewFilterMode === 'all-review' ? 'active' : ''}" onclick="setReviewFilter('all-review')">All (${allItems.length})</button>
+    <button class="review-filter-btn ${reviewFilterMode === 'uncategorized' ? 'active' : ''}" onclick="setReviewFilter('uncategorized')">Uncategorized (${uncategorizedItems.length})</button>
+    <button class="review-filter-btn ${reviewFilterMode === 'unlinked' ? 'active' : ''}" onclick="setReviewFilter('unlinked')">Needs Linking (${unlinkedItems.length})</button>
+  `;
+  document.getElementById('reviewFilters').innerHTML = filtersHtml;
+
+  // Filter
+  let filtered;
+  if (reviewFilterMode === 'all-review') filtered = allItems;
+  else if (reviewFilterMode === 'uncategorized') filtered = uncategorizedItems;
+  else if (reviewFilterMode === 'unlinked') filtered = unlinkedItems;
+  else filtered = allItems.filter(t => t.acct === reviewFilterMode);
+
+  // Group by category
+  const groups = {};
+  filtered.forEach(t => {
+    const key = t.autoCategory;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
+  });
+
+  const sortedGroups = Object.entries(groups).sort((a, b) => {
+    const aGeneric = GENERIC_CATEGORIES.has(a[0]) ? 0 : 1;
+    const bGeneric = GENERIC_CATEGORIES.has(b[0]) ? 0 : 1;
+    if (aGeneric !== bGeneric) return aGeneric - bGeneric;
+    return b[1].length - a[1].length;
+  });
+
+  if (sortedGroups.length === 0) {
+    document.getElementById('reviewContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim);">All clear — nothing to review!</div>';
+    return;
+  }
+
+  let html = '';
+  sortedGroups.forEach(([catName, txns]) => {
+    const totalAmt = txns.reduce((s, t) => s + t.amount, 0);
+    const isGenericGroup = GENERIC_CATEGORIES.has(catName);
+    const hasUnlinked = txns.some(t => t.needsLink);
+    const icon = isGenericGroup ? '⚠️' : (hasUnlinked ? '🔗' : '✓');
+    const isOpen = reviewOpenGroups.has(catName);
+    const safeCat = catName.replace(/'/g, "\\'");
+    html += `
+      <div class="review-group">
+        <div class="review-group-header" onclick="toggleReviewGroup('${safeCat}', this)">
+          <h4>${icon} ${catName} <span class="review-chevron" style="font-size:11px;color:var(--text-dim);">${isOpen ? '▼' : '▶'}</span></h4>
+          <div>
+            <span class="review-group-count">${txns.length} txn${txns.length !== 1 ? 's' : ''}</span>
+            <span style="margin-left:12px;font-weight:600;font-size:13px;color:${totalAmt >= 0 ? 'var(--green-dark)' : 'var(--red-dark)'}">${totalAmt >= 0 ? '+' : ''}${fmtFull(totalAmt)}</span>
+          </div>
+        </div>
+        <div class="review-group-rows${isOpen ? ' open' : ''}">`;
+
+    txns.sort((a, b) => b.date - a.date);
+    txns.forEach(t => {
+      const amtClass = t.amount >= 0 ? 'green' : 'red';
+      const amtStr = (t.amount >= 0 ? '+' : '') + fmtFull(t.amount);
+      const dateStr = t.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      // Build linking dropdown based on category
+      const linkHtml = buildReviewLinkDropdown(t.id, t.autoCategory);
+
+      html += `
+        <div class="review-txn" data-review-id="${t.id}">
+          <div class="review-desc">${dateStr} — ${t.desc}<span class="txn-tooltip">${t.desc}</span></div>
+          <div class="review-acct">${t.acct}</div>
+          <select class="txn-cat-select" onchange="reviewChangeCategory('${t.id}', this.value)" style="font-size:11px;">
+            ${buildCategoryOptions(t.autoCategory)}
+          </select>
+          <div class="review-link-slot" data-link-for="${t.id}">${linkHtml}</div>
+          <div class="review-amt ${amtClass}">${amtStr}</div>
+          <button class="review-ok-btn" onclick="reviewDismiss('${t.id}')" title="Mark as OK — remove from review">✓</button>
+        </div>`;
+    });
+
+    html += `</div></div>`;
+  });
+
+  document.getElementById('reviewContent').innerHTML = html;
+}
+
+function toggleReviewGroup(catName, headerEl) {
+  if (reviewOpenGroups.has(catName)) reviewOpenGroups.delete(catName);
+  else reviewOpenGroups.add(catName);
+  const rows = headerEl.nextElementSibling;
+  rows.classList.toggle('open');
+  headerEl.querySelector('.review-chevron').textContent = rows.classList.contains('open') ? '▼' : '▶';
+}
+
+function buildReviewLinkDropdown(recordId, category) {
+  // Returns HTML for the appropriate linking dropdown based on category
+  if (LINKABLE_TO_PROPERTY.has(category)) {
+    // Combined Property + Investment dropdown (skip investments already linked to a property)
+    const propIds = new Set(bsProperties.map(p => p.id));
+    let optsHtml = `<option value="">— Property / Investment —</option>`;
+    optsHtml += `<optgroup label="Properties">`;
+    bsProperties.forEach(p => { optsHtml += `<option value="prop:${p.id}">${p.property_name}</option>`; });
+    optsHtml += `</optgroup><optgroup label="Investments">`;
+    bsInvestments.forEach(inv => { if (!inv.propertyId || !propIds.has(inv.propertyId)) optsHtml += `<option value="inv:${inv.id}">${inv.name}</option>`; });
+    optsHtml += `</optgroup>`;
+    return `<select class="txn-cat-select review-link" onchange="reviewLinkPropOrInv('${recordId}', this.value)">${optsHtml}</select>`;
+  } else if (LINKABLE_TO_INVESTMENT.has(category)) {
+    const invOpts = [`<option value="">— Investment —</option>`];
+    bsInvestments.forEach(inv => { invOpts.push(`<option value="${inv.id}">${inv.name}</option>`); });
+    return `<select class="txn-cat-select review-link" onchange="reviewLinkInvestment('${recordId}', this.value)">${invOpts.join('')}</select>`;
+  } else if (LINKABLE_TO_LIABILITY.has(category)) {
+    const liabOpts = [`<option value="">— Loan —</option>`];
+    bsLiabilities.forEach(l => { liabOpts.push(`<option value="${l.id}">${l.lender}${l.relatedDeal ? ' — ' + l.relatedDeal : ''}</option>`); });
+    return `<select class="txn-cat-select review-link" onchange="reviewLinkLiability('${recordId}', this.value)">${liabOpts.join('')}</select>`;
+  } else if (LINKABLE_TO_LOAN.has(category)) {
+    const loanNames = getExistingLoanNames();
+    const currentName = categoryNames[recordId] || '';
+    const loanOpts = [`<option value="">— Apply to Loan —</option>`];
+    loanNames.forEach((ids, name) => { loanOpts.push(`<option value="${name}" ${name === currentName ? 'selected' : ''}>${name}</option>`); });
+    return `<select class="txn-cat-select review-link" onchange="reviewLinkLoan('${recordId}', this.value)">${loanOpts.join('')}</select>`;
+  }
+  return '<div class="review-link"></div>';
+}
+
+async function reviewChangeCategory(recordId, newCategory) {
+  categoryOverrides[recordId] = newCategory;
+  let friendlyName = null;
+  if (newCategory === 'Loan Out' || newCategory === 'Deposit') {
+    friendlyName = prompt(`Enter a short name for this ${newCategory.toLowerCase()} (shown on Balance Sheet):`, '');
+    if (friendlyName && friendlyName.trim()) categoryNames[recordId] = friendlyName.trim();
+  }
+  // For Loan Out, default loan_start_date to the transaction date
+  let loanStartDate = null;
+  if (newCategory === 'Loan Out') {
+    const rec = allRecords.find(r => r.id === recordId);
+    if (rec) {
+      const txnDate = getDate(rec);
+      loanStartDate = txnDate.toISOString().slice(0, 10);
+      loanStartDates[recordId] = loanStartDate;
+    }
+  }
+  showToast(`Category → ${newCategory}`);
+  // Update the linking dropdown inline — don't re-render the whole panel
+  const linkSlot = document.querySelector(`[data-link-for="${recordId}"]`);
+  if (linkSlot) linkSlot.innerHTML = buildReviewLinkDropdown(recordId, newCategory);
+  updateReviewBadge();
+  try {
+    const patchData = { category_override: newCategory };
+    if (friendlyName && friendlyName.trim()) patchData.category_name = friendlyName.trim();
+    if (loanStartDate) patchData.loan_start_date = loanStartDate;
+    const result = await supaWrite('exec_transactions', 'PATCH', patchData, `?id=eq.${recordId}`);
+    if (!result || result.length === 0) showToast('⚠️ Override not saved', 'error');
+  } catch(e) { console.error('Failed to save override:', e); showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewLinkPropOrInv(recordId, value) {
+  if (!value) {
+    delete propertyLinks[recordId]; delete investmentLinks[recordId];
+    showToast('Unlinked'); updateReviewBadge();
+    recomputeDistributed(); renderBalanceSheet();
+    try { await supaWrite('exec_transactions', 'PATCH', { property_id: null, investment_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
+    return;
+  }
+  const [type, id] = value.split(':');
+  if (type === 'prop') {
+    propertyLinks[recordId] = id; delete investmentLinks[recordId];
+    showToast('Linked to property'); updateReviewBadge();
+    recomputeDistributed(); renderBalanceSheet();
+    try { await supaWrite('exec_transactions', 'PATCH', { property_id: id, investment_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
+  } else if (type === 'inv') {
+    investmentLinks[recordId] = id; delete propertyLinks[recordId];
+    showToast('Linked to investment'); updateReviewBadge();
+    recomputeDistributed(); renderBalanceSheet();
+    try { await supaWrite('exec_transactions', 'PATCH', { investment_id: id, property_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
+  }
+}
+
+async function reviewLinkProperty(recordId, propertyId) {
+  if (propertyId) propertyLinks[recordId] = propertyId;
+  else delete propertyLinks[recordId];
+  showToast(propertyId ? 'Linked to property' : 'Unlinked');
+  updateReviewBadge();
+  try { await supaWrite('exec_transactions', 'PATCH', { property_id: propertyId || null }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewLinkInvestment(recordId, investmentId) {
+  if (investmentId) investmentLinks[recordId] = investmentId;
+  else delete investmentLinks[recordId];
+  showToast(investmentId ? 'Linked to investment' : 'Unlinked');
+  updateReviewBadge();
+  recomputeDistributed(); renderBalanceSheet();
+  try { await supaWrite('exec_transactions', 'PATCH', { investment_id: investmentId || null }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewLinkLiability(recordId, liabilityId) {
+  if (liabilityId) liabilityLinks[recordId] = liabilityId;
+  else delete liabilityLinks[recordId];
+  showToast(liabilityId ? 'Linked to loan' : 'Unlinked');
+  updateReviewBadge();
+  try { await supaWrite('exec_transactions', 'PATCH', { liability_id: liabilityId || null }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewLinkLoan(recordId, loanName) {
+  if (loanName) categoryNames[recordId] = loanName;
+  else delete categoryNames[recordId];
+  showToast(loanName ? `Applied to: ${loanName}` : 'Unlinked');
+  updateReviewBadge();
+  try { await supaWrite('exec_transactions', 'PATCH', { category_name: loanName || null }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewDismiss(recordId) {
+  reviewedItems[recordId] = true;
+  showToast('Marked OK');
+  updateReviewBadge();
+  renderReviewPanel();
+  try { await supaWrite('exec_transactions', 'PATCH', { reviewed: true }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+// ── Chat Widget ──
+let chatHistory = [];
+
+function toggleChat() {
+  const panel = document.getElementById('chatPanel');
+  const fab = document.getElementById('chatFab');
+  const isOpen = panel.classList.toggle('open');
+  fab.classList.toggle('hidden', isOpen);
+  if (isOpen) document.getElementById('chatInput').focus();
+}
+
+function addChatMsg(role, text) {
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.textContent = text;
+  document.getElementById('chatMessages').appendChild(div);
+  div.scrollIntoView({ behavior: 'smooth' });
+}
+
+function buildTransactionContext() {
+  // Build a compact summary of current period transactions for Claude
+  if (!periods.length) return 'No data loaded.';
+  const period = periods[selectedPeriodIndex];
+  const recs = getRecordsForPeriod(period);
+  const lines = recs.slice(0, 150).map(r => {
+    const d = getDate(r).toISOString().slice(0,10);
+    const desc = getDescription(r);
+    const amt = getAmount(r);
+    const acct = getAccountName(r);
+    const { type } = categorize(r);
+    return `${d} | ${desc} | ${amt} | ${acct} | cat: ${type} | id: ${r.id}`;
+  });
+  return `Current period: ${period.label}\nTransactions (date|desc|amount|account|category|recordId):\n${lines.join('\n')}`;
+}
+
+async function sendChat() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  addChatMsg('user', msg);
+
+  const sendBtn = document.getElementById('chatSend');
+  sendBtn.disabled = true;
+
+  // Build system prompt with transaction context
+  const systemPrompt = `You are an AI financial assistant for First Mile Capital (FMC). You help Morris manage and categorize bank transactions.
+
+CONTEXT:
+${buildTransactionContext()}
+
+AVAILABLE CATEGORIES: ${ALL_CATEGORIES.join(', ')}
+
+ACCOUNT CONTEXT:
+- Corporate accounts only: First Mile Capital (checking/savings), First Mile Management, Member accounts (Paramus, Plaza, Kemble, Red)
+- AM fees come into Member accounts, PM fees into Management
+- Biweekly transfers of $20200, $19939, $16287, $2011.36 are payroll reimbursements
+- Investor contributions (typically $1M+) are pass-through — not income
+
+CAPABILITIES:
+When the user tells you about a transaction's true category, respond with a JSON action block like:
+ACTION: {"type":"recategorize","recordId":"recXXX","category":"Category Name"}
+You can include multiple ACTION lines. Only use ACTION when the user explicitly tells you to change something.
+
+When the user asks questions, just answer naturally. Be concise.`;
+
+  chatHistory.push({ role: 'user', content: msg });
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': getClaudeKey(),
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages: chatHistory.slice(-10) // Keep last 10 turns for context
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`API ${resp.status}: ${err}`);
+    }
+
+    const data = await resp.json();
+    const reply = data.content[0].text;
+
+    chatHistory.push({ role: 'assistant', content: reply });
+
+    // Parse ACTION blocks
+    const actionLines = reply.split('\n').filter(l => l.startsWith('ACTION:'));
+    const cleanReply = reply.split('\n').filter(l => !l.startsWith('ACTION:')).join('\n').trim();
+
+    if (cleanReply) addChatMsg('assistant', cleanReply);
+
+    // Execute actions
+    for (const line of actionLines) {
+      try {
+        const json = JSON.parse(line.replace('ACTION:', '').trim());
+        if (json.type === 'recategorize' && json.recordId && json.category) {
+          categoryOverrides[json.recordId] = json.category;
+          addChatMsg('system', `Updated: ${json.category}`);
+          // Persist to Supabase
+          supaWrite('exec_transactions', 'PATCH', { category_override: json.category }, `?id=eq.${json.recordId}`).catch(e => console.error('Override save error:', e));
+        }
+      } catch(e) { /* skip malformed action */ }
+    }
+
+    if (actionLines.length > 0) {
+      renderPeriodDashboard();
+    }
+
+  } catch (e) {
+    console.error(e);
+    addChatMsg('assistant', `Error: ${e.message}. Make sure your Claude API key is configured.`);
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+// ── Balance Sheet ──
+let bsInvestments = [];
+let bsLiabilities = [];
+let jpyToUsd = null; // live rate
+
+async function fetchJpyRate() {
+  try {
+    const resp = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/jpy.json');
+    if (resp.ok) {
+      const data = await resp.json();
+      jpyToUsd = data.jpy.usd;
+      return;
+    }
+  } catch(e) { console.warn('Primary JPY API failed, trying fallback'); }
+  try {
+    const resp = await fetch('https://api.frankfurter.app/latest?from=JPY&to=USD');
+    if (resp.ok) {
+      const data = await resp.json();
+      jpyToUsd = data.rates.USD;
+      return;
+    }
+  } catch(e) { console.warn('Fallback JPY API also failed'); }
+}
+
+// Supabase field accessors (direct column names)
+function getInvField(r, key) { return r[key] !== undefined ? r[key] : null; }
+function getLiabField(r, key) { return r[key] !== undefined ? r[key] : null; }
+
+let bsProperties = []; // properties for linking to investments
+let propertyNOI = {};  // { propertyId -> annualNOI } — loaded from parent's bgtData
+let propertyDebt = {}; // { propertyId -> totalDebt }
+let noiReceived = false;   // true once parent sends NOI data
+const isInIframe = false; // v2 is native, not in iframe
+
+// Listen for data from parent index.html
+window.addEventListener('message', function(e) {
+  if (!e.data || !e.data.type) return;
+  if (e.data.type === 'propertyNOI') {
+    propertyNOI = e.data.data;
+    noiReceived = true;
+    console.log('Received NOI from parent:', propertyNOI);
+    // Re-run full loadBalanceSheet to rebuild bsInvestments with updated NOI values
+    loadBalanceSheet();
+  }
+  if (e.data.type === 'refreshDashboard') {
+    loadData();
+  }
+});
+// Fetch NOI directly from budget_line_items GL 6999 (pre-computed NOI row)
+async function fetchNOIFromBudget() {
+  try {
+    const rows = await supaFetch('budget_line_items', '?year=eq.2026&gl_code=eq.6999&select=property_id,amount');
+    if (!rows || rows.length === 0) return {};
+    const noiMap = {};
+    rows.forEach(r => {
+      if (!r.property_id) return;
+      if (!noiMap[r.property_id]) noiMap[r.property_id] = 0;
+      noiMap[r.property_id] += r.amount || 0;
+    });
+    return noiMap;
+  } catch(e) { console.error('Failed to fetch NOI from budget:', e); return {}; }
+}
+
+// Request NOI — from parent if in iframe, else fetch directly
+if (isInIframe) {
+  try { window.propertyNOI = getParentNOI(); } catch(e) {}
+  // Fallback: if NOI doesn't arrive within 3s, fetch directly
+  setTimeout(async () => {
+    if (!noiReceived) {
+      propertyNOI = await fetchNOIFromBudget();
+      noiReceived = true;
+      console.log('Fetched NOI directly from budget:', propertyNOI);
+      loadBalanceSheet();
+    }
+  }, 3000);
+} else {
+  // Standalone mode — fetch NOI directly on load
+  fetchNOIFromBudget().then(noi => {
+    propertyNOI = noi;
+    noiReceived = true;
+    console.log('Fetched NOI directly from budget (standalone):', propertyNOI);
+    loadBalanceSheet();
+  });
+}
+
+async function loadBalanceSheet() {
+  // Show loading state while calculating
+  const loadingEl = document.getElementById('bsNetLoading');
+  const valuesEl = document.getElementById('bsNetValues');
+  if (loadingEl) loadingEl.style.display = '';
+  if (valuesEl) valuesEl.style.display = 'none';
+
+  try {
+    const [inv, liab, props, bsItems] = await Promise.all([
+      supaFetch('exec_investments', '?order=name.asc'),
+      supaFetch('exec_liabilities', '?order=maturity_date.asc.nullslast'),
+      supaFetch('properties', '?order=property_name.asc&select=id,property_name,current_valuation'),
+      supaFetch('balance_sheet_items', '?is_header=eq.false&is_total=eq.false&select=property_id,bs_code,amount,account_section,account_name'),
+      fetchJpyRate()
+    ]);
+    bsProperties = props;
+
+    // Build property lookup { id -> { name, valuation } }
+    const propLookup = {};
+    props.forEach(p => { propLookup[p.id] = { name: p.property_name, valuation: p.current_valuation }; });
+
+    // Compute total mortgage debt per property from balance sheet items
+    // Only include mortgage/notes payable (typically BS 2100-2199), not AP or accrued expenses
+    propertyDebt = {};
+    bsItems.forEach(item => {
+      const code = parseInt(item.bs_code) || 0;
+      const name = (item.account_name || '').toLowerCase();
+      const isMortgage = (code >= 2100 && code < 2200) ||
+        name.includes('mortgage') || name.includes('note') || name.includes('loan');
+      if (isMortgage) {
+        if (!propertyDebt[item.property_id]) propertyDebt[item.property_id] = 0;
+        propertyDebt[item.property_id] += Math.abs(item.amount || 0);
+      }
+    });
+
+    // Map to compatible format with .id at top level
+    bsInvestments = inv.map(r => {
+      const linked = r.property_id ? propLookup[r.property_id] : null;
+      const noi = r.property_id ? (propertyNOI[r.property_id] || 0) : 0;
+      const debt = r.property_id ? (propertyDebt[r.property_id] || 0) : 0;
+      return {
+        id: r.id,
+        name: r.name,
+        ownership: r.ownership_pct,
+        committed: r.committed,
+        contributed: r.contributed,
+        distributedBase: r.distributed || 0,
+        distributed: r.distributed || 0,
+        unreturned: r.unreturned_capital,
+        netEquity: r.net_equity,
+        valuation: r.valuation,
+        capRate: r.cap_rate || null,
+        propertyId: r.property_id || null,
+        propertyName: linked ? linked.name : null,
+        propertyValuation: linked ? linked.valuation : null,
+        propertyNOI: noi,
+        propertyDebt: debt,
+        status: r.status || '',
+        membershipClass: r.membership_class || ''
+      };
+    });
+    bsLiabilities = liab.map(r => ({
+      id: r.id,
+      lender: r.lender,
+      relatedDeal: r.related_deal,
+      principal: r.principal,
+      currency: r.currency || 'USD',
+      usdEquiv: r.usd_equivalent,
+      maturity: r.maturity_date,
+      status: r.status || '',
+      notes: r.notes || ''
+    }));
+    // Compute distributed = base (historical, editable) + linked Investment Income transactions
+    recomputeDistributed();
+
+    renderBalanceSheet();
+    // Re-populate revenue filter now that bsProperties/bsInvestments are loaded
+    if (typeof lastPeriodComp !== 'undefined' && lastPeriodComp) {
+      populateRevenueFilter(lastPeriodComp);
+    }
+  } catch (e) {
+    console.error('Balance sheet load error:', e);
+    document.getElementById('bsInvestments').innerHTML = `<p style="color:var(--red);padding:16px;">Failed to load: ${e.message}</p>`;
+  }
+}
+
+function getCashBalance() {
+  // Sum latest ledger balance per account from allRecords
+  const latestByAcct = {};
+  allRecords.forEach(r => {
+    const acct = getAccountNumber(r);
+    const acctName = getAccountName(r);
+    const d = getDate(r);
+    const bal = getField(r, 'Ledger Balance');
+    if (bal != null && acct) {
+      if (!latestByAcct[acct] || d > latestByAcct[acct].date) {
+        latestByAcct[acct] = { date: d, balance: bal, name: acctName || acct };
+      }
+    }
+  });
+  return Object.values(latestByAcct).reduce((s, v) => s + v.balance, 0);
+}
+
+function getCashDetails() {
+  const latestByAcct = {};
+  allRecords.forEach(r => {
+    const acct = getAccountNumber(r);
+    const acctName = getAccountName(r);
+    const d = getDate(r);
+    const bal = getField(r, 'Ledger Balance');
+    if (bal != null && acct) {
+      if (!latestByAcct[acct] || d > latestByAcct[acct].date) {
+        latestByAcct[acct] = { date: d, balance: bal, name: acctName || acct };
+      }
+    }
+  });
+  return Object.entries(latestByAcct).map(([acct, v]) => ({ acct, name: v.name, balance: v.balance })).sort((a, b) => b.balance - a.balance);
+}
+
+function renderBalanceSheet() {
+  const cash = getCashBalance();
+  const cashAccounts = getCashDetails();
+
+  // Investments total — linked properties use cap rate formula, others use manual valuation or net_equity
+  let investmentsTotal = 0;
+  const invCards = bsInvestments.map(r => {
+    let value;
+    let valueSource = 'manual';
+    let valuationDetails = null;
+    const ownershipPct = r.ownership > 1 ? r.ownership / 100 : (r.ownership || 0);
+
+    if (r.propertyId && r.capRate && r.capRate > 0 && r.propertyNOI > 0) {
+      // Linked with cap rate: (NOI / cap_rate) - debt, then × equity %
+      const grossValue = r.propertyNOI / (r.capRate / 100); // cap rate stored as %, convert to decimal
+      const netValue = grossValue - (r.propertyDebt || 0);
+      value = netValue * ownershipPct;
+      valueSource = 'caprate';
+      valuationDetails = { noi: r.propertyNOI, capRate: r.capRate, grossValue, debt: r.propertyDebt || 0, netValue, equityValue: value };
+    } else if (r.propertyId && r.propertyValuation != null && r.propertyValuation > 0) {
+      // Linked to property but no cap rate: use property valuation × ownership %
+      value = r.propertyValuation * ownershipPct;
+      valueSource = 'property';
+    } else if (r.valuation != null && r.valuation > 0) {
+      // Manual valuation explicitly entered
+      value = r.valuation;
+    } else {
+      value = r.netEquity || 0;
+      valueSource = 'equity';
+    }
+    investmentsTotal += value;
+    return { id: r.id, name: r.name || 'Unknown', ownership: r.ownership || 0, committed: r.committed || 0, contributed: r.contributed || 0, distributed: r.distributed || 0, unreturned: r.unreturned || 0, valuation: r.valuation, netEquity: r.netEquity || 0, status: r.status, value, valueSource, valuationDetails, propertyId: r.propertyId, propertyName: r.propertyName, propertyValuation: r.propertyValuation, capRate: r.capRate, propertyNOI: r.propertyNOI, propertyDebt: r.propertyDebt };
+  });
+
+  // Liabilities total (USD equivalent)
+  let liabilitiesTotal = 0;
+  const liabCards = bsLiabilities.map(r => {
+    const currency = r.currency || 'USD';
+    let usdValue;
+    if (currency === 'USD') {
+      usdValue = r.principal || 0;
+    } else if (jpyToUsd && currency === 'JPY') {
+      usdValue = (r.principal || 0) * jpyToUsd;
+    } else {
+      usdValue = r.usdEquiv || 0;
+    }
+    liabilitiesTotal += usdValue;
+    return { id: r.id, lender: r.lender || 'Unknown', deal: r.relatedDeal || '', principal: r.principal || 0, currency, usdEquiv: r.usdEquiv, maturity: r.maturity, status: r.status, notes: r.notes, usdValue };
+  });
+
+  // Compute cumulative Loans Out and Deposits from all transaction records
+  let loansOutTotal = 0;
+  let depositsTotal = 0;
+  const loanOutItems = [];
+  const depositItems = [];
+  // Track loan payback amounts by loan name for netting
+  const loanPaybackByName = {}; // loanName -> total payback amount
+  allRecords.forEach(r => {
+    const { category, type } = categorize(r);
+    const amount = getAmount(r);
+    if (category === 'loan') {
+      loansOutTotal += Math.abs(amount);
+      loanOutItems.push({ id: r.id, desc: categoryNames[r.id] || getDescription(r), name: categoryNames[r.id] || null, amount: Math.abs(amount), date: getDate(r), acct: getAccountName(r), startDate: loanStartDates[r.id] || null, maturityDate: loanMaturityDates[r.id] || null });
+    } else if (category === 'loan_payback') {
+      const linkedLoan = categoryNames[r.id];
+      if (linkedLoan) {
+        if (!loanPaybackByName[linkedLoan]) loanPaybackByName[linkedLoan] = 0;
+        loanPaybackByName[linkedLoan] += Math.abs(amount);
+      }
+    } else if (category === 'deposit') {
+      depositsTotal += Math.abs(amount);
+      depositItems.push({ desc: categoryNames[r.id] || getDescription(r), amount: Math.abs(amount), date: getDate(r), acct: getAccountName(r) });
+    }
+  });
+  // Group loan outs by name (combine same-named loans) and net paybacks
+  const loanGroups = {};
+  loanOutItems.forEach(item => {
+    const key = item.name || `__unnamed_${item.desc}_${item.date}`;
+    if (!loanGroups[key]) loanGroups[key] = { desc: item.name || item.desc, name: item.name, amount: 0, payback: 0, netAmount: 0, date: item.date, startDate: item.startDate, maturityDate: item.maturityDate, acct: item.acct, count: 0, recordIds: [] };
+    loanGroups[key].amount += item.amount;
+    loanGroups[key].count++;
+    loanGroups[key].recordIds.push(item.id);
+    if (item.date > loanGroups[key].date) loanGroups[key].date = item.date; // use latest date
+  });
+  // Apply paybacks and calculate net
+  loansOutTotal = 0;
+  const consolidatedLoans = Object.values(loanGroups);
+  consolidatedLoans.forEach(item => {
+    if (item.name && loanPaybackByName[item.name]) {
+      item.payback = loanPaybackByName[item.name];
+    }
+    item.netAmount = Math.max(0, item.amount - item.payback);
+    loansOutTotal += item.netAmount;
+  });
+
+  const totalAssets = cash + investmentsTotal + loansOutTotal + depositsTotal;
+  const netPosition = totalAssets - liabilitiesTotal;
+
+  // Detailed asset breakdown for debugging
+  console.log('%c═══ TOTAL ASSETS BREAKDOWN ═══', 'color:#f90;font-weight:bold;font-size:14px');
+  console.log(`%cCash (sum of latest ledger balances): $${cash.toLocaleString('en-US', {minimumFractionDigits:2})}`, 'color:#4fc3f7');
+  console.log('%c─── Cash by Account ───', 'color:#4fc3f7;font-weight:bold');
+  cashAccounts.forEach(a => {
+    console.log(`  %c${a.name} (${a.acct}): $${a.balance.toLocaleString('en-US', {minimumFractionDigits:2})}`, 'color:#4fc3f7');
+  });
+  console.log('%c─── Investments ───', 'color:#f90;font-weight:bold');
+  invCards.forEach(inv => {
+    let formula = '';
+    if (inv.valueSource === 'caprate') {
+      const d = inv.valuationDetails;
+      formula = `  NOI $${d.noi.toLocaleString()} / ${d.capRate}% cap = $${d.grossValue.toLocaleString()} gross − $${d.debt.toLocaleString()} debt = $${d.netValue.toLocaleString()} × ${(inv.ownership > 1 ? inv.ownership : inv.ownership*100).toFixed(2)}% ownership`;
+    } else if (inv.valueSource === 'property') {
+      formula = `  Property valuation $${(inv.propertyValuation||0).toLocaleString()} × ${(inv.ownership > 1 ? inv.ownership : inv.ownership*100).toFixed(2)}% ownership`;
+    } else if (inv.valueSource === 'manual') {
+      formula = `  Manual valuation entered`;
+    } else {
+      formula = `  Fallback to net equity (contributed − distributed)`;
+    }
+    console.log(`%c${inv.name}: $${inv.value.toLocaleString('en-US', {minimumFractionDigits:2})}  [${inv.valueSource}]`, 'color:#66bb6a;font-weight:bold');
+    console.log(`  ${formula}`);
+  });
+  console.log(`%c─── Investments subtotal: $${investmentsTotal.toLocaleString('en-US', {minimumFractionDigits:2})}`, 'color:#66bb6a');
+  console.log(`%c═══ TOTAL ASSETS = Cash $${cash.toLocaleString('en-US', {minimumFractionDigits:2})} + Investments $${investmentsTotal.toLocaleString('en-US', {minimumFractionDigits:2})} = $${totalAssets.toLocaleString('en-US', {minimumFractionDigits:2})} ═══`, 'color:#f90;font-weight:bold;font-size:13px');
+
+  // Render summary bar — swap loading for values
+  // If in iframe and NOI hasn't arrived yet, keep loading state visible (don't flash wrong numbers)
+  const awaitingNOI = isInIframe && !noiReceived;
+
+  document.getElementById('bsTotalAssets').textContent = fmt(totalAssets);
+  document.getElementById('bsTotalLiabilities').textContent = fmt(liabilitiesTotal);
+  const bsTotalAssetsInline = document.getElementById('bsTotalAssetsInline');
+  if (bsTotalAssetsInline) bsTotalAssetsInline.textContent = fmt(totalAssets);
+  const bsTotalLiabInline = document.getElementById('bsTotalLiabInline');
+  if (bsTotalLiabInline) bsTotalLiabInline.textContent = fmt(liabilitiesTotal);
+  const npEl = document.getElementById('bsNetPosition');
+  npEl.textContent = fmt(netPosition);
+  npEl.className = 'bs-net-value ' + (netPosition >= 0 ? 'green' : 'red');
+  const loadingEl = document.getElementById('bsNetLoading');
+  const valuesEl = document.getElementById('bsNetValues');
+  if (awaitingNOI) {
+    // Keep showing loading state until NOI data arrives
+    if (loadingEl) loadingEl.style.display = '';
+    if (valuesEl) valuesEl.style.display = 'none';
+  } else {
+    if (loadingEl) loadingEl.style.display = 'none';
+    if (valuesEl) valuesEl.style.display = '';
+  }
+
+  // Stacked bar
+  const barTotal = cash + investmentsTotal + loansOutTotal + depositsTotal + liabilitiesTotal;
+  const cashTooltipLines = cashAccounts.map(a => `${a.name}: ${fmt(a.balance)}`).join('\n');
+  const cashTooltip = `Cash: ${fmt(cash)}\n─────────────\n${cashTooltipLines}`;
+  if (barTotal > 0) {
+    const cashPct = (cash / barTotal * 100).toFixed(1);
+    const invPct = (investmentsTotal / barTotal * 100).toFixed(1);
+    const loanPct = (loansOutTotal / barTotal * 100).toFixed(1);
+    const depPct = (depositsTotal / barTotal * 100).toFixed(1);
+    const liabPct = (liabilitiesTotal / barTotal * 100).toFixed(1);
+    document.getElementById('bsStackBar').innerHTML =
+      `<div class="bs-bar-seg bs-bar-cash" style="width:${cashPct}%;cursor:pointer;" title="${cashTooltip}"></div>` +
+      `<div class="bs-bar-seg bs-bar-inv" style="width:${invPct}%" title="Investments: ${fmt(investmentsTotal)}"></div>` +
+      `<div class="bs-bar-seg" style="width:${loanPct}%;background:#f59e0b;" title="Loans Out: ${fmt(loansOutTotal)}"></div>` +
+      `<div class="bs-bar-seg" style="width:${depPct}%;background:#8b5cf6;" title="Deposits: ${fmt(depositsTotal)}"></div>` +
+      `<div class="bs-bar-seg bs-bar-liab" style="width:${liabPct}%" title="Liabilities: ${fmt(liabilitiesTotal)}"></div>`;
+  }
+
+  // Render investment cards
+  const invContainer = document.getElementById('bsInvestments');
+  if (invCards.length === 0) {
+    invContainer.innerHTML = '<p style="color:var(--text-dim);padding:16px;text-align:center;">No investments found.</p>';
+  } else {
+    invCards.sort((a, b) => b.value - a.value);
+    invContainer.innerHTML = invCards.map(inv => {
+      const ownershipDisplay = inv.ownership > 1 ? `${inv.ownership.toFixed(2)}%` : (inv.ownership > 0 ? `${(inv.ownership * 100).toFixed(2)}%` : '—');
+      const linkedBadge = inv.propertyId
+        ? `<a href="#financials&prop=${encodeURIComponent(inv.name)}" onclick="event.stopPropagation(); if(typeof switchView==='function'){switchView('financials');} return false;" style="display:inline-block;font-size:11px;margin-left:4px;vertical-align:middle;text-decoration:none;cursor:pointer;opacity:0.5;" title="Open in Property Financials">↗</a>`
+        : '';
+      let valueNote = '';
+      if (inv.valueSource === 'equity') {
+        valueNote = `<div style="font-size:9px;color:var(--text-dim);margin-top:2px;">Net equity (no valuation set)</div>`;
+      }
+      const editBtn = (inv.valueSource !== 'property' && inv.valueSource !== 'caprate')
+        ? `<button class="bs-edit-btn" id="avBtn-${inv.id}" onclick="event.stopPropagation();editAssetValue('${inv.id}', ${inv.value})" title="Edit value">✏️</button>`
+        : '';
+      // Cap rate display for linked investments
+      const capRateDisplay = inv.capRate
+        ? `<span id="cr-${inv.id}" style="color:var(--accent);cursor:pointer;" onclick="event.stopPropagation();editCapRate('${inv.id}', ${inv.capRate})">${inv.capRate.toFixed(2)}%</span> <button class="bs-edit-btn" onclick="event.stopPropagation();editCapRate('${inv.id}', ${inv.capRate})" title="Edit cap rate" style="font-size:10px;">✏️</button>`
+        : `<span style="font-size:10px;color:var(--text-dim);cursor:pointer;" onclick="event.stopPropagation();editCapRate('${inv.id}', 0)">Set rate</span>`;
+      const capRateRow = inv.propertyId ? `
+          <div class="bs-card-metrics" style="margin-top:4px;">
+            <div class="bs-metric">
+              <div class="bs-metric-label">2026 NOI</div>
+              <div class="bs-metric-value">${inv.propertyNOI ? fmt(inv.propertyNOI) : '—'}</div>
+            </div>
+            <div class="bs-metric">
+              <div class="bs-metric-label">Mortgage</div>
+              <div class="bs-metric-value" style="color:var(--red-dark)">${inv.propertyDebt ? fmt(inv.propertyDebt) : '—'}</div>
+            </div>
+            <div class="bs-metric">
+              <div class="bs-metric-label">Cap Rate</div>
+              <div class="bs-metric-value" id="crWrap-${inv.id}">${capRateDisplay}</div>
+            </div>
+          </div>` : '';
+      return `
+        <div class="bs-card bs-card-collapsed" onclick="toggleInvCard(this, event)">
+          <div class="bs-card-header">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <svg class="bs-card-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div class="bs-card-title">${inv.name}${linkedBadge}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="bs-card-collapsed-value">${fmt(inv.value)}</div>
+              <div class="bs-card-ownership" style="display:none;">${ownershipDisplay} equity</div>
+              <div class="bs-card-actions" style="display:none;">
+                <button title="Edit" onclick="event.stopPropagation();openEditInvestment('${inv.id}')">✏️</button>
+                <button class="delete" title="Delete" onclick="event.stopPropagation();deleteInvestment('${inv.id}','${inv.name.replace(/'/g,"\\'")}')">🗑️</button>
+              </div>
+            </div>
+          </div>
+          <div class="bs-card-body" style="display:none;">
+            <div class="bs-card-asset-row" style="margin-bottom:8px;">
+              <div>
+                <div class="bs-metric-label">Position Value</div>
+                <div class="bs-asset-value" id="av-${inv.id}">${fmt(inv.value)}</div>
+                ${valueNote}
+              </div>
+              ${editBtn}
+            </div>
+            <div class="bs-card-metrics">
+              <div class="bs-metric">
+                <div class="bs-metric-label">Contributed</div>
+                <div class="bs-metric-value">${fmt(inv.contributed)}</div>
+              </div>
+              <div class="bs-metric">
+                <div class="bs-metric-label">Distributed <button class="bs-edit-btn" onclick="event.stopPropagation();editDistributed('${inv.id}')" title="Edit base distributed amount" style="font-size:10px;">✏️</button></div>
+                <div class="bs-metric-value green" id="dist-${inv.id}">${fmt(inv.distributed)}</div>
+              </div>
+            </div>${capRateRow}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Render liability cards
+  const liabContainer = document.getElementById('bsLiabilities');
+  const activeLiabs = liabCards.filter(l => l.usdValue > 0 || l.principal > 0);
+  if (activeLiabs.length === 0) {
+    liabContainer.innerHTML = '<p style="color:var(--text-dim);padding:16px;text-align:center;">No liabilities found.</p>';
+  } else {
+    activeLiabs.sort((a, b) => b.usdValue - a.usdValue);
+    liabContainer.innerHTML = activeLiabs.map(l => {
+      const currName = typeof l.currency === 'object' ? l.currency.name : l.currency;
+      const isJpy = currName === 'JPY';
+      let amtStr;
+      if (isJpy) {
+        const jpyStr = `¥${(l.principal/1000000).toFixed(0)}M`;
+        const usdStr = fmt(l.usdValue);
+        amtStr = `${jpyStr}<br><span style="font-size:12px;color:var(--text-dim);font-weight:500">≈ ${usdStr}${jpyToUsd ? ' (live)' : ''}</span>`;
+      } else {
+        amtStr = fmt(l.principal);
+      }
+
+      let maturityHtml = '—';
+      let maturityClass = 'far';
+      if (l.maturity) {
+        const mDate = new Date(l.maturity);
+        const now = new Date();
+        const daysLeft = Math.round((mDate - now) / (1000 * 60 * 60 * 24));
+        const yearsLeft = (daysLeft / 365).toFixed(1);
+        maturityClass = daysLeft < 365 ? 'near' : (daysLeft < 365 * 3 ? 'mid' : 'far');
+        const dateStr = mDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        maturityHtml = `${dateStr} <span class="bs-maturity-badge ${maturityClass}">${yearsLeft}y</span>`;
+      }
+
+      const collapsedAmt = isJpy ? fmt(l.usdValue) : fmt(l.principal);
+      let collapsedMaturity = '';
+      if (l.maturity) {
+        const mDate2 = new Date(l.maturity);
+        const daysLeft2 = Math.round((mDate2 - new Date()) / (1000 * 60 * 60 * 24));
+        const yearsLeft2 = (daysLeft2 / 365).toFixed(1);
+        const mc2 = daysLeft2 < 365 ? 'near' : (daysLeft2 < 365 * 3 ? 'mid' : 'far');
+        collapsedMaturity = `<span class="bs-maturity-badge ${mc2}" style="margin-left:4px;font-size:10px;">${yearsLeft2}y</span>`;
+      }
+      return `
+        <div class="bs-liab-card bs-card-collapsed" onclick="toggleLiabCard(this, event)">
+          <div class="bs-liab-header">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <svg class="bs-card-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <div class="bs-liab-title">${l.lender}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="bs-card-collapsed-value" style="color:var(--red-dark);">${collapsedAmt}${collapsedMaturity}</div>
+              <div class="bs-card-actions" style="display:none;">
+                <button title="Edit" onclick="event.stopPropagation();openEditLiability('${l.id}')">✏️</button>
+                <button class="delete" title="Delete" onclick="event.stopPropagation();deleteLiability('${l.id}','${l.lender.replace(/'/g,"\\'")}')">🗑️</button>
+              </div>
+            </div>
+          </div>
+          <div class="bs-liab-body" style="display:none;">
+            <div class="bs-liab-amount" style="margin:8px 0;">${amtStr}</div>
+            <div class="bs-liab-details">
+              <div class="bs-liab-detail">
+                <div class="bs-liab-detail-label">Maturity</div>
+                <div class="bs-liab-detail-value">${maturityHtml}</div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // Render Cash accounts section
+  const cashEl = document.getElementById('bsCashAccounts');
+  const cashTotalEl = document.getElementById('bsCashTotal');
+  if (cashTotalEl) cashTotalEl.textContent = fmt(cash);
+  if (cashAccounts.length === 0) {
+    cashEl.innerHTML = '<p style="color:var(--text-dim);padding:8px 16px;font-size:13px;">No accounts found.</p>';
+  } else {
+    cashEl.innerHTML = cashAccounts.map(a => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;font-size:13px;">
+        <div style="min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-dim);">${a.name}</div>
+        <div style="font-weight:600;color:var(--accent);white-space:nowrap;margin-left:8px;">${fmt(a.balance)}</div>
+      </div>
+    `).join('');
+  }
+
+  // Render Loans Out section
+  const loansOutEl = document.getElementById('bsLoansOut');
+  const loansOutTotalEl = document.getElementById('bsLoansOutTotal');
+  if (loansOutTotalEl) loansOutTotalEl.textContent = loansOutTotal > 0 ? fmt(loansOutTotal) : '';
+  const activeLoanOuts = consolidatedLoans.filter(item => item.netAmount > 0);
+  if (activeLoanOuts.length === 0) {
+    loansOutEl.innerHTML = '<p style="color:var(--text-dim);padding:8px 16px;font-size:13px;">No outstanding loans.</p>';
+  } else {
+    loansOutEl.innerHTML = activeLoanOuts.map((item, idx) => {
+      const countNote = item.count > 1 ? ` (${item.count} txns)` : '';
+      const paybackNote = item.payback > 0 ? `<div style="color:var(--green-dark);font-size:10px;">Payback: -${fmt(item.payback)} → Net: ${fmt(item.netAmount)}</div>` : '';
+      const ids = item.recordIds.join(',');
+      const startDateStr = item.startDate || item.date.toISOString().slice(0, 10);
+      const maturityStr = item.maturityDate || '';
+      const startDateDisplay = new Date(startDateStr + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+      let maturityDisplay = '';
+      if (maturityStr) {
+        const mDate = new Date(maturityStr + 'T00:00:00');
+        const daysLeft = Math.round((mDate - new Date()) / (1000*60*60*24));
+        const yearsLeft = (daysLeft / 365).toFixed(1);
+        const badgeClass = daysLeft < 365 ? 'near' : (daysLeft < 365*3 ? 'mid' : 'far');
+        maturityDisplay = ` · Mat: ${mDate.toLocaleDateString('en-US', {month:'short',year:'numeric'})} <span class="bs-maturity-badge ${badgeClass}" style="font-size:9px;">${yearsLeft}y</span>`;
+      }
+      return `
+      <div id="loan-out-${idx}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;gap:8px;">
+        <div style="min-width:0;flex:1;">
+          <div class="loan-out-display" style="display:flex;align-items:center;gap:4px;">
+            <span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.desc}${countNote}</span>
+            <button onclick="editLoanOut(${idx}, '${ids}', '${(item.name||'').replace(/'/g,"\\'")}', ${item.amount}, '${startDateStr}', '${maturityStr}')" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px;opacity:0.5;" title="Edit loan">✏️</button>
+          </div>
+          <div style="color:var(--text-dim);font-size:11px;">Start: ${startDateDisplay}${maturityDisplay}</div>
+          ${paybackNote}
+        </div>
+        <div style="font-weight:600;color:#f59e0b;white-space:nowrap;">${fmt(item.netAmount)}</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Render Deposits section
+  const depositsEl = document.getElementById('bsDeposits');
+  const depositsTotalEl = document.getElementById('bsDepositsTotal');
+  if (depositsTotalEl) depositsTotalEl.textContent = depositsTotal > 0 ? fmt(depositsTotal) : '';
+  if (depositItems.length === 0) {
+    depositsEl.innerHTML = '<p style="color:var(--text-dim);padding:8px 16px;font-size:13px;">No deposits held.</p>';
+  } else {
+    depositsEl.innerHTML = depositItems.map(item => `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;gap:8px;">
+        <div style="min-width:0;flex:1;">
+          <div style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.desc}</div>
+          <div style="color:var(--text-dim);font-size:11px;">${item.date.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</div>
+        </div>
+        <div style="font-weight:600;color:#8b5cf6;white-space:nowrap;">${fmt(item.amount)}</div>
+      </div>
+    `).join('');
+  }
+}
+
+// ── Modal helpers ──
+function openModal(html) {
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('open');
+}
+
+// ── Position Value inline edit ──
+function toggleInvCard(card, event) {
+  // Don't toggle if clicking buttons/inputs inside
+  if (event.target.closest('button, input, select, .bs-card-actions')) return;
+  const isCollapsed = card.classList.contains('bs-card-collapsed');
+  const body = card.querySelector('.bs-card-body');
+  const collapsedValue = card.querySelector('.bs-card-collapsed-value');
+  const ownership = card.querySelector('.bs-card-ownership');
+  const actions = card.querySelector('.bs-card-actions');
+  if (isCollapsed) {
+    card.classList.remove('bs-card-collapsed');
+    body.style.display = '';
+    if (collapsedValue) collapsedValue.style.display = 'none';
+    if (ownership) ownership.style.display = '';
+    if (actions) actions.style.display = '';
+  } else {
+    card.classList.add('bs-card-collapsed');
+    body.style.display = 'none';
+    if (collapsedValue) collapsedValue.style.display = '';
+    if (ownership) ownership.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+  }
+}
+
+function toggleLiabCard(card, event) {
+  if (event.target.closest('button, input, select, .bs-card-actions')) return;
+  const isCollapsed = card.classList.contains('bs-card-collapsed');
+  const body = card.querySelector('.bs-liab-body');
+  const collapsedValue = card.querySelector('.bs-card-collapsed-value');
+  const actions = card.querySelector('.bs-card-actions');
+  if (isCollapsed) {
+    card.classList.remove('bs-card-collapsed');
+    body.style.display = '';
+    if (collapsedValue) collapsedValue.style.display = 'none';
+    if (actions) actions.style.display = '';
+  } else {
+    card.classList.add('bs-card-collapsed');
+    body.style.display = 'none';
+    if (collapsedValue) collapsedValue.style.display = '';
+    if (actions) actions.style.display = 'none';
+  }
+}
+
+function editAssetValue(recordId, currentValue) {
+  const el = document.getElementById(`av-${recordId}`);
+  const btnEl = document.getElementById(`avBtn-${recordId}`);
+  const numVal = Math.round(currentValue);
+  el.innerHTML = `<input class="bs-edit-input" id="avInput-${recordId}" type="text" value="${numVal}" onkeydown="if(event.key==='Enter')saveAssetValue('${recordId}');if(event.key==='Escape'){loadBalanceSheet();}">`;
+  btnEl.innerHTML = '✓';
+  btnEl.onclick = () => saveAssetValue(recordId);
+  const inp = document.getElementById(`avInput-${recordId}`);
+  inp.focus();
+  inp.select();
+}
+
+async function saveAssetValue(recordId) {
+  const inp = document.getElementById(`avInput-${recordId}`);
+  const val = parseFloat(inp.value.replace(/[^0-9.-]/g, ''));
+  if (isNaN(val)) { showToast('Invalid number'); return; }
+  try {
+    await supaWrite('exec_investments', 'PATCH', { valuation: val }, `?id=eq.${recordId}`);
+    showToast('Position value updated');
+    await loadBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// ── Cap Rate inline edit ──
+function editCapRate(recordId, currentRate) {
+  const wrap = document.getElementById(`crWrap-${recordId}`);
+  if (!wrap) return;
+  const val = currentRate || '';
+  wrap.innerHTML = `<input class="bs-edit-input" id="crInput-${recordId}" type="number" step="0.01" value="${val}" placeholder="e.g. 7.5" style="width:60px;font-size:12px;" onkeydown="if(event.key==='Enter')saveCapRate('${recordId}');if(event.key==='Escape'){loadBalanceSheet();}">
+    <button class="bs-edit-btn" onclick="saveCapRate('${recordId}')" style="font-size:10px;">✓</button>`;
+  const inp = document.getElementById(`crInput-${recordId}`);
+  inp.focus();
+  inp.select();
+}
+
+async function saveCapRate(recordId) {
+  const inp = document.getElementById(`crInput-${recordId}`);
+  const val = parseFloat(inp.value);
+  if (isNaN(val) || val <= 0) { showToast('Enter a valid cap rate %'); return; }
+  try {
+    await supaWrite('exec_investments', 'PATCH', { cap_rate: val }, `?id=eq.${recordId}`);
+    showToast('Cap rate updated');
+    await loadBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+function editDistributed(recordId) {
+  const inv = bsInvestments.find(i => i.id === recordId);
+  if (!inv) return;
+  const el = document.getElementById(`dist-${recordId}`);
+  if (!el) return;
+  const base = inv.distributedBase || 0;
+  el.innerHTML = `<input class="bs-edit-input" id="distInput-${recordId}" type="number" step="0.01" value="${base.toFixed(2)}" placeholder="Base distributed" style="width:80px;font-size:12px;" onkeydown="if(event.key==='Enter')saveDistributed('${recordId}');if(event.key==='Escape'){recomputeDistributed();renderBalanceSheet();}">
+    <button class="bs-edit-btn" onclick="saveDistributed('${recordId}')" style="font-size:10px;">✓</button>`;
+  const inp = document.getElementById(`distInput-${recordId}`);
+  inp.focus();
+  inp.select();
+}
+
+async function saveDistributed(recordId) {
+  const inp = document.getElementById(`distInput-${recordId}`);
+  const val = parseFloat(inp.value);
+  if (isNaN(val) || val < 0) { showToast('Enter a valid amount'); return; }
+  const inv = bsInvestments.find(i => i.id === recordId);
+  if (inv) inv.distributedBase = val;
+  try {
+    await supaWrite('exec_investments', 'PATCH', { distributed: val }, `?id=eq.${recordId}`);
+    showToast('Distributed base updated');
+    recomputeDistributed();
+    renderBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// ── Investment CRUD ──
+function buildPropertyOptions(selectedId) {
+  const opts = ['<option value="">— None (manual valuation) —</option>'];
+  bsProperties.forEach(p => {
+    const sel = p.id === selectedId ? ' selected' : '';
+    const val = p.current_valuation ? ` (${fmt(p.current_valuation)})` : '';
+    opts.push(`<option value="${p.id}"${sel}>${p.property_name}${val}</option>`);
+  });
+  return opts.join('');
+}
+
+function onPropertyLinkChange() {
+  const sel = document.getElementById('invPropertyId');
+  const valInput = document.getElementById('invValuation');
+  const valLabel = document.getElementById('invValuationLabel');
+  const capRow = document.getElementById('capRateRow');
+  if (sel.value) {
+    valInput.disabled = true;
+    valInput.placeholder = 'Auto: (NOI ÷ Cap Rate) − Debt × Equity %';
+    valInput.value = '';
+    if (valLabel) valLabel.style.opacity = '0.5';
+    if (capRow) capRow.style.display = '';
+  } else {
+    valInput.disabled = false;
+    valInput.placeholder = 'Enter asset value';
+    if (valLabel) valLabel.style.opacity = '1';
+    if (capRow) capRow.style.display = 'none';
+  }
+}
+
+function openAddInvestment() {
+  openModal(`
+    <h3>Add Investment</h3>
+    <label>Investment Name</label>
+    <input id="invName" placeholder="e.g. 61 South Paramus">
+    <label>Link to Property</label>
+    <select id="invPropertyId" onchange="onPropertyLinkChange()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">${buildPropertyOptions(null)}</select>
+    <label>Ownership %</label>
+    <input id="invOwnership" type="number" step="0.01" placeholder="e.g. 15.17">
+    <div id="capRateRow" style="display:none;">
+      <label>Cap Rate (%)</label>
+      <input id="invCapRate" type="number" step="0.01" placeholder="e.g. 7.5">
+    </div>
+    <label>Contributed ($)</label>
+    <input id="invContributed" type="number" step="0.01" placeholder="e.g. 4780417">
+    <label>Distributed ($)</label>
+    <input id="invDistributed" type="number" step="0.01" placeholder="0" value="0">
+    <label id="invValuationLabel">Position Value ($)</label>
+    <input id="invValuation" type="number" step="0.01" placeholder="Enter asset value">
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveNewInvestment()">Add</button>
+    </div>
+  `);
+}
+
+async function saveNewInvestment() {
+  const name = document.getElementById('invName').value.trim();
+  const propertyId = document.getElementById('invPropertyId').value || null;
+  const ownership = parseFloat(document.getElementById('invOwnership').value) || 0;
+  const capRateEl = document.getElementById('invCapRate');
+  const capRate = capRateEl ? (parseFloat(capRateEl.value) || null) : null;
+  const contributed = parseFloat(document.getElementById('invContributed').value) || 0;
+  const distributed = parseFloat(document.getElementById('invDistributed').value) || 0;
+  const valuation = propertyId ? null : (parseFloat(document.getElementById('invValuation').value) || null);
+  if (!name) { showToast('Name required'); return; }
+  const body = { name, ownership_pct: ownership, contributed, distributed, property_id: propertyId, cap_rate: capRate };
+  if (valuation) body.valuation = valuation;
+  try {
+    await supaWrite('exec_investments', 'POST', body);
+    closeModal();
+    showToast('Investment added');
+    await loadBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+function openEditInvestment(recordId) {
+  const r = bsInvestments.find(rec => rec.id === recordId);
+  if (!r) return;
+  const name = r.name || '';
+  const ownership = r.ownership || 0;
+  const contributed = r.contributed || 0;
+  const distributedBase = r.distributedBase || 0;
+  const valuation = r.valuation || '';
+  const capRate = r.capRate || '';
+  const isLinked = !!r.propertyId;
+  openModal(`
+    <h3>Edit Investment</h3>
+    <label>Investment Name</label>
+    <input id="invName" value="${name}">
+    <label>Link to Property</label>
+    <select id="invPropertyId" onchange="onPropertyLinkChange()" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--card);color:var(--text);font-size:13px;">${buildPropertyOptions(r.propertyId)}</select>
+    <label>Ownership %</label>
+    <input id="invOwnership" type="number" step="0.01" value="${ownership}">
+    <div id="capRateRow" ${isLinked ? '' : 'style="display:none;"'}>
+      <label>Cap Rate (%)</label>
+      <input id="invCapRate" type="number" step="0.01" value="${capRate}" placeholder="e.g. 7.5">
+    </div>
+    <label>Contributed ($)</label>
+    <input id="invContributed" type="number" step="0.01" value="${contributed}">
+    <label>Distributed Base ($) <span style="font-size:11px;color:var(--text-dim);">Linked distributions added automatically</span></label>
+    <input id="invDistributed" type="number" step="0.01" value="${distributedBase}">
+    <label id="invValuationLabel" ${isLinked ? 'style="opacity:0.5"' : ''}>Position Value ($)</label>
+    <input id="invValuation" type="number" step="0.01" value="${valuation}" ${isLinked ? 'disabled placeholder="Auto: (NOI ÷ Cap Rate) − Debt × Equity %"' : ''}>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveEditInvestment('${recordId}')">Save</button>
+    </div>
+  `);
+}
+
+async function saveEditInvestment(recordId) {
+  const name = document.getElementById('invName').value.trim();
+  const propertyId = document.getElementById('invPropertyId').value || null;
+  const ownership = parseFloat(document.getElementById('invOwnership').value) || 0;
+  const capRateEl = document.getElementById('invCapRate');
+  const capRate = capRateEl ? (parseFloat(capRateEl.value) || null) : null;
+  const contributed = parseFloat(document.getElementById('invContributed').value) || 0;
+  const distributedBase = parseFloat(document.getElementById('invDistributed').value) || 0;
+  const valuation = propertyId ? null : (parseFloat(document.getElementById('invValuation').value) || null);
+  if (!name) { showToast('Name required'); return; }
+  try {
+    await supaWrite('exec_investments', 'PATCH', { name, ownership_pct: ownership, contributed, distributed: distributedBase, valuation: valuation || 0, property_id: propertyId, cap_rate: capRate }, `?id=eq.${recordId}`);
+    closeModal();
+    showToast('Investment updated');
+    await loadBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+async function deleteInvestment(recordId, name) {
+  openModal(`
+    <h3>Delete Investment</h3>
+    <p style="margin-top:8px;color:var(--text-dim);font-size:14px;">Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.</p>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="danger" onclick="confirmDeleteInvestment('${recordId}')">Delete</button>
+    </div>
+  `);
+}
+
+async function confirmDeleteInvestment(recordId) {
+  try {
+    await supaWrite('exec_investments', 'DELETE', null, `?id=eq.${recordId}`);
+    closeModal();
+    showToast('Investment deleted');
+    await loadBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// ── Liability CRUD ──
+function openAddLiability() {
+  openModal(`
+    <h3>Add Liability</h3>
+    <label>Lender / Description</label>
+    <input id="liabLender" placeholder="e.g. Six Fields - Deal Name">
+    <label>Principal Amount</label>
+    <input id="liabPrincipal" type="number" step="0.01" placeholder="e.g. 4000000">
+    <label>Currency</label>
+    <select id="liabCurrency"><option value="USD" selected>USD</option><option value="JPY">JPY</option></select>
+    <label>Maturity Date</label>
+    <input id="liabMaturity" type="date">
+    <label>Notes</label>
+    <input id="liabNotes" placeholder="Optional">
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveNewLiability()">Add</button>
+    </div>
+  `);
+}
+
+async function saveNewLiability() {
+  const lender = document.getElementById('liabLender').value.trim();
+  const principal = parseFloat(document.getElementById('liabPrincipal').value) || 0;
+  const currency = document.getElementById('liabCurrency').value;
+  const maturity = document.getElementById('liabMaturity').value;
+  const notes = document.getElementById('liabNotes').value.trim();
+  if (!lender) { showToast('Lender required'); return; }
+  const body = { lender, principal, currency, status: 'Active' };
+  if (maturity) body.maturity_date = maturity;
+  if (notes) body.notes = notes;
+  try {
+    await supaWrite('exec_liabilities', 'POST', body);
+    closeModal();
+    showToast('Liability added');
+    await loadBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// ── Edit Loan Out (name, amount, start date, maturity date) ──
+function editLoanOut(idx, idsStr, currentName, currentAmount, currentDate, currentMaturity) {
+  const el = document.getElementById(`loan-out-${idx}`);
+  if (!el) return;
+  const ids = idsStr.split(',').filter(Boolean);
+  el.innerHTML = `
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;width:100%;padding:4px 0;">
+      <input id="loanEditName-${idx}" type="text" value="${currentName}" placeholder="Loan name"
+        style="flex:1;min-width:120px;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" />
+      <input id="loanEditAmount-${idx}" type="number" value="${currentAmount}" step="0.01" placeholder="Amount"
+        style="width:100px;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" />
+      <label style="font-size:10px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px;">Start Date
+      <input id="loanEditDate-${idx}" type="date" value="${currentDate || ''}" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" /></label>
+      <label style="font-size:10px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px;">Maturity
+      <input id="loanEditMaturity-${idx}" type="date" value="${currentMaturity || ''}" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" /></label>
+      <button onclick="saveLoanOutEdit(${idx}, '${idsStr}')" style="font-size:12px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;">Save</button>
+      <button onclick="loadBalanceSheet()" style="font-size:12px;padding:4px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
+    </div>`;
+}
+
+async function saveLoanOutEdit(idx, idsStr) {
+  const ids = idsStr.split(',').filter(Boolean);
+  const name = document.getElementById(`loanEditName-${idx}`).value.trim();
+  const amount = parseFloat(document.getElementById(`loanEditAmount-${idx}`).value);
+  const dateVal = document.getElementById(`loanEditDate-${idx}`).value;
+  const maturityVal = document.getElementById(`loanEditMaturity-${idx}`).value;
+  if (!name) { showToast('Name required'); return; }
+
+  try {
+    // Update all records in this group with new name, start date, and maturity
+    for (const id of ids) {
+      const updates = { category_name: name };
+      categoryNames[id] = name;
+      if (dateVal) {
+        updates.loan_start_date = dateVal;
+        loanStartDates[id] = dateVal;
+      }
+      updates.loan_maturity_date = maturityVal || null;
+      loanMaturityDates[id] = maturityVal || null;
+      await supaWrite('exec_transactions', 'PATCH', updates, `?id=eq.${id}`);
+    }
+    // If amount changed and it's a single record, update the amount
+    if (ids.length === 1 && !isNaN(amount) && amount > 0) {
+      await supaWrite('exec_transactions', 'PATCH', { amount: -Math.abs(amount) }, `?id=eq.${ids[0]}`);
+      // Update local allRecords
+      const rec = allRecords.find(r => r.id === ids[0]);
+      if (rec) {
+        if (rec.Amount !== undefined) rec.Amount = -Math.abs(amount);
+        else if (rec.amount !== undefined) rec.amount = -Math.abs(amount);
+      }
+    }
+    showToast('Loan updated');
+    renderPeriodDashboard();
+    loadBalanceSheet();
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+  }
+}
+
+function openEditLiability(recordId) {
+  const r = bsLiabilities.find(rec => rec.id === recordId);
+  if (!r) return;
+  const lender = r.lender || '';
+  const principal = r.principal || 0;
+  const currName = r.currency || 'USD';
+  const maturity = r.maturity || '';
+  const notes = r.notes || '';
+  openModal(`
+    <h3>Edit Liability</h3>
+    <label>Lender / Description</label>
+    <input id="liabLender" value="${lender}">
+    <label>Principal Amount</label>
+    <input id="liabPrincipal" type="number" step="0.01" value="${principal}">
+    <label>Currency</label>
+    <select id="liabCurrency"><option value="USD" ${currName==='USD'?'selected':''}>USD</option><option value="JPY" ${currName==='JPY'?'selected':''}>JPY</option></select>
+    <label>Maturity Date</label>
+    <input id="liabMaturity" type="date" value="${maturity}">
+    <label>Notes</label>
+    <input id="liabNotes" value="${notes}">
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveEditLiability('${recordId}')">Save</button>
+    </div>
+  `);
+}
+
+async function saveEditLiability(recordId) {
+  const lender = document.getElementById('liabLender').value.trim();
+  const principal = parseFloat(document.getElementById('liabPrincipal').value) || 0;
+  const currency = document.getElementById('liabCurrency').value;
+  const maturity = document.getElementById('liabMaturity').value;
+  const notes = document.getElementById('liabNotes').value.trim();
+  if (!lender) { showToast('Lender required'); return; }
+  const body = { lender, principal, currency, notes };
+  if (maturity) body.maturity_date = maturity;
+  try {
+    await supaWrite('exec_liabilities', 'PATCH', body, `?id=eq.${recordId}`);
+    closeModal();
+    showToast('Liability updated');
+    await loadBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+async function deleteLiability(recordId, name) {
+  openModal(`
+    <h3>Delete Liability</h3>
+    <p style="margin-top:8px;color:var(--text-dim);font-size:14px;">Are you sure you want to delete <strong>${name}</strong>? This cannot be undone.</p>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="danger" onclick="confirmDeleteLiability('${recordId}')">Delete</button>
+    </div>
+  `);
+}
+
+async function confirmDeleteLiability(recordId) {
+  try {
+    await supaWrite('exec_liabilities', 'DELETE', null, `?id=eq.${recordId}`);
+    closeModal();
+    showToast('Liability deleted');
+    await loadBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
+// ── Manual Loan Out / Deposit (no matching transaction) ──
+function openAddManualAsset(assetType) {
+  const typeLabel = assetType === 'Loan Out' ? 'Loan' : 'Deposit';
+  const placeholder = assetType === 'Loan Out' ? 'e.g. ReWyre - Rasheq Salary' : 'e.g. Security deposit - 123 Main St';
+  openModal(`
+    <h3>Add ${typeLabel}</h3>
+    <label>Name / Description</label>
+    <input id="manualAssetName" placeholder="${placeholder}">
+    <label>Amount ($)</label>
+    <input id="manualAssetAmount" type="number" step="0.01" placeholder="e.g. 104000">
+    <label>Date</label>
+    <input id="manualAssetDate" type="date" value="${new Date().toISOString().slice(0,10)}">
+    <label>Account</label>
+    <select id="manualAssetAccount">
+      ${Object.entries(INCLUDE_ACCOUNTS).map(([num, name]) =>
+        `<option value="${num}" ${num === MAIN_ACCT ? 'selected' : ''}>${name}</option>`
+      ).join('')}
+    </select>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveManualAsset('${assetType}')">Add</button>
+    </div>
+  `);
+}
+
+async function saveManualAsset(assetType) {
+  const name = document.getElementById('manualAssetName').value.trim();
+  const amount = parseFloat(document.getElementById('manualAssetAmount').value) || 0;
+  const date = document.getElementById('manualAssetDate').value;
+  const acctNum = document.getElementById('manualAssetAccount').value;
+  const acctName = INCLUDE_ACCOUNTS[acctNum] || 'FIRST MILE CAPITAL LLC';
+
+  if (!name) { showToast('Name required'); return; }
+  if (!amount) { showToast('Amount required'); return; }
+
+  // Insert a synthetic transaction row with category_override pre-set
+  const body = {
+    date: date,
+    description: 'MANUAL: ' + name,
+    amount: -Math.abs(amount), // Negative = outgoing (loan out / deposit)
+    account_name: acctName,
+    account_number: acctNum,
+    transaction_type: 'Manual Entry',
+    credit_debit: 'Debit',
+    category_override: assetType,
+    category_name: name
+  };
+
+  try {
+    const result = await supaWrite('exec_transactions', 'POST', body);
+    if (result && result.length > 0) {
+      // Add to local state immediately
+      const newRec = result[0];
+      categoryOverrides[newRec.id] = assetType;
+      categoryNames[newRec.id] = name;
+      allRecords.push({
+        id: newRec.id,
+        fields: {
+          Date: newRec.date,
+          Description: newRec.description,
+          Amount: newRec.amount,
+          'Account Name': newRec.account_name,
+          'Account Number': newRec.account_number,
+          'Transaction Type': newRec.transaction_type,
+          'Credit/Debit': newRec.credit_debit
+        }
+      });
+    }
+    closeModal();
+    showToast(`${assetType} added: ${name}`);
+    renderPeriodDashboard();
+    await loadBalanceSheet();
+  } catch(e) {
+    console.error('Failed to save manual asset:', e);
+    showToast('Error: ' + e.message);
+  }
+}
+
+// ── Public init function ──
+window.exec2Init = async function() {
+  if (_exec2Inited) return;
+  _exec2Inited = true;
+  _injectCSS();
+  _injectHTML();
+  await exec2InitData();
+};
+
+})();

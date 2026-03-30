@@ -783,6 +783,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
       <span>Executive Financials</span>
     </a>
+    <a class="sidebar-item" data-view="exec2">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
+      <span>Exec Financials v2</span>
+    </a>
   </div>
 
   <div class="sidebar-section">
@@ -1067,9 +1071,14 @@
     </div>
   </div>
 
-  <!-- Executive Financials (iframe) -->
+  <!-- Executive Financials (iframe - legacy) -->
   <div class="manage-view" id="view-exec" style="padding:0; height:calc(100vh - 65px);">
     <iframe id="execFrame" data-src="exec.html" style="width:100%; height:100%; border:none;"></iframe>
+  </div>
+
+  <!-- Executive Financials v2 (native) -->
+  <div class="manage-view" id="view-exec2" style="padding:0; height:calc(100vh - 65px); overflow-y:auto;">
+    <div id="exec2Root"></div>
   </div>
 
   <!-- budgeting view removed - merged into financials -->
@@ -1460,6 +1469,7 @@
     properties: 'Manage <span>Properties</span>',
     users: 'Manage <span>Users</span>',
     exec: 'Executive <span>Financials</span>',
+    exec2: 'Exec <span>Financials v2</span>',
     jobs: 'Scheduled <span>Jobs</span>',
     sql: 'SQL <span>Console</span>',
   };
@@ -1506,6 +1516,7 @@
     if (view === 'jobs') loadCronJobs();
     if (view === 'calendar') calInit();
     if (view === 'financials') fbInit();
+    if (view === 'exec2' && typeof exec2Init === 'function') exec2Init();
     if (view === 'exec') {
       const frame = document.getElementById('execFrame');
       if (frame && !frame.src) {
@@ -1619,6 +1630,10 @@
     if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
     return method === 'DELETE' ? null : r.json();
   }
+
+  // Expose shared utilities for external modules (exec-v2.js, etc.)
+  window.supaFetch = supaFetch;
+  window.supaWrite = supaWrite;
 
   // ── Scheduled Jobs (pg_cron) Management ──
   let cronEditJobId = null;
@@ -4453,6 +4468,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     toast._timer = setTimeout(() => toast.classList.remove('show'), 1200);
   }
 </script>
+<script src="exec-v2.js"></script>
 
 </body>
 </html>
