@@ -821,6 +821,7 @@ let allRecords = [];
 let categoryOverrides = {}; // recordId -> category (persisted in Supabase)
 let categoryNames = {};     // recordId -> friendly name for balance sheet display (persisted in Supabase)
 let loanStartDates = {};    // recordId -> loan start date string (for Loan Out — affects cash flow period)
+let loanMaturityDates = {}; // recordId -> loan maturity date string (optional)
 let investmentLinks = {};   // recordId -> investment_id (links transaction to an investment)
 let propertyLinks = {};     // recordId -> property_id (links income to a property)
 let liabilityLinks = {};    // recordId -> liability_id (links interest expense to a liability)
@@ -896,6 +897,7 @@ async function loadData() {
       if (r.liability_id) liabilityLinks[r.id] = r.liability_id;
       if (r.reviewed) reviewedItems[r.id] = true;
       if (r.loan_start_date) loanStartDates[r.id] = r.loan_start_date;
+      if (r.loan_maturity_date) loanMaturityDates[r.id] = r.loan_maturity_date;
       return {
         id: r.id,
         fields: {
@@ -3520,7 +3522,7 @@ function renderBalanceSheet() {
     const amount = getAmount(r);
     if (category === 'loan') {
       loansOutTotal += Math.abs(amount);
-      loanOutItems.push({ id: r.id, desc: categoryNames[r.id] || getDescription(r), name: categoryNames[r.id] || null, amount: Math.abs(amount), date: getDate(r), acct: getAccountName(r), startDate: loanStartDates[r.id] || null });
+      loanOutItems.push({ id: r.id, desc: categoryNames[r.id] || getDescription(r), name: categoryNames[r.id] || null, amount: Math.abs(amount), date: getDate(r), acct: getAccountName(r), startDate: loanStartDates[r.id] || null, maturityDate: loanMaturityDates[r.id] || null });
     } else if (category === 'loan_payback') {
       const linkedLoan = categoryNames[r.id];
       if (linkedLoan) {
@@ -3536,7 +3538,7 @@ function renderBalanceSheet() {
   const loanGroups = {};
   loanOutItems.forEach(item => {
     const key = item.name || `__unnamed_${item.desc}_${item.date}`;
-    if (!loanGroups[key]) loanGroups[key] = { desc: item.name || item.desc, name: item.name, amount: 0, payback: 0, netAmount: 0, date: item.date, startDate: item.startDate, acct: item.acct, count: 0, recordIds: [] };
+    if (!loanGroups[key]) loanGroups[key] = { desc: item.name || item.desc, name: item.name, amount: 0, payback: 0, netAmount: 0, date: item.date, startDate: item.startDate, maturityDate: item.maturityDate, acct: item.acct, count: 0, recordIds: [] };
     loanGroups[key].amount += item.amount;
     loanGroups[key].count++;
     loanGroups[key].recordIds.push(item.id);
@@ -3797,15 +3799,24 @@ function renderBalanceSheet() {
       const paybackNote = item.payback > 0 ? `<div style="color:var(--green-dark);font-size:10px;">Payback: -${fmt(item.payback)} → Net: ${fmt(item.netAmount)}</div>` : '';
       const ids = item.recordIds.join(',');
       const startDateStr = item.startDate || item.date.toISOString().slice(0, 10);
+      const maturityStr = item.maturityDate || '';
       const startDateDisplay = new Date(startDateStr + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
+      let maturityDisplay = '';
+      if (maturityStr) {
+        const mDate = new Date(maturityStr + 'T00:00:00');
+        const daysLeft = Math.round((mDate - new Date()) / (1000*60*60*24));
+        const yearsLeft = (daysLeft / 365).toFixed(1);
+        const badgeClass = daysLeft < 365 ? 'near' : (daysLeft < 365*3 ? 'mid' : 'far');
+        maturityDisplay = ` · Mat: ${mDate.toLocaleDateString('en-US', {month:'short',year:'numeric'})} <span class="bs-maturity-badge ${badgeClass}" style="font-size:9px;">${yearsLeft}y</span>`;
+      }
       return `
       <div id="loan-out-${idx}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;gap:8px;">
         <div style="min-width:0;flex:1;">
           <div class="loan-out-display" style="display:flex;align-items:center;gap:4px;">
             <span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.desc}${countNote}</span>
-            <button onclick="editLoanOut(${idx}, '${ids}', '${(item.name||'').replace(/'/g,"\\'")}', ${item.amount}, '${startDateStr}')" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px;opacity:0.5;" title="Edit loan">✏️</button>
+            <button onclick="editLoanOut(${idx}, '${ids}', '${(item.name||'').replace(/'/g,"\\'")}', ${item.amount}, '${startDateStr}', '${maturityStr}')" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px;opacity:0.5;" title="Edit loan">✏️</button>
           </div>
-          <div style="color:var(--text-dim);font-size:11px;">Start: ${startDateDisplay}</div>
+          <div style="color:var(--text-dim);font-size:11px;">Start: ${startDateDisplay}${maturityDisplay}</div>
           ${paybackNote}
         </div>
         <div style="font-weight:600;color:#f59e0b;white-space:nowrap;">${fmt(item.netAmount)}</div>
@@ -4119,8 +4130,8 @@ async function saveNewLiability() {
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
-// ── Edit Loan Out (name, amount, date) ──
-function editLoanOut(idx, idsStr, currentName, currentAmount, currentDate) {
+// ── Edit Loan Out (name, amount, start date, maturity date) ──
+function editLoanOut(idx, idsStr, currentName, currentAmount, currentDate, currentMaturity) {
   const el = document.getElementById(`loan-out-${idx}`);
   if (!el) return;
   const ids = idsStr.split(',').filter(Boolean);
@@ -4132,6 +4143,8 @@ function editLoanOut(idx, idsStr, currentName, currentAmount, currentDate) {
         style="width:100px;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" />
       <label style="font-size:10px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px;">Start Date
       <input id="loanEditDate-${idx}" type="date" value="${currentDate || ''}" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" /></label>
+      <label style="font-size:10px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px;">Maturity
+      <input id="loanEditMaturity-${idx}" type="date" value="${currentMaturity || ''}" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" /></label>
       <button onclick="saveLoanOutEdit(${idx}, '${idsStr}')" style="font-size:12px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;">Save</button>
       <button onclick="loadBalanceSheet()" style="font-size:12px;padding:4px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
     </div>`;
@@ -4142,10 +4155,11 @@ async function saveLoanOutEdit(idx, idsStr) {
   const name = document.getElementById(`loanEditName-${idx}`).value.trim();
   const amount = parseFloat(document.getElementById(`loanEditAmount-${idx}`).value);
   const dateVal = document.getElementById(`loanEditDate-${idx}`).value;
+  const maturityVal = document.getElementById(`loanEditMaturity-${idx}`).value;
   if (!name) { showToast('Name required'); return; }
 
   try {
-    // Update all records in this group with new name and start date
+    // Update all records in this group with new name, start date, and maturity
     for (const id of ids) {
       const updates = { category_name: name };
       categoryNames[id] = name;
@@ -4153,6 +4167,8 @@ async function saveLoanOutEdit(idx, idsStr) {
         updates.loan_start_date = dateVal;
         loanStartDates[id] = dateVal;
       }
+      updates.loan_maturity_date = maturityVal || null;
+      loanMaturityDates[id] = maturityVal || null;
       await supaWrite('exec_transactions', 'PATCH', updates, `?id=eq.${id}`);
     }
     // If amount changed and it's a single record, update the amount

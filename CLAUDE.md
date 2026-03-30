@@ -140,7 +140,9 @@ The embedded Claude chat has access to these tools:
 - Loan Out / Deposit drilldown rows have inline editable name field (persists to `category_name` column) + category dropdown
 - Loan Payback transactions link to a specific Loan Out via `category_name` (stores the loan name). Payback amount is netted against the loan on the balance sheet. Loans at $0 net are hidden.
 - Same-named Loan Out transactions are consolidated into a single entry on the balance sheet (e.g. 2 Kemble FCB wires → 1 combined line)
-- Loans Out have edit pencil (✏️) for inline editing of name, amount, and date on the balance sheet
+- Loans Out have edit pencil (✏️) for inline editing of name, amount, start date, and maturity date on the balance sheet
+- Loan Out has two dates: Start Date (always required, defaults to transaction date) and Maturity Date (optional). Start date affects cash flow period — loans with start date before the current period are excluded from that period's cash flow.
+- `loan_start_date` column on exec_transactions — set automatically when categorizing as Loan Out, editable via balance sheet edit pencil
 - Revenue section has a property/investment filter dropdown — filters income rows to show revenue for a specific property/investment
 - Property/Investment linking dropdowns deduplicate by checking `propertyId` on investments (skip investments already linked to a listed property) — not by name matching
 - Investment Contributions drilldown rows have: investment linking dropdown (links to `investment_id` on exec_transactions) + category dropdown
