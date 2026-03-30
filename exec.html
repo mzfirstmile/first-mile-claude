@@ -820,6 +820,7 @@ const KNOWN_PAYROLL_SPLITS = {}; // populated by matchPayrollSplits() after data
 let allRecords = [];
 let categoryOverrides = {}; // recordId -> category (persisted in Supabase)
 let categoryNames = {};     // recordId -> friendly name for balance sheet display (persisted in Supabase)
+let loanStartDates = {};    // recordId -> loan start date string (for Loan Out — affects cash flow period)
 let investmentLinks = {};   // recordId -> investment_id (links transaction to an investment)
 let propertyLinks = {};     // recordId -> property_id (links income to a property)
 let liabilityLinks = {};    // recordId -> liability_id (links interest expense to a liability)
@@ -894,6 +895,7 @@ async function loadData() {
       if (r.property_id) propertyLinks[r.id] = r.property_id;
       if (r.liability_id) liabilityLinks[r.id] = r.liability_id;
       if (r.reviewed) reviewedItems[r.id] = true;
+      if (r.loan_start_date) loanStartDates[r.id] = r.loan_start_date;
       return {
         id: r.id,
         fields: {
@@ -1237,7 +1239,7 @@ function nextPeriod() {
 }
 
 // ── Compute period financials ──
-function computePeriod(records) {
+function computePeriod(records, period) {
   let totalIncome = 0, totalOpex = 0, totalDistributions = 0, totalInvestments = 0, totalLoans = 0, totalLoanPaybacks = 0, totalDeposits = 0, payrollReimb = 0, payrollSplitTotal = 0;
   const incomeBuckets = {};
   const opexBuckets = {};       // Operating expenses
@@ -1294,11 +1296,15 @@ function computePeriod(records) {
       investBuckets[type].count++;
       investBuckets[type].records.push(r);
     } else if (category === 'loan') {
-      totalLoans += amount;
-      if (!loanBuckets[type]) loanBuckets[type] = { total: 0, count: 0, records: [] };
+      // Check loan_start_date: if before period start, exclude from cash flow totals
+      const loanStart = loanStartDates[r.id] ? new Date(loanStartDates[r.id]) : getDate(r);
+      const inPeriodCashFlow = !period || loanStart >= period.start;
+      if (inPeriodCashFlow) totalLoans += amount;
+      if (!loanBuckets[type]) loanBuckets[type] = { total: 0, count: 0, records: [], prePeriodTotal: 0 };
       loanBuckets[type].total += amount;
       loanBuckets[type].count++;
       loanBuckets[type].records.push(r);
+      if (!inPeriodCashFlow) loanBuckets[type].prePeriodTotal += amount;
     } else if (category === 'loan_payback') {
       totalLoanPaybacks += amount;
       if (!loanPaybackBuckets[type]) loanPaybackBuckets[type] = { total: 0, count: 0, records: [] };
@@ -1356,7 +1362,7 @@ function renderChart() {
   // Compute net cash flow per period
   const periodData = periods.map((p, i) => {
     const recs = getRecordsForPeriod(p);
-    const comp = computePeriod(recs);
+    const comp = computePeriod(recs, p);
     const totalOut = comp.totalOpex + comp.totalDistributions + comp.totalInvestments + comp.totalLoans + comp.totalDeposits;
     return { ...p, income: comp.totalIncome, expense: totalOut, net: comp.cashFlow, netIncome: comp.netIncome, idx: i };
   });
@@ -1477,7 +1483,7 @@ function renderPeriodDashboard() {
   if (periods.length === 0) return;
   const period = periods[selectedPeriodIndex];
   const records = getRecordsForPeriod(period);
-  const comp = computePeriod(records);
+  const comp = computePeriod(records, period);
   lastPeriodComp = comp;
 
   // Period title
@@ -2011,6 +2017,16 @@ async function changeCategory(recordId, newCategory) {
       categoryNames[recordId] = friendlyName.trim();
     }
   }
+  // For Loan Out, default loan_start_date to the transaction date
+  let loanStartDate = null;
+  if (newCategory === 'Loan Out') {
+    const rec = allRecords.find(r => r.id === recordId);
+    if (rec) {
+      const txnDate = getDate(rec);
+      loanStartDate = txnDate.toISOString().slice(0, 10);
+      loanStartDates[recordId] = loanStartDate;
+    }
+  }
 
   showToast(`Category → ${newCategory}`);
   updateReviewBadge();
@@ -2023,6 +2039,7 @@ async function changeCategory(recordId, newCategory) {
   try {
     const patchData = { category_override: newCategory };
     if (friendlyName && friendlyName.trim()) patchData.category_name = friendlyName.trim();
+    if (loanStartDate) patchData.loan_start_date = loanStartDate;
     const result = await supaWrite('exec_transactions', 'PATCH', patchData, `?id=eq.${recordId}`);
     if (!result || result.length === 0) {
       console.error(`Category override: no rows updated for id=${recordId}. Column may not exist — run: ALTER TABLE exec_transactions ADD COLUMN IF NOT EXISTS category_override TEXT; ALTER TABLE exec_transactions ADD COLUMN IF NOT EXISTS category_name TEXT;`);
@@ -3025,6 +3042,16 @@ async function reviewChangeCategory(recordId, newCategory) {
     friendlyName = prompt(`Enter a short name for this ${newCategory.toLowerCase()} (shown on Balance Sheet):`, '');
     if (friendlyName && friendlyName.trim()) categoryNames[recordId] = friendlyName.trim();
   }
+  // For Loan Out, default loan_start_date to the transaction date
+  let loanStartDate = null;
+  if (newCategory === 'Loan Out') {
+    const rec = allRecords.find(r => r.id === recordId);
+    if (rec) {
+      const txnDate = getDate(rec);
+      loanStartDate = txnDate.toISOString().slice(0, 10);
+      loanStartDates[recordId] = loanStartDate;
+    }
+  }
   showToast(`Category → ${newCategory}`);
   // Update the linking dropdown inline — don't re-render the whole panel
   const linkSlot = document.querySelector(`[data-link-for="${recordId}"]`);
@@ -3033,6 +3060,7 @@ async function reviewChangeCategory(recordId, newCategory) {
   try {
     const patchData = { category_override: newCategory };
     if (friendlyName && friendlyName.trim()) patchData.category_name = friendlyName.trim();
+    if (loanStartDate) patchData.loan_start_date = loanStartDate;
     const result = await supaWrite('exec_transactions', 'PATCH', patchData, `?id=eq.${recordId}`);
     if (!result || result.length === 0) showToast('⚠️ Override not saved', 'error');
   } catch(e) { console.error('Failed to save override:', e); showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
@@ -3492,7 +3520,7 @@ function renderBalanceSheet() {
     const amount = getAmount(r);
     if (category === 'loan') {
       loansOutTotal += Math.abs(amount);
-      loanOutItems.push({ id: r.id, desc: categoryNames[r.id] || getDescription(r), name: categoryNames[r.id] || null, amount: Math.abs(amount), date: getDate(r), acct: getAccountName(r) });
+      loanOutItems.push({ id: r.id, desc: categoryNames[r.id] || getDescription(r), name: categoryNames[r.id] || null, amount: Math.abs(amount), date: getDate(r), acct: getAccountName(r), startDate: loanStartDates[r.id] || null });
     } else if (category === 'loan_payback') {
       const linkedLoan = categoryNames[r.id];
       if (linkedLoan) {
@@ -3508,7 +3536,7 @@ function renderBalanceSheet() {
   const loanGroups = {};
   loanOutItems.forEach(item => {
     const key = item.name || `__unnamed_${item.desc}_${item.date}`;
-    if (!loanGroups[key]) loanGroups[key] = { desc: item.name || item.desc, name: item.name, amount: 0, payback: 0, netAmount: 0, date: item.date, acct: item.acct, count: 0, recordIds: [] };
+    if (!loanGroups[key]) loanGroups[key] = { desc: item.name || item.desc, name: item.name, amount: 0, payback: 0, netAmount: 0, date: item.date, startDate: item.startDate, acct: item.acct, count: 0, recordIds: [] };
     loanGroups[key].amount += item.amount;
     loanGroups[key].count++;
     loanGroups[key].recordIds.push(item.id);
@@ -3768,15 +3796,16 @@ function renderBalanceSheet() {
       const countNote = item.count > 1 ? ` (${item.count} txns)` : '';
       const paybackNote = item.payback > 0 ? `<div style="color:var(--green-dark);font-size:10px;">Payback: -${fmt(item.payback)} → Net: ${fmt(item.netAmount)}</div>` : '';
       const ids = item.recordIds.join(',');
-      const isoDate = item.date.toISOString().slice(0, 10);
+      const startDateStr = item.startDate || item.date.toISOString().slice(0, 10);
+      const startDateDisplay = new Date(startDateStr + 'T00:00:00').toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'});
       return `
       <div id="loan-out-${idx}" style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border-bottom:1px solid var(--border);font-size:13px;gap:8px;">
         <div style="min-width:0;flex:1;">
           <div class="loan-out-display" style="display:flex;align-items:center;gap:4px;">
             <span style="font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.desc}${countNote}</span>
-            <button onclick="editLoanOut(${idx}, '${ids}', '${(item.name||'').replace(/'/g,"\\'")}', ${item.amount}, '${isoDate}')" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px;opacity:0.5;" title="Edit loan name/amount/date">✏️</button>
+            <button onclick="editLoanOut(${idx}, '${ids}', '${(item.name||'').replace(/'/g,"\\'")}', ${item.amount}, '${startDateStr}')" style="background:none;border:none;cursor:pointer;font-size:12px;padding:2px;opacity:0.5;" title="Edit loan">✏️</button>
           </div>
-          <div style="color:var(--text-dim);font-size:11px;">${item.date.toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric'})}</div>
+          <div style="color:var(--text-dim);font-size:11px;">Start: ${startDateDisplay}</div>
           ${paybackNote}
         </div>
         <div style="font-weight:600;color:#f59e0b;white-space:nowrap;">${fmt(item.netAmount)}</div>
@@ -4101,7 +4130,8 @@ function editLoanOut(idx, idsStr, currentName, currentAmount, currentDate) {
         style="flex:1;min-width:120px;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" />
       <input id="loanEditAmount-${idx}" type="number" value="${currentAmount}" step="0.01" placeholder="Amount"
         style="width:100px;font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" />
-      <input id="loanEditDate-${idx}" type="date" value="${currentDate || ''}" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" />
+      <label style="font-size:10px;color:var(--text-dim);display:flex;flex-direction:column;gap:2px;">Start Date
+      <input id="loanEditDate-${idx}" type="date" value="${currentDate || ''}" style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text);" /></label>
       <button onclick="saveLoanOutEdit(${idx}, '${idsStr}')" style="font-size:12px;padding:4px 10px;background:var(--accent);color:#fff;border:none;border-radius:4px;cursor:pointer;">Save</button>
       <button onclick="loadBalanceSheet()" style="font-size:12px;padding:4px 10px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:4px;cursor:pointer;">Cancel</button>
     </div>`;
@@ -4115,11 +4145,14 @@ async function saveLoanOutEdit(idx, idsStr) {
   if (!name) { showToast('Name required'); return; }
 
   try {
-    // Update all records in this group with new name
+    // Update all records in this group with new name and start date
     for (const id of ids) {
       const updates = { category_name: name };
       categoryNames[id] = name;
-      if (dateVal) updates.date = dateVal;
+      if (dateVal) {
+        updates.loan_start_date = dateVal;
+        loanStartDates[id] = dateVal;
+      }
       await supaWrite('exec_transactions', 'PATCH', updates, `?id=eq.${id}`);
     }
     // If amount changed and it's a single record, update the amount
