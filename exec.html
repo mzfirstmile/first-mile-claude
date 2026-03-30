@@ -818,13 +818,13 @@ const KNOWN_PAYROLL_SPLITS = {}; // populated by matchPayrollSplits() after data
 
 // Property photo mapping (investment name → image path)
 const PROP_PHOTOS = {
-  '132-40 Metropolitan': 'assets/Property Photos/132-40 Metro Ave corner view.png',
-  '60-18 Metropolitan': 'assets/Property Photos/60-18 Metro chipotle.png',
-  '61 South': 'assets/Property Photos/61south.png',
-  '340 MK': 'assets/Property Photos/340mk.jpg',
-  'Paramus Plaza': 'assets/Property Photos/paramusplaza.png',
-  '1700 East Putnam': 'assets/Property Photos/1700eastputnam.png',
-  '575 Broadway': 'assets/Property Photos/575broadway.jpg'
+  '132-40 Metropolitan': 'assets/Property%20Photos/132-40%20Metro%20Ave%20corner%20view.png',
+  '60-18 Metropolitan': 'assets/Property%20Photos/60-18%20Metro%20chipotle.png',
+  '61 South': 'assets/Property%20Photos/61south.png',
+  '340 MK': 'assets/Property%20Photos/340mk.jpg',
+  'Paramus Plaza': 'assets/Property%20Photos/paramusplaza.png',
+  '1700 East Putnam': 'assets/Property%20Photos/1700eastputnam.png',
+  '575 Broadway': 'assets/Property%20Photos/575broadway.jpg'
 };
 
 // State
@@ -3440,7 +3440,8 @@ async function loadBalanceSheet() {
         propertyNOI: noi,
         propertyDebt: debt,
         status: r.status || '',
-        membershipClass: r.membership_class || ''
+        membershipClass: r.membership_class || '',
+        closeDate: r.close_date || null
       };
     });
     bsLiabilities = liab.map(r => ({

@@ -801,13 +801,13 @@ const KNOWN_PAYROLL_SPLITS = {}; // populated by matchPayrollSplits() after data
 
 // Property photo mapping (investment name → image path)
 const PROP_PHOTOS = {
-  '132-40 Metropolitan': 'assets/Property Photos/132-40 Metro Ave corner view.png',
-  '60-18 Metropolitan': 'assets/Property Photos/60-18 Metro chipotle.png',
-  '61 South': 'assets/Property Photos/61south.png',
-  '340 MK': 'assets/Property Photos/340mk.jpg',
-  'Paramus Plaza': 'assets/Property Photos/paramusplaza.png',
-  '1700 East Putnam': 'assets/Property Photos/1700eastputnam.png',
-  '575 Broadway': 'assets/Property Photos/575broadway.jpg'
+  '132-40 Metropolitan': 'assets/Property%20Photos/132-40%20Metro%20Ave%20corner%20view.png',
+  '60-18 Metropolitan': 'assets/Property%20Photos/60-18%20Metro%20chipotle.png',
+  '61 South': 'assets/Property%20Photos/61south.png',
+  '340 MK': 'assets/Property%20Photos/340mk.jpg',
+  'Paramus Plaza': 'assets/Property%20Photos/paramusplaza.png',
+  '1700 East Putnam': 'assets/Property%20Photos/1700eastputnam.png',
+  '575 Broadway': 'assets/Property%20Photos/575broadway.jpg'
 };
 
 // State
@@ -3457,7 +3457,8 @@ async function loadBalanceSheet() {
         propertyNOI: noi,
         propertyDebt: debt,
         status: r.status || '',
-        membershipClass: r.membership_class || ''
+        membershipClass: r.membership_class || '',
+        closeDate: r.close_date || null
       };
     });
     bsLiabilities = liab.map(r => ({
@@ -3549,7 +3550,7 @@ function renderBalanceSheet() {
       valueSource = 'equity';
     }
     investmentsTotal += value;
-    return { id: r.id, name: r.name || 'Unknown', ownership: r.ownership || 0, committed: r.committed || 0, contributed: r.contributed || 0, distributed: r.distributed || 0, unreturned: r.unreturned || 0, valuation: r.valuation, netEquity: r.netEquity || 0, status: r.status, value, valueSource, valuationDetails, propertyId: r.propertyId, propertyName: r.propertyName, propertyValuation: r.propertyValuation, capRate: r.capRate, propertyNOI: r.propertyNOI, propertyDebt: r.propertyDebt };
+    return { id: r.id, name: r.name || 'Unknown', ownership: r.ownership || 0, committed: r.committed || 0, contributed: r.contributed || 0, distributed: r.distributed || 0, unreturned: r.unreturned || 0, valuation: r.valuation, netEquity: r.netEquity || 0, status: r.status, value, valueSource, valuationDetails, propertyId: r.propertyId, propertyName: r.propertyName, propertyValuation: r.propertyValuation, capRate: r.capRate, propertyNOI: r.propertyNOI, propertyDebt: r.propertyDebt, closeDate: r.closeDate };
   });
 
   // Liabilities total (USD equivalent)
@@ -3689,7 +3690,13 @@ function renderBalanceSheet() {
   if (invCards.length === 0) {
     invContainer.innerHTML = '<p style="color:var(--text-dim);padding:16px;text-align:center;">No investments found.</p>';
   } else {
-    invCards.sort((a, b) => b.value - a.value);
+    // Sort by close date (newest first), investments without close date at end
+    invCards.sort((a, b) => {
+      if (a.closeDate && b.closeDate) return b.closeDate.localeCompare(a.closeDate);
+      if (a.closeDate && !b.closeDate) return -1;
+      if (!a.closeDate && b.closeDate) return 1;
+      return b.value - a.value;
+    });
     invContainer.innerHTML = invCards.map(inv => {
       const ownershipDisplay = inv.ownership > 1 ? `${inv.ownership.toFixed(2)}%` : (inv.ownership > 0 ? `${(inv.ownership * 100).toFixed(2)}%` : '—');
       const linkedBadge = inv.propertyId
@@ -3751,7 +3758,11 @@ function renderBalanceSheet() {
               </div>
               ${editBtn}
             </div>
-            <div class="bs-card-metrics">
+            <div class="bs-card-metrics" style="grid-template-columns:1fr 1fr 1fr;">
+              <div class="bs-metric">
+                <div class="bs-metric-label">Closed</div>
+                <div class="bs-metric-value">${inv.closeDate ? new Date(inv.closeDate + 'T00:00:00').toLocaleDateString('en-US', {month:'short', year:'numeric'}) : '—'}</div>
+              </div>
               <div class="bs-metric">
                 <div class="bs-metric-label">Contributed</div>
                 <div class="bs-metric-value">${fmt(inv.contributed)}</div>
