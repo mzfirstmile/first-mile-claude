@@ -1478,6 +1478,14 @@
   let currentView = 'home';
 
   function switchView(view, pushHistory = true) {
+    // Block access to restricted views
+    if (currentUser && currentUser.access) {
+      const key = view === 'exec2' ? 'exec' : view;
+      if (key !== 'home' && currentUser.access[key] === false) {
+        switchView('home');
+        return;
+      }
+    }
     currentView = view;
 
     // Push to browser history so back/forward buttons work
