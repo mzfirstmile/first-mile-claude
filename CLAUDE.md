@@ -60,6 +60,23 @@ The embedded Claude chat has access to these tools:
 - **Terminology:** Use "Total Revenue" (not "Total Income") everywhere — only "Net Income" uses the word "income". Applied to PDF, email, and exec.html dashboard.
 - **NOI dependency:** Balance sheet investment valuations depend on NOI data from budget module. exec.html now waits for NOI before showing net position (no more flash of wrong -$4M number).
 
+## Bank Transaction Upload System (CSV)
+- **Upload button** in exec.html header ("📤 Upload Transactions") opens upload modal
+- **CSV format:** Chase BAI2 format — columns: As Of, Currency, BankID Type, BankID, Account, Data Type, BAI Code, Description, Amount, Balance/Value Date, Customer Reference, Immediate Availability, 1 Day Float, 2+ DayFloat, Bank Reference, Text
+- **Deduplication:** Checks date + amount + first 40 chars of description against existing allRecords. Also dedupes within the upload file itself. Since Morris uploads 30-day rolling views weekly, overlap is expected and handled.
+- **Confidence scoring:** `categorizeWithConfidence()` wraps the existing `categorize()` function and adds confidence levels:
+  - **High:** Known patterns (JUSTWORK=Payroll, CORPORATION SERV=Legal, SIGONFILE=Investment Income, NYS DTF/NJ WEB PMT=Taxes, SETTLEMENT=Owner Distributions, ACCOUNT TRANSFER=Internal Transfer, etc.) + Member account credits/debits + Management account Appfolio deposits
+  - **Medium:** Auto-rule match that isn't generic
+  - **Low:** Falls into generic catch-all categories (Other Income, Other Operating, Wire Payments, etc.)
+- **Review screen:** Two sections — "Needs Review" (low/medium confidence, sorted by amount) at top, "High Confidence Matches" (high confidence, sorted by date) at bottom
+- **Income linking dropdowns:** AM Fee, PM Fee, Dev Fee, Acquisition Fee get a **Property dropdown** to link income to specific properties. Investment Income gets an **Investment dropdown** (same as Investment Contributions). Interest Expense gets a **Liability dropdown** to link to loans.
+- **These linking dropdowns also work in existing drilldowns** — not just the upload review screen
+- **Pattern learning:** `exec_learned_patterns` table stores description patterns from user categorizations. Confidence and occurrence counts improve over time. On each upload confirmation, patterns are extracted from user's category choices and saved/incremented.
+- **DB columns added:** `property_id TEXT` and `liability_id UUID` on exec_transactions. New table `exec_learned_patterns`.
+- **CSV files stored in:** `Bank Transactions Batch Upload/` folder (gitignored)
+- **Debits:** CSV shows debit amounts as positive — the upload code negates them (amount = -Math.abs(rawAmount) for Debits)
+- **Account mapping:** ACCOUNT_NAME_MAP in exec.html maps account numbers to names (includes Pref Fund I: 483103381654, etc.)
+
 ## Pending / Known Issues
 - **132-40 Metropolitan NOI not showing on balance sheet:** Property exists in exec_investments but shows $0 valuation. FB_PROP_META updated in index.html code, but live site needs git push. Also `fbGlAccounts` was null when trying to recompute budget data — GL accounts may not have loaded. Budget rows DO exist in Supabase (confirmed).
 - **Investment contribution → auto-update contributed amount:** When linking a wire to an investment via dropdown, should also increment that investment's `contributed` field. Not yet implemented.

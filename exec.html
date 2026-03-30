@@ -152,6 +152,60 @@
   .excluded-row:hover { background:var(--surface2); color:var(--text); }
   .excluded-row:last-child { border-bottom:none; }
 
+  /* ── Upload Modal ── */
+  .upload-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,.5); z-index:800; justify-content:center; align-items:center; }
+  .upload-overlay.show { display:flex; }
+  .upload-modal { background:var(--surface); border-radius:16px; padding:32px; width:680px; max-width:95vw; max-height:90vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,.2); }
+  .upload-modal h2 { font-size:20px; font-weight:700; margin-bottom:16px; }
+  .upload-dropzone { border:2px dashed var(--border); border-radius:12px; padding:40px; text-align:center; cursor:pointer; transition:all .2s; margin-bottom:20px; }
+  .upload-dropzone:hover, .upload-dropzone.dragover { border-color:var(--accent); background:var(--accent-dim); }
+  .upload-dropzone p { font-size:14px; color:var(--text-dim); margin-top:8px; }
+  .upload-dropzone .upload-icon { font-size:36px; margin-bottom:8px; }
+  .upload-progress { margin:16px 0; }
+  .upload-progress-bar { height:4px; background:var(--border); border-radius:4px; overflow:hidden; }
+  .upload-progress-bar .fill { height:100%; background:var(--accent); transition:width .3s; width:0; }
+  .upload-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:16px 0; }
+  .upload-stat { text-align:center; padding:12px; background:var(--surface2); border-radius:8px; }
+  .upload-stat .num { font-size:22px; font-weight:700; font-family:'SF Mono','Fira Code',monospace; }
+  .upload-stat .lbl { font-size:10px; font-weight:600; color:var(--text-dim); text-transform:uppercase; letter-spacing:.3px; margin-top:2px; }
+  .upload-stat .num.green { color:var(--green-dark); }
+  .upload-stat .num.red { color:var(--red-dark); }
+  .upload-stat .num.orange { color:var(--orange); }
+
+  /* ── Upload Review Screen ── */
+  .upload-review { display:none; padding:0 40px 40px; margin:0 auto; }
+  .upload-review.show { display:block; }
+  .upload-review-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; padding:12px 0; flex-wrap:wrap; gap:12px; }
+  .upload-review-header h2 { font-size:20px; font-weight:700; }
+  .upload-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; }
+  .upload-section h3 { font-size:15px; font-weight:700; margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+  .upload-section h3 .badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; }
+  .upload-section h3 .badge.low { background:var(--orange-dim); color:var(--orange); }
+  .upload-section h3 .badge.high { background:var(--green-dim); color:var(--green-dark); }
+  .upload-txn-row { display:grid; grid-template-columns:80px 1fr 160px 160px 120px; gap:8px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .upload-txn-row:last-child { border-bottom:none; }
+  .upload-txn-row .txn-date { font-size:12px; color:var(--text-dim); white-space:nowrap; }
+  .upload-txn-row .txn-desc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; position:relative; cursor:help; }
+  .upload-txn-row .txn-desc:hover { overflow:visible; }
+  .upload-txn-row .txn-desc .txn-tooltip { display:none; position:absolute; left:0; top:calc(100% + 4px); background:var(--text); color:#fff; padding:10px 14px; border-radius:8px; font-size:12px; white-space:normal; word-break:break-word; max-width:600px; min-width:300px; z-index:200; box-shadow:0 4px 16px rgba(0,0,0,.25); line-height:1.5; }
+  .upload-txn-row .txn-desc:hover .txn-tooltip { display:block; }
+  .upload-txn-row .txn-amount { text-align:right; font-weight:600; font-variant-numeric:tabular-nums; }
+  .upload-txn-row .txn-amount.green { color:var(--green-dark); }
+  .upload-txn-row .txn-amount.red { color:var(--red-dark); }
+  .upload-txn-row select { font-size:11px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; background:var(--surface2); }
+  .confidence-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:6px; }
+  .confidence-dot.high { background:var(--green); }
+  .confidence-dot.medium { background:var(--orange); }
+  .confidence-dot.low { background:var(--red); }
+  .upload-actions { display:flex; gap:12px; justify-content:flex-end; margin-top:20px; }
+  .upload-actions .btn-primary { padding:10px 24px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:none; background:var(--accent); color:#fff; transition:all .15s; }
+  .upload-actions .btn-primary:hover { background:#0095b3; }
+  .upload-actions .btn-primary:disabled { opacity:.4; cursor:default; }
+  @media (max-width:900px) {
+    .upload-txn-row { grid-template-columns:60px 1fr 140px 100px; }
+    .upload-txn-row select:nth-of-type(2) { display:none; }
+  }
+
   /* ── Review Uncategorized Panel ── */
   .review-panel { display:none; padding:0 40px 40px; margin:0 auto; }
   .review-panel.show { display:block; }
@@ -165,7 +219,10 @@
   .review-group-header .review-group-count { font-size:12px; color:var(--text-dim); }
   .review-group-rows { display:none; }
   .review-group-rows.open { display:block; }
-  .review-txn { display:grid; grid-template-columns:1fr 150px 160px 100px; gap:8px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .review-txn { display:grid; grid-template-columns:1fr 140px 140px 130px 100px 36px; gap:6px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .review-txn .review-link { font-size:10px; }
+  .review-txn .review-ok-btn { width:30px; height:30px; border-radius:50%; border:1px solid var(--border); background:var(--surface); cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; transition:all .15s; color:var(--text-dim); }
+  .review-txn .review-ok-btn:hover { background:var(--green);color:#fff;border-color:var(--green); }
   .review-txn:last-child { border-bottom:none; }
   .review-txn .review-desc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:help; }
   .review-txn .review-acct { font-size:11px; color:var(--text-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -176,7 +233,7 @@
   .review-back-bar h2 { font-size:20px; font-weight:700; }
   @media (max-width:900px) {
     .review-panel { padding-left:20px; padding-right:20px; }
-    .review-txn { grid-template-columns:1fr 140px 100px; }
+    .review-txn { grid-template-columns:1fr 140px 100px 36px; }
     .review-txn .review-acct { display:none; }
   }
 
@@ -357,6 +414,7 @@
 <header id="mainHeader">
   <h1><img src="assets/favicon.png" class="logo-icon" alt="">Executive <span>Financials</span></h1>
   <div class="header-right">
+    <button class="btn accent" onclick="openUploadModal()">📤 Upload Transactions</button>
     <button class="btn" onclick="openReviewUncategorized()" id="reviewBtn" style="display:none;">⚠️ Review <span id="reviewCount" style="background:var(--red);color:#fff;padding:1px 6px;border-radius:10px;font-size:10px;margin-left:4px;">0</span></button>
     <button class="btn" onclick="refreshData()">Refresh</button>
     <a href="index.html" class="btn">Calendar</a>
@@ -548,10 +606,50 @@
   </div><!-- /dashboard-grid -->
 </div>
 
+<!-- Upload Modal -->
+<div class="upload-overlay" id="uploadOverlay" onclick="if(event.target===this)closeUploadModal()">
+  <div class="upload-modal">
+    <h2>📤 Upload Bank Transactions</h2>
+    <div class="upload-dropzone" id="uploadDropzone" onclick="document.getElementById('csvFileInput').click()">
+      <div class="upload-icon">📁</div>
+      <strong>Drop CSV file here or click to browse</strong>
+      <p>Supports Chase BAI2 format CSV exports (weekly 30-day reports)</p>
+    </div>
+    <input type="file" id="csvFileInput" accept=".csv" style="display:none" onchange="handleCsvUpload(this.files[0])">
+    <div class="upload-progress" id="uploadProgress" style="display:none;">
+      <div style="font-size:13px;margin-bottom:6px;" id="uploadStatusText">Parsing CSV...</div>
+      <div class="upload-progress-bar"><div class="fill" id="uploadProgressFill"></div></div>
+    </div>
+    <div class="upload-stats" id="uploadStats" style="display:none;">
+      <div class="upload-stat"><div class="num" id="statTotal">0</div><div class="lbl">Total Rows</div></div>
+      <div class="upload-stat"><div class="num green" id="statNew">0</div><div class="lbl">New</div></div>
+      <div class="upload-stat"><div class="num orange" id="statDupes">0</div><div class="lbl">Duplicates Skipped</div></div>
+    </div>
+    <div id="uploadModalActions" style="display:none;">
+      <div class="upload-actions">
+        <button class="btn" onclick="closeUploadModal()">Cancel</button>
+        <button class="btn-primary" id="btnProceedReview" onclick="proceedToUploadReview()">Review & Import →</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upload Review Screen -->
+<div class="upload-review" id="uploadReview">
+  <div class="upload-review-header">
+    <h2>Review Uploaded Transactions</h2>
+    <div style="display:flex;gap:10px;">
+      <button class="btn" onclick="closeUploadReview()">← Back to Dashboard</button>
+      <button class="btn-primary" id="btnConfirmImport" onclick="confirmImport()" style="padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:var(--accent);color:#fff;">Confirm Import</button>
+    </div>
+  </div>
+  <div id="uploadReviewContent"></div>
+</div>
+
 <!-- Review Uncategorized Panel -->
 <div class="review-panel" id="reviewPanel">
   <div class="review-back-bar">
-    <h2>Review Uncategorized Transactions</h2>
+    <h2>Review Transactions</h2>
     <button class="btn" onclick="closeReviewPanel()">← Back to Dashboard</button>
   </div>
   <div class="review-filters" id="reviewFilters"></div>
@@ -716,6 +814,9 @@ let allRecords = [];
 let categoryOverrides = {}; // recordId -> category (persisted in Supabase)
 let categoryNames = {};     // recordId -> friendly name for balance sheet display (persisted in Supabase)
 let investmentLinks = {};   // recordId -> investment_id (links transaction to an investment)
+let propertyLinks = {};     // recordId -> property_id (links income to a property)
+let liabilityLinks = {};    // recordId -> liability_id (links interest expense to a liability)
+let reviewedItems = {};     // recordId -> true (dismissed from review as OK)
 let payrollSplits = {};     // recordId -> payroll amount to deduct from PM fee
 let cfMode = 'yearly';
 let selectedPeriodIndex = -1; // -1 means latest
@@ -783,6 +884,9 @@ async function loadData() {
       if (r.category_override) categoryOverrides[r.id] = r.category_override;
       if (r.category_name) categoryNames[r.id] = r.category_name;
       if (r.investment_id) investmentLinks[r.id] = r.investment_id;
+      if (r.property_id) propertyLinks[r.id] = r.property_id;
+      if (r.liability_id) liabilityLinks[r.id] = r.liability_id;
+      if (r.reviewed) reviewedItems[r.id] = true;
       return {
         id: r.id,
         fields: {
@@ -1726,11 +1830,39 @@ function openDrilldown(type, cssClass) {
             <div class="txn-amount ${amtClass}">${amtStr}</div>
           </div>`;
       } else {
-        // Real record with category dropdown
+        // Real record with category dropdown + optional linking dropdown
+        const linkableIncomeTypes = ['Asset Management Fee Income', 'Property Management Fee Income', 'Development Fee Income', 'Acquisition Fee Income'];
+        const isLinkableIncome = linkableIncomeTypes.includes(d.currentType);
+        const isInvestmentIncome = d.currentType === 'Investment Income';
+        const isInterestExpense = d.currentType === 'Interest Expense';
+
+        let linkHtml = '';
+        if (isLinkableIncome && d.recordId) {
+          // Property dropdown for fee income
+          const currentPropId = propertyLinks[d.recordId] || '';
+          const propOpts = [`<option value="">— Property —</option>`];
+          bsProperties.forEach(p => { propOpts.push(`<option value="${p.id}" ${p.id === currentPropId ? 'selected' : ''}>${p.property_name}</option>`); });
+          linkHtml = `<select class="txn-cat-select" style="max-width:130px;font-size:10px;" onchange="linkToProperty('${d.recordId}', this.value)">${propOpts.join('')}</select>`;
+        } else if (isInvestmentIncome && d.recordId) {
+          // Investment dropdown for investment income (to track distributions)
+          const linkedInvId = investmentLinks[d.recordId] || '';
+          const invOpts = [`<option value="">— Investment —</option>`];
+          bsInvestments.forEach(inv => { invOpts.push(`<option value="${inv.id}" ${inv.id === linkedInvId ? 'selected' : ''}>${inv.name}</option>`); });
+          invOpts.push(`<option value="__new__">+ Add New…</option>`);
+          linkHtml = `<select class="txn-cat-select" style="max-width:130px;font-size:10px;" onchange="linkToInvestment('${d.recordId}', this.value, this)">${invOpts.join('')}</select>`;
+        } else if (isInterestExpense && d.recordId) {
+          // Liability dropdown for interest expense
+          const currentLiabId = liabilityLinks[d.recordId] || '';
+          const liabOpts = [`<option value="">— Loan —</option>`];
+          bsLiabilities.forEach(l => { liabOpts.push(`<option value="${l.id}" ${l.id === currentLiabId ? 'selected' : ''}>${l.lender}${l.relatedDeal ? ' — ' + l.relatedDeal : ''}</option>`); });
+          linkHtml = `<select class="txn-cat-select" style="max-width:130px;font-size:10px;" onchange="linkToLiability('${d.recordId}', this.value)">${liabOpts.join('')}</select>`;
+        }
+
         html += `
-          <div class="txn-row">
+          <div class="txn-row"${linkHtml ? ' style="flex-wrap:wrap;"' : ''}>
             <div class="txn-desc">${d.desc}<span class="txn-tooltip">${d.desc}</span></div>
             <div class="txn-acct">${d.acct}</div>
+            ${linkHtml}
             <select class="txn-cat-select" onchange="changeCategory('${d.recordId}', this.value)">
               ${buildCategoryOptions(d.currentType)}
             </select>
@@ -1911,37 +2043,681 @@ async function linkToInvestment(recordId, investmentId, selectEl) {
   }
 }
 
-// ── Review Uncategorized ──
+// Link transaction to a property (income items)
+async function linkToProperty(recordId, propertyId) {
+  if (propertyId) {
+    propertyLinks[recordId] = propertyId;
+  } else {
+    delete propertyLinks[recordId];
+  }
+  const propName = propertyId ? (bsProperties.find(p => p.id === propertyId) || {}).property_name : 'Unlinked';
+  showToast(`Property → ${propName || 'Unlinked'}`);
+  if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  try {
+    await supaWrite('exec_transactions', 'PATCH', { property_id: propertyId || null }, `?id=eq.${recordId}`);
+  } catch(e) {
+    console.error('Failed to save property link:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+}
+
+// Link interest expense to a liability
+async function linkToLiability(recordId, liabilityId) {
+  if (liabilityId) {
+    liabilityLinks[recordId] = liabilityId;
+  } else {
+    delete liabilityLinks[recordId];
+  }
+  const liabName = liabilityId ? (bsLiabilities.find(l => l.id === liabilityId) || {}).lender : 'Unlinked';
+  showToast(`Loan → ${liabName || 'Unlinked'}`);
+  if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+  try {
+    await supaWrite('exec_transactions', 'PATCH', { liability_id: liabilityId || null }, `?id=eq.${recordId}`);
+  } catch(e) {
+    console.error('Failed to save liability link:', e);
+    showToast(`⚠️ Save failed: ${e.message}`, 'error');
+  }
+}
+
+// ── CSV Upload & Import System ──
+
+// Account number → name mapping (includes all known accounts)
+const ACCOUNT_NAME_MAP = {
+  '483101560383': 'FIRST MILE CAPITAL LLC',
+  '483110283091': 'First Mile Capital SAVINGS',
+  '483110897814': 'FIRST MILE MANAGEMENT LLC',
+  '483103381719': 'FM PARAMUS MEMBER LLC',
+  '483108155623': 'FM Plaza Member LLC',
+  '483107673423': 'FM Kemble Membe',
+  '483103204524': 'FM SIXTYONE PARAMUS LLC',
+  '483106854065': 'FM PLAZA MANAGER LLC',
+  '483107226809': 'FM 340 KEMBLE LLC Operating',
+  '483108416715': 'FM 340 Kemble LLC Investors',
+  '483107740039': 'FM Kemble JV LLC',
+  '483107689514': 'FM Paramus Member LLC',
+  '483112607604': 'FM GREENWICH OWNER LLC',
+  '483112182514': '132 40 METRO OWNER LLC',
+  '483103381654': 'First Mile Pref Fund I',
+  '483108735247': 'FM Capital Account',
+};
+
+// Learned patterns — loaded from Supabase exec_learned_patterns table
+let learnedPatterns = []; // { description_pattern, amount_min, amount_max, account_number, category, property_id, investment_id, liability_id, confidence, occurrences }
+
+// Staged upload data
+let uploadStagedTxns = []; // parsed + deduped, ready for review
+let uploadReviewChoices = {}; // idx -> { category, property_id, investment_id, liability_id }
+
+async function loadLearnedPatterns() {
+  try {
+    const data = await supaFetch('exec_learned_patterns', '?order=occurrences.desc&limit=500');
+    learnedPatterns = data || [];
+    console.log(`Loaded ${learnedPatterns.length} learned patterns`);
+  } catch(e) {
+    // Table may not exist yet — that's ok
+    console.log('Learned patterns table not found (will be created on first pattern save)');
+    learnedPatterns = [];
+  }
+}
+
+// Load patterns on startup
+loadLearnedPatterns();
+
+function openUploadModal() {
+  document.getElementById('uploadOverlay').classList.add('show');
+  document.getElementById('uploadProgress').style.display = 'none';
+  document.getElementById('uploadStats').style.display = 'none';
+  document.getElementById('uploadModalActions').style.display = 'none';
+  document.getElementById('csvFileInput').value = '';
+  uploadStagedTxns = [];
+}
+function closeUploadModal() {
+  document.getElementById('uploadOverlay').classList.remove('show');
+}
+
+// Drag and drop
+const dropzone = document.getElementById('uploadDropzone');
+if (dropzone) {
+  dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+  dropzone.addEventListener('dragleave', () => { dropzone.classList.remove('dragover'); });
+  dropzone.addEventListener('drop', (e) => {
+    e.preventDefault(); dropzone.classList.remove('dragover');
+    if (e.dataTransfer.files.length > 0) handleCsvUpload(e.dataTransfer.files[0]);
+  });
+}
+
+function parseCsvLine(line) {
+  const result = [];
+  let inQuotes = false;
+  let current = '';
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && i + 1 < line.length && line[i+1] === '"') { current += '"'; i++; }
+      else { inQuotes = !inQuotes; }
+    } else if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current.trim());
+  return result;
+}
+
+async function handleCsvUpload(file) {
+  if (!file || !file.name.endsWith('.csv')) {
+    alert('Please upload a CSV file');
+    return;
+  }
+
+  const progress = document.getElementById('uploadProgress');
+  const statusText = document.getElementById('uploadStatusText');
+  const progressFill = document.getElementById('uploadProgressFill');
+  progress.style.display = 'block';
+  statusText.textContent = 'Parsing CSV...';
+  progressFill.style.width = '20%';
+
+  const text = await file.text();
+  // Remove BOM
+  const clean = text.replace(/^\uFEFF/, '');
+  const lines = clean.split(/\r?\n/).filter(l => l.trim());
+  const headers = parseCsvLine(lines[0]);
+
+  // Map header positions
+  const colIdx = {};
+  headers.forEach((h, i) => { colIdx[h.replace(/^"|"$/g, '')] = i; });
+
+  const rows = [];
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    if (cols.length < 8) continue;
+
+    const date = (cols[colIdx['As Of']] || '').replace(/"/g, '');
+    const acctNum = (cols[colIdx['Account']] || '').replace(/"/g, '');
+    const dataType = (cols[colIdx['Data Type']] || '').replace(/"/g, '');
+    const shortDesc = (cols[colIdx['Description']] || '').replace(/"/g, '');
+    const rawAmount = parseFloat((cols[colIdx['Amount']] || '0').replace(/"/g, '')) || 0;
+    const textDesc = (cols[colIdx['Text']] || '').replace(/"/g, '');
+    const bankRef = (cols[colIdx['Bank Reference']] || '').replace(/"/g, '');
+
+    if (!date || !acctNum) continue;
+
+    // Use Text field if available (more descriptive), fallback to Description
+    const description = textDesc || shortDesc;
+    // Debits are positive in the CSV — make them negative
+    const amount = dataType === 'Debits' ? -Math.abs(rawAmount) : Math.abs(rawAmount);
+    const acctName = ACCOUNT_NAME_MAP[acctNum] || `Account ${acctNum}`;
+    const creditDebit = dataType === 'Credits' ? 'Credit' : 'Debit';
+
+    rows.push({ date, description, amount, acctNum, acctName, creditDebit, bankRef, shortDesc });
+  }
+
+  progressFill.style.width = '50%';
+  statusText.textContent = `Parsed ${rows.length} transactions. Checking for duplicates...`;
+
+  // Deduplication: check against existing allRecords by date + amount + description fuzzy match
+  const existingSet = new Set();
+  allRecords.forEach(r => {
+    const d = getDate(r);
+    const dateStr = d.toISOString().slice(0, 10);
+    const amt = getAmount(r);
+    const desc = getDescription(r).toUpperCase().slice(0, 40);
+    existingSet.add(`${dateStr}|${amt.toFixed(2)}|${desc}`);
+    // Also add with just date + amount for extra safety
+    existingSet.add(`${dateStr}|${amt.toFixed(2)}`);
+  });
+
+  const newTxns = [];
+  let dupeCount = 0;
+  rows.forEach(r => {
+    const key1 = `${r.date}|${r.amount.toFixed(2)}|${r.description.toUpperCase().slice(0, 40)}`;
+    const key2 = `${r.date}|${r.amount.toFixed(2)}`;
+    // Check for exact match first (date + amount + desc prefix)
+    if (existingSet.has(key1)) { dupeCount++; return; }
+    // For same date + amount, check if there's already one — but allow if amounts differ
+    // Don't skip on just date+amount since there can be multiple txns on same date with same amount
+    // Instead use a stricter dedup: date + amount + first 30 chars of description
+    newTxns.push(r);
+  });
+
+  // Additional dedup within the upload itself (same file can have dupes)
+  const seen = new Set();
+  const finalNew = [];
+  newTxns.forEach(r => {
+    const key = `${r.date}|${r.amount.toFixed(2)}|${r.description.toUpperCase().slice(0, 40)}`;
+    if (seen.has(key)) { dupeCount++; return; }
+    seen.add(key);
+    finalNew.push(r);
+  });
+
+  progressFill.style.width = '100%';
+  statusText.textContent = 'Ready for review';
+
+  // Show stats
+  document.getElementById('uploadStats').style.display = 'grid';
+  document.getElementById('statTotal').textContent = rows.length;
+  document.getElementById('statNew').textContent = finalNew.length;
+  document.getElementById('statDupes').textContent = dupeCount;
+
+  uploadStagedTxns = finalNew;
+
+  if (finalNew.length > 0) {
+    document.getElementById('uploadModalActions').style.display = 'block';
+  } else {
+    statusText.textContent = 'No new transactions to import (all duplicates).';
+  }
+}
+
+// Confidence scoring for categorization
+function categorizeWithConfidence(txn) {
+  // txn: { date, description, amount, acctNum, acctName, creditDebit }
+  // Returns: { category, type, confidence: 'high'|'medium'|'low', reason }
+
+  const desc = txn.description.toUpperCase();
+  const amount = txn.amount;
+  const acctName = txn.acctName;
+  const acctNum = txn.acctNum;
+
+  // First check learned patterns
+  for (const pat of learnedPatterns) {
+    if (pat.description_pattern && desc.includes(pat.description_pattern.toUpperCase())) {
+      if (pat.account_number && pat.account_number !== acctNum) continue;
+      if (pat.amount_min != null && Math.abs(amount) < pat.amount_min) continue;
+      if (pat.amount_max != null && Math.abs(amount) > pat.amount_max) continue;
+      return {
+        category: pat.category,
+        type: pat.category,
+        confidence: pat.occurrences >= 3 ? 'high' : 'medium',
+        reason: `Learned pattern (${pat.occurrences}x match)`,
+        patternId: pat.id,
+        property_id: pat.property_id,
+        investment_id: pat.investment_id,
+        liability_id: pat.liability_id
+      };
+    }
+  }
+
+  // Build a pseudo-record to reuse existing categorize() function
+  const pseudoRecord = {
+    id: 'upload_temp',
+    fields: {
+      Date: txn.date,
+      Description: txn.description,
+      Amount: amount,
+      'Ledger Balance': null,
+      'Transaction Type': desc.includes('ACCOUNT TRANSFER TRSF') ? 'Transfer' : (txn.creditDebit === 'Credit' ? 'Credit' : 'Debit'),
+      'Credit/Debit': txn.creditDebit,
+      'Account Name': acctName,
+      'Account Number': acctNum
+    }
+  };
+
+  // Temporarily remove from overrides so categorize() uses rules
+  const result = categorize(pseudoRecord);
+
+  // Determine confidence based on category
+  let confidence = 'medium';
+  let reason = 'Auto-rule match';
+
+  // High confidence: specific known patterns
+  const highConfPatterns = [
+    { test: () => desc.includes('JUSTWORK'), cat: 'Payroll' },
+    { test: () => desc.includes('CROWN ACQUISITIONS'), cat: 'Rent' },
+    { test: () => desc.includes('PACE'), cat: 'Marketing' },
+    { test: () => desc.includes('ELYSE'), cat: 'Finders Fee' },
+    { test: () => desc.includes('X SHORE') || desc.includes('XSHORE'), cat: 'Contractors' },
+    { test: () => desc.includes('LEVINE') && desc.includes('JACOBS'), cat: 'Legal/Corp Services' },
+    { test: () => desc.includes('CORPORATION SERV'), cat: 'Legal/Corp Services' },
+    { test: () => desc.includes('NYS DTF') || desc.includes('NJ WEB PMT'), cat: 'Taxes' },
+    { test: () => desc.includes('CHASE CREDIT') || desc.includes('CITI AUTOPAY'), cat: 'Credit Cards' },
+    { test: () => desc.includes('PA-MGMT'), cat: 'Payroll Reimbursement' },
+    { test: () => PAYROLL_REIMB_AMOUNTS.some(a => Math.abs(Math.abs(amount) - a) < PAYROLL_REIMB_TOLERANCE) && desc.includes('ACCOUNT TRANSFER'), cat: 'Payroll Reimbursement' },
+    { test: () => desc.includes('SETTLEMENT') && amount < 0, cat: 'Owner Distributions' },
+    { test: () => desc.includes('APPFOLIO') && amount < 0, cat: 'Software/Services' },
+    { test: () => desc.includes('JLL') && desc.includes('CAS'), cat: 'Asset Management Fee Income' },
+    { test: () => desc.includes('ACCOUNT TRANSFER TRSF'), cat: 'Internal Transfer' },
+    { test: () => desc.includes('INTEREST CREDIT'), cat: 'Interest Income' },
+    { test: () => desc.includes('TAX PAYMNT') || desc.includes('TAX PMT'), cat: 'Taxes' },
+    { test: () => desc.includes('SIGONFILE') && amount > 0, cat: 'Investment Income' },
+  ];
+
+  for (const p of highConfPatterns) {
+    if (p.test()) { confidence = 'high'; reason = `Known pattern: ${p.cat}`; break; }
+  }
+
+  // Account-based high confidence
+  if (MEMBER_ACCOUNTS.some(m => acctName.toUpperCase().includes(m.toUpperCase())) && !desc.includes('ACCOUNT TRANSFER')) {
+    confidence = 'high';
+    reason = amount > 0 ? 'Member account credit = AM Fee' : 'Member account debit = AM Payout';
+  }
+  if ((acctName.toUpperCase().includes('MANAGEMENT') || acctName.toUpperCase().includes('FIRST MILE MANAGEMENT'))) {
+    if (desc.includes('CORPTRDEXC') || desc.includes('APPFOLIO')) {
+      confidence = 'high'; reason = 'Management account Appfolio deposit = PM Fee';
+    }
+  }
+  // Internal transfers are always high confidence
+  if (result.type === 'Internal Transfer' || result.type === 'Payroll Reimbursement') {
+    confidence = 'high'; reason = 'Known transfer pattern';
+  }
+
+  // Low confidence: generic catch-all categories — but only if no high-confidence pattern already matched
+  if (confidence !== 'high' && GENERIC_CATEGORIES.has(result.type)) {
+    confidence = 'low';
+    reason = 'Generic category — needs manual review';
+  }
+
+  // If a high-confidence description pattern matched a category that differs from auto-categorize,
+  // override the result type with the pattern's category
+  for (const p of highConfPatterns) {
+    if (p.test() && result.type !== p.cat && GENERIC_CATEGORIES.has(result.type)) {
+      result.type = p.cat;
+      confidence = 'high';
+      reason = `Known pattern: ${p.cat}`;
+      break;
+    }
+  }
+
+  return { ...result, confidence, reason };
+}
+
+function proceedToUploadReview() {
+  closeUploadModal();
+  document.getElementById('dashboard').classList.remove('show');
+  document.getElementById('uploadReview').classList.add('show');
+
+  // Score all staged transactions
+  uploadReviewChoices = {};
+  const scored = uploadStagedTxns.map((txn, idx) => {
+    const result = categorizeWithConfidence(txn);
+    uploadReviewChoices[idx] = {
+      category: result.type,
+      property_id: result.property_id || null,
+      investment_id: result.investment_id || null,
+      liability_id: result.liability_id || null
+    };
+    return { ...txn, idx, ...result };
+  });
+
+  // Split into low and high confidence
+  const lowConf = scored.filter(s => s.confidence === 'low' || s.confidence === 'medium');
+  const highConf = scored.filter(s => s.confidence === 'high');
+
+  // Sort low confidence first by amount (largest first)
+  lowConf.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+  highConf.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  let html = '';
+
+  // Low confidence section
+  if (lowConf.length > 0) {
+    html += `<div class="upload-section">
+      <h3><span class="confidence-dot low"></span> Needs Review <span class="badge low">${lowConf.length} transactions</span></h3>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">These transactions could not be confidently categorized. Please review and correct if needed.</p>`;
+    lowConf.forEach(t => { html += renderUploadTxnRow(t); });
+    html += `</div>`;
+  }
+
+  // High confidence section
+  if (highConf.length > 0) {
+    html += `<div class="upload-section">
+      <h3><span class="confidence-dot high"></span> High Confidence Matches <span class="badge high">${highConf.length} transactions</span></h3>
+      <p style="font-size:12px;color:var(--text-dim);margin-bottom:14px;">These look correct based on known patterns. Glance through to verify — change any that are wrong.</p>`;
+    highConf.forEach(t => { html += renderUploadTxnRow(t); });
+    html += `</div>`;
+  }
+
+  if (scored.length === 0) {
+    html = '<div style="text-align:center;padding:40px;color:var(--text-dim);">No transactions to review.</div>';
+  }
+
+  document.getElementById('uploadReviewContent').innerHTML = html;
+}
+
+function renderUploadTxnRow(t) {
+  const amtClass = t.amount >= 0 ? 'green' : 'red';
+  const amtStr = (t.amount >= 0 ? '+' : '') + fmtFull(t.amount);
+  const dateStr = new Date(t.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const isIncome = INCOME_CATEGORIES.includes(t.type);
+
+  // Income categories that can link to properties/investments
+  const linkableIncome = ['Asset Management Fee Income', 'Property Management Fee Income', 'Development Fee Income', 'Acquisition Fee Income'];
+  const isLinkableIncome = linkableIncome.includes(t.type);
+  const isInvestmentIncome = t.type === 'Investment Income';
+  const isInterestExpense = t.type === 'Interest Expense';
+  const isInvestmentContrib = t.type === 'Investment Contributions';
+
+  // Build linking dropdown HTML
+  let linkDropdownHtml = '';
+  if (isLinkableIncome) {
+    // Property dropdown
+    const propOptions = [`<option value="">— No Property —</option>`];
+    bsProperties.forEach(p => {
+      const selected = t.property_id === p.id ? 'selected' : '';
+      propOptions.push(`<option value="${p.id}" ${selected}>${p.property_name}</option>`);
+    });
+    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkProperty(${t.idx}, this.value)">
+      ${propOptions.join('')}
+    </select>`;
+  } else if (isInvestmentIncome || isInvestmentContrib) {
+    // Investment dropdown
+    const invOptions = [`<option value="">— No Investment —</option>`];
+    bsInvestments.forEach(inv => {
+      const selected = t.investment_id === inv.id ? 'selected' : '';
+      invOptions.push(`<option value="${inv.id}" ${selected}>${inv.name}</option>`);
+    });
+    invOptions.push(`<option value="__new__">+ Add New Investment…</option>`);
+    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkInvestment(${t.idx}, this.value, this)">
+      ${invOptions.join('')}
+    </select>`;
+  } else if (isInterestExpense) {
+    // Liability dropdown
+    const liabOptions = [`<option value="">— No Loan —</option>`];
+    bsLiabilities.forEach(l => {
+      const selected = t.liability_id === l.id ? 'selected' : '';
+      liabOptions.push(`<option value="${l.id}" ${selected}>${l.lender} — ${l.relatedDeal || ''}</option>`);
+    });
+    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkLiability(${t.idx}, this.value)">
+      ${liabOptions.join('')}
+    </select>`;
+  }
+
+  return `<div class="upload-txn-row" data-idx="${t.idx}">
+    <div class="txn-date">${dateStr}</div>
+    <div class="txn-desc">${t.description.slice(0, 80)}${t.description.length > 80 ? '…' : ''}
+      <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">${t.acctName}</div>
+      <span class="txn-tooltip">${t.description}</span>
+    </div>
+    <select class="txn-cat-select" style="font-size:11px;" onchange="uploadChangeCategory(${t.idx}, this.value, this)">
+      ${buildCategoryOptions(t.type)}
+    </select>
+    ${linkDropdownHtml}
+    <div class="txn-amount ${amtClass}">${amtStr}</div>
+  </div>`;
+}
+
+function uploadChangeCategory(idx, newCategory, selectEl) {
+  uploadReviewChoices[idx].category = newCategory;
+  // If category changed to one that needs a linking dropdown, re-render the row
+  // (simpler to just re-render the whole review screen)
+  const row = selectEl.closest('.upload-txn-row');
+  if (row) {
+    const txn = uploadStagedTxns[idx];
+    const result = categorizeWithConfidence(txn);
+    result.type = newCategory; // override with user choice
+    result.idx = idx;
+    Object.assign(result, txn);
+    result.property_id = uploadReviewChoices[idx].property_id;
+    result.investment_id = uploadReviewChoices[idx].investment_id;
+    result.liability_id = uploadReviewChoices[idx].liability_id;
+    row.outerHTML = renderUploadTxnRow(result);
+  }
+  showToast(`Category → ${newCategory}`);
+}
+
+function uploadLinkProperty(idx, propertyId) {
+  uploadReviewChoices[idx].property_id = propertyId || null;
+  const propName = propertyId ? (bsProperties.find(p => p.id === propertyId) || {}).property_name : 'None';
+  showToast(`Linked → ${propName}`);
+}
+
+function uploadLinkInvestment(idx, investmentId, selectEl) {
+  if (investmentId === '__new__') {
+    const name = prompt('New investment name:');
+    if (!name || !name.trim()) { selectEl.value = uploadReviewChoices[idx].investment_id || ''; return; }
+    const ownershipStr = prompt('Ownership % (e.g. 7.47):', '100');
+    const ownership = parseFloat(ownershipStr) || 100;
+    supaWrite('exec_investments', 'POST', { name: name.trim(), ownership_pct: ownership, contributed: 0, distributed: 0, valuation: 0, status: 'Active' })
+      .then(newInv => {
+        if (newInv && newInv.length > 0) {
+          const created = newInv[0];
+          bsInvestments.push({ id: created.id, name: created.name, ownership: created.ownership_pct, committed: 0, contributed: 0, distributed: 0, unreturned: 0, netEquity: 0, valuation: 0, capRate: null, propertyId: null, propertyName: null, propertyValuation: null, propertyNOI: 0, propertyDebt: 0, status: 'Active', membershipClass: '' });
+          uploadReviewChoices[idx].investment_id = created.id;
+          showToast(`Created: ${name.trim()}`);
+          // Re-render review to update all investment dropdowns
+          proceedToUploadReview();
+        }
+      })
+      .catch(e => { showToast(`⚠️ ${e.message}`, 'error'); selectEl.value = ''; });
+    return;
+  }
+  uploadReviewChoices[idx].investment_id = investmentId || null;
+  const invName = investmentId ? (bsInvestments.find(i => i.id === investmentId) || {}).name : 'None';
+  showToast(`Linked → ${invName}`);
+}
+
+function uploadLinkLiability(idx, liabilityId) {
+  uploadReviewChoices[idx].liability_id = liabilityId || null;
+  const liabName = liabilityId ? (bsLiabilities.find(l => l.id === liabilityId) || {}).lender : 'None';
+  showToast(`Linked → ${liabName}`);
+}
+
+async function confirmImport() {
+  const btn = document.getElementById('btnConfirmImport');
+  btn.disabled = true;
+  btn.textContent = 'Importing...';
+
+  let successCount = 0;
+  let errorCount = 0;
+
+  // Batch insert — build all rows first
+  const insertRows = uploadStagedTxns.map((txn, idx) => {
+    const choice = uploadReviewChoices[idx] || {};
+    const row = {
+      date: txn.date,
+      description: txn.description,
+      amount: txn.amount,
+      ledger_balance: null,
+      transaction_type: txn.creditDebit === 'Credit' ? 'Credit' : 'Debit',
+      credit_debit: txn.creditDebit,
+      account_name: txn.acctName,
+      account_number: txn.acctNum,
+    };
+    // Always include all optional columns (PostgREST requires uniform keys in batch insert)
+    row.category_override = choice.category || null;
+    row.investment_id = choice.investment_id || null;
+    row.property_id = choice.property_id || null;
+    row.liability_id = choice.liability_id || null;
+    row.category_name = null;
+    return row;
+  });
+
+  try {
+    // Insert in batches of 50
+    for (let i = 0; i < insertRows.length; i += 50) {
+      const batch = insertRows.slice(i, i + 50);
+      await supaWrite('exec_transactions', 'POST', batch);
+      successCount += batch.length;
+    }
+
+    // Learn patterns from user categorizations
+    await learnFromUpload();
+
+    showToast(`Imported ${successCount} transactions`);
+    closeUploadReview();
+    loadData(); // Refresh dashboard
+  } catch(e) {
+    console.error('Import error:', e);
+    showToast(`⚠️ Import error: ${e.message}`, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Confirm Import';
+  }
+}
+
+async function learnFromUpload() {
+  // Look at what users categorized manually (overrides) vs what auto-categorize suggested
+  // Build patterns from high-confidence user corrections
+  const patternsToSave = [];
+
+  uploadStagedTxns.forEach((txn, idx) => {
+    const choice = uploadReviewChoices[idx];
+    if (!choice || !choice.category) return;
+
+    const autoResult = categorizeWithConfidence(txn);
+    // If user changed the category, learn from it
+    const userChanged = choice.category !== autoResult.type;
+
+    // Extract description keywords (first significant word after stripping common prefixes)
+    const desc = txn.description.toUpperCase();
+    let pattern = null;
+
+    // Try to extract a meaningful pattern from description
+    // Look for company names, DES: fields, etc.
+    const desMatch = desc.match(/DES:([A-Z0-9 ]+?)(?:\s+ID:|\s+INDN:)/);
+    if (desMatch) { pattern = desMatch[1].trim(); }
+    else {
+      // First 20 chars of description as pattern
+      const words = desc.split(/\s+/).filter(w => w.length > 3 && !['ACCOUNT','TRANSFER','TRSF','CREDIT','DEBIT','PREAUTHORIZED','CORPORATE','TRADE','PAYMENT'].includes(w));
+      if (words.length > 0) pattern = words.slice(0, 2).join(' ');
+    }
+
+    if (pattern && pattern.length >= 3) {
+      patternsToSave.push({
+        description_pattern: pattern,
+        account_number: txn.acctNum,
+        category: choice.category,
+        amount_min: Math.abs(txn.amount) * 0.8,
+        amount_max: Math.abs(txn.amount) * 1.2,
+        property_id: choice.property_id || null,
+        investment_id: choice.investment_id || null,
+        liability_id: choice.liability_id || null,
+        confidence: userChanged ? 0.9 : 0.7,
+        occurrences: 1
+      });
+    }
+  });
+
+  // Save patterns (upsert — increment occurrences if pattern already exists)
+  for (const pat of patternsToSave) {
+    try {
+      // Check if pattern already exists
+      const existing = await supaFetch('exec_learned_patterns',
+        `?description_pattern=eq.${encodeURIComponent(pat.description_pattern)}&category=eq.${encodeURIComponent(pat.category)}&limit=1`);
+      if (existing && existing.length > 0) {
+        // Increment occurrences
+        await supaWrite('exec_learned_patterns', 'PATCH',
+          { occurrences: existing[0].occurrences + 1, confidence: Math.min(1, existing[0].confidence + 0.05) },
+          `?id=eq.${existing[0].id}`);
+      } else {
+        await supaWrite('exec_learned_patterns', 'POST', pat);
+      }
+    } catch(e) {
+      // Table might not exist yet — try to create it silently
+      console.log('Pattern save skipped:', e.message);
+    }
+  }
+}
+
+function closeUploadReview() {
+  document.getElementById('uploadReview').classList.remove('show');
+  document.getElementById('dashboard').classList.add('show');
+  renderPeriodDashboard();
+}
+
+// ── Review Panel ──
 // Generic/catch-all categories that indicate a transaction needs manual review
 const GENERIC_CATEGORIES = new Set([
   'Other Income', 'Other Operating', 'Wire Payments', 'Checks',
   'Investment Income', 'Credit Cards', 'Banking'
 ]);
 
-let reviewFilterMode = 'needs-review'; // 'needs-review', 'all', or specific account name
+// Categories that should be linked to a property, investment, or liability
+const LINKABLE_TO_PROPERTY = new Set(['Asset Management Fee Income', 'Property Management Fee Income', 'Development Fee Income', 'Acquisition Fee Income']);
+const LINKABLE_TO_INVESTMENT = new Set(['Investment Income']);
+const LINKABLE_TO_LIABILITY = new Set(['Interest Expense']);
 
-function getUncategorizedCount() {
-  // Count transactions without category_override that auto-categorize to generic buckets
-  let count = 0;
+let reviewFilterMode = 'all-review'; // 'all-review', 'uncategorized', 'unlinked', or specific account
+
+function getReviewItems() {
+  // Returns items that need review: uncategorized (generic) OR unlinked (missing property/investment/liability link)
+  const items = [];
   allRecords.forEach(r => {
-    if (!categoryOverrides[r.id]) {
-      const { type } = categorize(r);
-      if (GENERIC_CATEGORIES.has(type)) count++;
+    if (reviewedItems[r.id]) return; // dismissed
+    const id = r.id;
+    const effectiveCat = categoryOverrides[id] || categorize(r).type;
+    const isGeneric = !categoryOverrides[id] && GENERIC_CATEGORIES.has(effectiveCat);
+    const needsPropLink = LINKABLE_TO_PROPERTY.has(effectiveCat) && !propertyLinks[id];
+    const needsInvLink = LINKABLE_TO_INVESTMENT.has(effectiveCat) && !investmentLinks[id];
+    const needsLiabLink = LINKABLE_TO_LIABILITY.has(effectiveCat) && !liabilityLinks[id];
+    const needsLink = needsPropLink || needsInvLink || needsLiabLink;
+
+    if (isGeneric || needsLink) {
+      items.push({
+        id, date: getDate(r), desc: getDescription(r), acct: getAccountName(r),
+        amount: getAmount(r), autoCategory: effectiveCat,
+        isGeneric, needsLink, needsPropLink, needsInvLink, needsLiabLink,
+        reason: isGeneric ? 'uncategorized' : 'unlinked'
+      });
     }
   });
-  return count;
+  return items;
 }
 
+function getReviewCount() { return getReviewItems().length; }
+
 function updateReviewBadge() {
-  const count = getUncategorizedCount();
+  const count = getReviewCount();
   const btn = document.getElementById('reviewBtn');
   const badge = document.getElementById('reviewCount');
-  if (count > 0) {
-    btn.style.display = '';
-    badge.textContent = count;
-  } else {
-    btn.style.display = 'none';
-  }
+  if (count > 0) { btn.style.display = ''; badge.textContent = count; }
+  else { btn.style.display = 'none'; }
 }
 
 function openReviewUncategorized() {
@@ -1956,64 +2732,36 @@ function closeReviewPanel() {
   renderPeriodDashboard();
 }
 
-function setReviewFilter(mode) {
-  reviewFilterMode = mode;
-  renderReviewPanel();
-}
+function setReviewFilter(mode) { reviewFilterMode = mode; renderReviewPanel(); }
 
 function renderReviewPanel() {
-  // Gather all transactions without category_override
-  const uncategorized = [];
-  allRecords.forEach(r => {
-    if (!categoryOverrides[r.id]) {
-      const { category, type } = categorize(r);
-      uncategorized.push({
-        id: r.id,
-        date: getDate(r),
-        desc: getDescription(r),
-        acct: getAccountName(r),
-        amount: getAmount(r),
-        autoCategory: type,
-        autoCatType: category,
-        isGeneric: GENERIC_CATEGORIES.has(type)
-      });
-    }
-  });
+  const allItems = getReviewItems();
+  const uncategorizedItems = allItems.filter(t => t.isGeneric);
+  const unlinkedItems = allItems.filter(t => t.needsLink && !t.isGeneric);
 
   // Build filter buttons
-  const needsReviewCount = uncategorized.filter(t => t.isGeneric).length;
-  const accounts = [...new Set(uncategorized.map(t => t.acct))].sort();
-
   let filtersHtml = `
-    <button class="review-filter-btn ${reviewFilterMode === 'needs-review' ? 'active' : ''}" onclick="setReviewFilter('needs-review')">Needs Review (${needsReviewCount})</button>
-    <button class="review-filter-btn ${reviewFilterMode === 'all' ? 'active' : ''}" onclick="setReviewFilter('all')">All Unset (${uncategorized.length})</button>
+    <button class="review-filter-btn ${reviewFilterMode === 'all-review' ? 'active' : ''}" onclick="setReviewFilter('all-review')">All (${allItems.length})</button>
+    <button class="review-filter-btn ${reviewFilterMode === 'uncategorized' ? 'active' : ''}" onclick="setReviewFilter('uncategorized')">Uncategorized (${uncategorizedItems.length})</button>
+    <button class="review-filter-btn ${reviewFilterMode === 'unlinked' ? 'active' : ''}" onclick="setReviewFilter('unlinked')">Needs Linking (${unlinkedItems.length})</button>
   `;
-  accounts.forEach(acct => {
-    const acctCount = uncategorized.filter(t => t.acct === acct && (reviewFilterMode === 'needs-review' ? t.isGeneric : true)).length;
-    const shortName = acct.replace(/LLC|Operating/gi, '').trim();
-    filtersHtml += `<button class="review-filter-btn ${reviewFilterMode === acct ? 'active' : ''}" onclick="setReviewFilter('${acct.replace(/'/g, "\\'")}')">${shortName} (${acctCount})</button>`;
-  });
   document.getElementById('reviewFilters').innerHTML = filtersHtml;
 
-  // Filter transactions
+  // Filter
   let filtered;
-  if (reviewFilterMode === 'needs-review') {
-    filtered = uncategorized.filter(t => t.isGeneric);
-  } else if (reviewFilterMode === 'all') {
-    filtered = uncategorized;
-  } else {
-    // Filter by account
-    filtered = uncategorized.filter(t => t.acct === reviewFilterMode);
-  }
+  if (reviewFilterMode === 'all-review') filtered = allItems;
+  else if (reviewFilterMode === 'uncategorized') filtered = uncategorizedItems;
+  else if (reviewFilterMode === 'unlinked') filtered = unlinkedItems;
+  else filtered = allItems.filter(t => t.acct === reviewFilterMode);
 
-  // Group by auto-assigned category
+  // Group by category
   const groups = {};
   filtered.forEach(t => {
-    if (!groups[t.autoCategory]) groups[t.autoCategory] = [];
-    groups[t.autoCategory].push(t);
+    const key = t.autoCategory;
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(t);
   });
 
-  // Sort groups: generic categories first, then by count
   const sortedGroups = Object.entries(groups).sort((a, b) => {
     const aGeneric = GENERIC_CATEGORIES.has(a[0]) ? 0 : 1;
     const bGeneric = GENERIC_CATEGORIES.has(b[0]) ? 0 : 1;
@@ -2022,7 +2770,7 @@ function renderReviewPanel() {
   });
 
   if (sortedGroups.length === 0) {
-    document.getElementById('reviewContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim);">All transactions are categorized!</div>';
+    document.getElementById('reviewContent').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-dim);">All clear — nothing to review!</div>';
     return;
   }
 
@@ -2030,7 +2778,8 @@ function renderReviewPanel() {
   sortedGroups.forEach(([catName, txns]) => {
     const totalAmt = txns.reduce((s, t) => s + t.amount, 0);
     const isGenericGroup = GENERIC_CATEGORIES.has(catName);
-    const icon = isGenericGroup ? '⚠️' : '✓';
+    const hasUnlinked = txns.some(t => t.needsLink);
+    const icon = isGenericGroup ? '⚠️' : (hasUnlinked ? '🔗' : '✓');
     html += `
       <div class="review-group">
         <div class="review-group-header" onclick="this.nextElementSibling.classList.toggle('open');this.querySelector('.review-chevron').textContent=this.nextElementSibling.classList.contains('open')?'▼':'▶'">
@@ -2042,12 +2791,28 @@ function renderReviewPanel() {
         </div>
         <div class="review-group-rows">`;
 
-    // Sort by date desc
     txns.sort((a, b) => b.date - a.date);
     txns.forEach(t => {
       const amtClass = t.amount >= 0 ? 'green' : 'red';
       const amtStr = (t.amount >= 0 ? '+' : '') + fmtFull(t.amount);
       const dateStr = t.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+      // Build linking dropdown based on category
+      let linkHtml = '<div class="review-link"></div>'; // empty placeholder for grid alignment
+      if (t.needsPropLink) {
+        const propOpts = [`<option value="">— Property —</option>`];
+        bsProperties.forEach(p => { propOpts.push(`<option value="${p.id}">${p.property_name}</option>`); });
+        linkHtml = `<select class="txn-cat-select review-link" onchange="reviewLinkProperty('${t.id}', this.value)">${propOpts.join('')}</select>`;
+      } else if (t.needsInvLink) {
+        const invOpts = [`<option value="">— Investment —</option>`];
+        bsInvestments.forEach(inv => { invOpts.push(`<option value="${inv.id}">${inv.name}</option>`); });
+        linkHtml = `<select class="txn-cat-select review-link" onchange="reviewLinkInvestment('${t.id}', this.value)">${invOpts.join('')}</select>`;
+      } else if (t.needsLiabLink) {
+        const liabOpts = [`<option value="">— Loan —</option>`];
+        bsLiabilities.forEach(l => { liabOpts.push(`<option value="${l.id}">${l.lender}${l.relatedDeal ? ' — ' + l.relatedDeal : ''}</option>`); });
+        linkHtml = `<select class="txn-cat-select review-link" onchange="reviewLinkLiability('${t.id}', this.value)">${liabOpts.join('')}</select>`;
+      }
+
       html += `
         <div class="review-txn">
           <div class="review-desc" title="${t.desc}">${dateStr} — ${t.desc}</div>
@@ -2055,7 +2820,9 @@ function renderReviewPanel() {
           <select class="txn-cat-select" onchange="reviewChangeCategory('${t.id}', this.value)" style="font-size:11px;">
             ${buildCategoryOptions(t.autoCategory)}
           </select>
+          ${linkHtml}
           <div class="review-amt ${amtClass}">${amtStr}</div>
+          <button class="review-ok-btn" onclick="reviewDismiss('${t.id}')" title="Mark as OK — remove from review">✓</button>
         </div>`;
     });
 
@@ -2066,33 +2833,60 @@ function renderReviewPanel() {
 }
 
 async function reviewChangeCategory(recordId, newCategory) {
-  // Same as changeCategory but re-renders review panel instead of dashboard
   categoryOverrides[recordId] = newCategory;
-
   let friendlyName = null;
   if (newCategory === 'Loan Out' || newCategory === 'Deposit') {
     friendlyName = prompt(`Enter a short name for this ${newCategory.toLowerCase()} (shown on Balance Sheet):`, '');
-    if (friendlyName && friendlyName.trim()) {
-      categoryNames[recordId] = friendlyName.trim();
-    }
+    if (friendlyName && friendlyName.trim()) categoryNames[recordId] = friendlyName.trim();
   }
-
   showToast(`Category → ${newCategory}`);
   updateReviewBadge();
   renderReviewPanel();
-
   try {
     const patchData = { category_override: newCategory };
     if (friendlyName && friendlyName.trim()) patchData.category_name = friendlyName.trim();
     const result = await supaWrite('exec_transactions', 'PATCH', patchData, `?id=eq.${recordId}`);
-    if (!result || result.length === 0) {
-      console.error(`Review category override: no rows updated for id=${recordId}`);
-      showToast('⚠️ Override not saved — check console', 'error');
-    }
-  } catch(e) {
-    console.error('Failed to save override:', e);
-    showToast(`⚠️ Save failed: ${e.message}`, 'error');
-  }
+    if (!result || result.length === 0) showToast('⚠️ Override not saved', 'error');
+  } catch(e) { console.error('Failed to save override:', e); showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewLinkProperty(recordId, propertyId) {
+  if (propertyId) propertyLinks[recordId] = propertyId;
+  else delete propertyLinks[recordId];
+  showToast(propertyId ? 'Linked to property' : 'Unlinked');
+  updateReviewBadge();
+  renderReviewPanel();
+  try { await supaWrite('exec_transactions', 'PATCH', { property_id: propertyId || null }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewLinkInvestment(recordId, investmentId) {
+  if (investmentId) investmentLinks[recordId] = investmentId;
+  else delete investmentLinks[recordId];
+  showToast(investmentId ? 'Linked to investment' : 'Unlinked');
+  updateReviewBadge();
+  renderReviewPanel();
+  try { await supaWrite('exec_transactions', 'PATCH', { investment_id: investmentId || null }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewLinkLiability(recordId, liabilityId) {
+  if (liabilityId) liabilityLinks[recordId] = liabilityId;
+  else delete liabilityLinks[recordId];
+  showToast(liabilityId ? 'Linked to loan' : 'Unlinked');
+  updateReviewBadge();
+  renderReviewPanel();
+  try { await supaWrite('exec_transactions', 'PATCH', { liability_id: liabilityId || null }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+async function reviewDismiss(recordId) {
+  reviewedItems[recordId] = true;
+  showToast('Marked OK');
+  updateReviewBadge();
+  renderReviewPanel();
+  try { await supaWrite('exec_transactions', 'PATCH', { reviewed: true }, `?id=eq.${recordId}`); }
+  catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
 }
 
 // ── Chat Widget ──
