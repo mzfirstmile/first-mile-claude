@@ -816,6 +816,17 @@ const KNOWN_PAYROLL_SPLITS_BY_AMOUNT = [
 ];
 const KNOWN_PAYROLL_SPLITS = {}; // populated by matchPayrollSplits() after data loads
 
+// Property photo mapping (investment name → image path)
+const PROP_PHOTOS = {
+  '132-40 Metropolitan': 'assets/Property Photos/132-40 Metro Ave corner view.png',
+  '60-18 Metropolitan': 'assets/Property Photos/60-18 Metro chipotle.png',
+  '61 South': 'assets/Property Photos/61south.png',
+  '340 MK': 'assets/Property Photos/340mk.jpg',
+  'Paramus Plaza': 'assets/Property Photos/paramusplaza.png',
+  '1700 East Putnam': 'assets/Property Photos/1700eastputnam.png',
+  '575 Broadway': 'assets/Property Photos/575broadway.jpg'
+};
+
 // State
 let allRecords = [];
 let categoryOverrides = {}; // recordId -> category (persisted in Supabase)
@@ -3693,6 +3704,10 @@ function renderBalanceSheet() {
               <div class="bs-metric-value" id="crWrap-${inv.id}">${capRateDisplay}</div>
             </div>
           </div>` : '';
+      // Property photo lookup — match by partial name
+      const photoKey = Object.keys(PROP_PHOTOS).find(k => inv.name.toLowerCase().includes(k.toLowerCase()));
+      const photoUrl = photoKey ? PROP_PHOTOS[photoKey] : null;
+      const photoHtml = photoUrl ? `<div style="margin-bottom:10px;border-radius:8px;overflow:hidden;"><img src="${photoUrl}" alt="${inv.name}" style="width:100%;height:120px;object-fit:cover;display:block;"></div>` : '';
       return `
         <div class="bs-card bs-card-collapsed" onclick="toggleInvCard(this, event)">
           <div class="bs-card-header">
@@ -3710,6 +3725,7 @@ function renderBalanceSheet() {
             </div>
           </div>
           <div class="bs-card-body" style="display:none;">
+            ${photoHtml}
             <div class="bs-card-asset-row" style="margin-bottom:8px;">
               <div>
                 <div class="bs-metric-label">Position Value</div>

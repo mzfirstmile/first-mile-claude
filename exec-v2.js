@@ -328,15 +328,16 @@ function _injectCSS() {
 
   /* Investment cards */
   .bs-grid { display:grid; grid-template-columns:1fr; gap:12px; margin-bottom:16px; }
-  .bs-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; transition:box-shadow .2s; cursor:pointer; }
+  #exec2Root .bs-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px; transition:box-shadow .2s; cursor:pointer; overflow:visible; }
   .bs-card-collapsed { padding:10px 14px; }
-  .bs-card-collapsed .bs-card-header { margin-bottom:0; }
+  .bs-card-collapsed .bs-card-header { margin-bottom:0; border-bottom:none; }
+  .bs-card-collapsed .bs-card-body { display:none !important; }
   .bs-card-chevron { color:var(--text-dim); transition:transform .2s; flex-shrink:0; }
   .bs-card:not(.bs-card-collapsed) .bs-card-chevron { transform:rotate(90deg); }
   .bs-card-collapsed-value { font-size:14px; font-weight:600; color:var(--green); white-space:nowrap; }
   .bs-card:hover { box-shadow:0 4px 20px rgba(0,0,0,.06); }
   .bs-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-  .bs-card-title { font-size:13px; font-weight:600; }
+  .bs-card-title { font-size:13px; font-weight:600; padding:0; border-bottom:none; display:inline; }
   .bs-card-ownership { font-size:10px; font-weight:600; color:var(--accent); background:var(--accent-dim); padding:2px 7px; border-radius:12px; white-space:nowrap; }
   .bs-card-metrics { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .bs-card-asset-row { margin-top:10px; padding-top:8px; border-top:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
@@ -797,6 +798,17 @@ const KNOWN_PAYROLL_SPLITS_BY_AMOUNT = [
   { txnAmount: 94508.25,  splitAmount: 54601.60 }     // Mar 2026 CORPTRDEXC
 ];
 const KNOWN_PAYROLL_SPLITS = {}; // populated by matchPayrollSplits() after data loads
+
+// Property photo mapping (investment name → image path)
+const PROP_PHOTOS = {
+  '132-40 Metropolitan': 'assets/Property Photos/132-40 Metro Ave corner view.png',
+  '60-18 Metropolitan': 'assets/Property Photos/60-18 Metro chipotle.png',
+  '61 South': 'assets/Property Photos/61south.png',
+  '340 MK': 'assets/Property Photos/340mk.jpg',
+  'Paramus Plaza': 'assets/Property Photos/paramusplaza.png',
+  '1700 East Putnam': 'assets/Property Photos/1700eastputnam.png',
+  '575 Broadway': 'assets/Property Photos/575broadway.jpg'
+};
 
 // State
 let allRecords = [];
@@ -1441,6 +1453,25 @@ function renderChart() {
     const cx = padL + i * gap + gap / 2;
     const cy = y(p.cumulative);
     svg += `<circle cx="${cx}" cy="${cy}" r="3" fill="#1a1a1a" style="cursor:pointer" onclick="selectPeriod(${i})"/>`;
+  });
+
+  // Hover tooltip areas — invisible rects with hover effects
+  periodData.forEach((p, i) => {
+    const cx = padL + i * gap + gap / 2;
+    const cy = y(p.cumulative);
+    const tooltipY = Math.max(padT + 10, cy - 60);
+    const tooltipId = `chart-tip-${i}`;
+    // Tooltip group (hidden by default)
+    const fmtK = v => (v < 0 ? '-' : '') + '$' + Math.round(Math.abs(v)/1000).toLocaleString() + 'K';
+    svg += `<g id="${tooltipId}" style="display:none;pointer-events:none;">`;
+    svg += `<rect x="${cx - 62}" y="${tooltipY}" width="124" height="52" rx="6" fill="rgba(30,30,30,0.92)" />`;
+    svg += `<text x="${cx}" y="${tooltipY + 15}" font-size="10" fill="#aaa" text-anchor="middle" font-family="sans-serif">${p.shortLabel} ${p.year}</text>`;
+    svg += `<text x="${cx - 54}" y="${tooltipY + 28}" font-size="10" fill="#2ecc71" font-family="sans-serif" font-weight="600">Rev: ${fmtK(p.income)}</text>`;
+    svg += `<text x="${cx + 6}" y="${tooltipY + 28}" font-size="10" fill="#e74c3c" font-family="sans-serif" font-weight="600">Exp: ${fmtK(-p.expense)}</text>`;
+    svg += `<text x="${cx}" y="${tooltipY + 43}" font-size="11" fill="#fff" text-anchor="middle" font-family="sans-serif" font-weight="700">Net: ${fmtK(p.cumulative)}</text>`;
+    svg += `</g>`;
+    // Hover trigger (transparent rect over column)
+    svg += `<rect x="${padL + i * gap}" y="${padT}" width="${gap}" height="${chartH}" fill="transparent" style="cursor:pointer" onmouseenter="document.getElementById('${tooltipId}').style.display=''" onmouseleave="document.getElementById('${tooltipId}').style.display='none'" onclick="selectPeriod(${i})"/>`;
   });
 
   // X axis labels
@@ -3690,6 +3721,10 @@ function renderBalanceSheet() {
               <div class="bs-metric-value" id="crWrap-${inv.id}">${capRateDisplay}</div>
             </div>
           </div>` : '';
+      // Property photo lookup — match by partial name
+      const photoKey = Object.keys(PROP_PHOTOS).find(k => inv.name.toLowerCase().includes(k.toLowerCase()));
+      const photoUrl = photoKey ? PROP_PHOTOS[photoKey] : null;
+      const photoHtml = photoUrl ? `<div style="margin-bottom:10px;border-radius:8px;overflow:hidden;"><img src="${photoUrl}" alt="${inv.name}" style="width:100%;height:120px;object-fit:cover;display:block;"></div>` : '';
       return `
         <div class="bs-card bs-card-collapsed" onclick="toggleInvCard(this, event)">
           <div class="bs-card-header">
@@ -3707,6 +3742,7 @@ function renderBalanceSheet() {
             </div>
           </div>
           <div class="bs-card-body" style="display:none;">
+            ${photoHtml}
             <div class="bs-card-asset-row" style="margin-bottom:8px;">
               <div>
                 <div class="bs-metric-label">Position Value</div>
