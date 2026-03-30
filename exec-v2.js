@@ -1218,7 +1218,13 @@ function setCfMode(mode) {
   document.querySelectorAll('.cf-toggle button').forEach(b => b.classList.remove('active'));
   document.querySelector(`.cf-toggle button[onclick="setCfMode('${mode}')"]`).classList.add('active');
   buildPeriods();
-  selectedPeriodIndex = periods.length - 1;
+  // Select latest period that has started (not future)
+  const now = new Date();
+  let latestIdx = periods.length - 1;
+  for (let i = periods.length - 1; i >= 0; i--) {
+    if (periods[i].start <= now) { latestIdx = i; break; }
+  }
+  selectedPeriodIndex = latestIdx;
   renderAll();
   saveStateToHash();
 }
