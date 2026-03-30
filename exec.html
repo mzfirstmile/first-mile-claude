@@ -2073,6 +2073,22 @@ async function updateLoanName(recordId, newName) {
   renderPeriodDashboard();
 }
 
+// Recompute distributed amounts on bsInvestments from linked Investment Income transactions
+function recomputeDistributed() {
+  const distByInv = {};
+  allRecords.forEach(r => {
+    const invId = investmentLinks[r.id];
+    if (!invId) return;
+    const cat = categorize(r);
+    if (cat.type === 'Investment Income') {
+      distByInv[invId] = (distByInv[invId] || 0) + Math.abs(getAmount(r));
+    }
+  });
+  bsInvestments.forEach(inv => {
+    inv.distributed = distByInv[inv.id] || 0;
+  });
+}
+
 async function linkToInvestment(recordId, investmentId, selectEl) {
   if (investmentId === '__new__') {
     // Prompt for new investment name
@@ -2145,6 +2161,10 @@ async function linkToInvestment(recordId, investmentId, selectEl) {
     openDrilldown(currentDrilldownType, currentDrilldownCssClass);
   }
 
+  // Recompute distributed totals and re-render balance sheet
+  recomputeDistributed();
+  renderBalanceSheet();
+
   // Persist to Supabase
   try {
     const result = await supaWrite('exec_transactions', 'PATCH',
@@ -2186,6 +2206,7 @@ async function linkToPropOrInv(recordId, value) {
     delete investmentLinks[recordId];
     showToast('Unlinked');
     if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+    recomputeDistributed(); renderBalanceSheet();
     try { await supaWrite('exec_transactions', 'PATCH', { property_id: null, investment_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
     return;
   }
@@ -2196,6 +2217,7 @@ async function linkToPropOrInv(recordId, value) {
     const name = (bsProperties.find(p => p.id === id) || {}).property_name || id;
     showToast(`Linked → ${name}`);
     if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+    recomputeDistributed(); renderBalanceSheet();
     try { await supaWrite('exec_transactions', 'PATCH', { property_id: id, investment_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
   } else if (type === 'inv') {
     investmentLinks[recordId] = id;
@@ -2203,6 +2225,7 @@ async function linkToPropOrInv(recordId, value) {
     const name = (bsInvestments.find(i => i.id === id) || {}).name || id;
     showToast(`Linked → ${name}`);
     if (currentDrilldownType) openDrilldown(currentDrilldownType, currentDrilldownCssClass);
+    recomputeDistributed(); renderBalanceSheet();
     try { await supaWrite('exec_transactions', 'PATCH', { investment_id: id, property_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
   }
 }
@@ -3071,6 +3094,7 @@ async function reviewLinkPropOrInv(recordId, value) {
   if (!value) {
     delete propertyLinks[recordId]; delete investmentLinks[recordId];
     showToast('Unlinked'); updateReviewBadge();
+    recomputeDistributed(); renderBalanceSheet();
     try { await supaWrite('exec_transactions', 'PATCH', { property_id: null, investment_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
     return;
   }
@@ -3078,10 +3102,12 @@ async function reviewLinkPropOrInv(recordId, value) {
   if (type === 'prop') {
     propertyLinks[recordId] = id; delete investmentLinks[recordId];
     showToast('Linked to property'); updateReviewBadge();
+    recomputeDistributed(); renderBalanceSheet();
     try { await supaWrite('exec_transactions', 'PATCH', { property_id: id, investment_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
   } else if (type === 'inv') {
     investmentLinks[recordId] = id; delete propertyLinks[recordId];
     showToast('Linked to investment'); updateReviewBadge();
+    recomputeDistributed(); renderBalanceSheet();
     try { await supaWrite('exec_transactions', 'PATCH', { investment_id: id, property_id: null }, `?id=eq.${recordId}`); } catch(e) { showToast(`⚠️ Save failed`, 'error'); }
   }
 }
@@ -3100,6 +3126,7 @@ async function reviewLinkInvestment(recordId, investmentId) {
   else delete investmentLinks[recordId];
   showToast(investmentId ? 'Linked to investment' : 'Unlinked');
   updateReviewBadge();
+  recomputeDistributed(); renderBalanceSheet();
   try { await supaWrite('exec_transactions', 'PATCH', { investment_id: investmentId || null }, `?id=eq.${recordId}`); }
   catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
 }
@@ -3415,6 +3442,21 @@ async function loadBalanceSheet() {
       status: r.status || '',
       notes: r.notes || ''
     }));
+    // Compute distributed amounts from linked Investment Income transactions
+    const distByInv = {};
+    allRecords.forEach(r => {
+      const invId = investmentLinks[r.id];
+      if (!invId) return;
+      const cat = categorize(r);
+      if (cat.type === 'Investment Income') {
+        const amt = Math.abs(getAmount(r));
+        distByInv[invId] = (distByInv[invId] || 0) + amt;
+      }
+    });
+    bsInvestments.forEach(inv => {
+      if (distByInv[inv.id] != null) inv.distributed = distByInv[inv.id];
+    });
+
     renderBalanceSheet();
     // Re-populate revenue filter now that bsProperties/bsInvestments are loaded
     if (typeof lastPeriodComp !== 'undefined' && lastPeriodComp) {
