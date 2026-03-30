@@ -128,7 +128,7 @@ The embedded Claude chat has access to these tools:
 - Owner Distributions, Investment Contributions, Loans Out, Deposits, and Loan Paybacks are grouped under "Balance Sheet Transactions" card (not separate sections)
 - Each investment contribution wire can be linked to a specific investment via `investment_id` on `exec_transactions` — dropdown in drilldown shows all investments + "Add New" option
 - When adding a new investment from the wire linking dropdown, user enters name + ownership % → creates unlinked investment on balance sheet
-- exec.html defaults to Yearly view (not Monthly)
+- exec.html defaults to Monthly view, latest month selected
 - URL hash state persistence: mode, period, drilldown type all saved to hash so page refresh keeps your view
 - Browser back button closes drilldown (uses History API pushState/popstate)
 - Linked investments show subtle ↗ arrow icon (not "Linked" text badge) — clicking navigates to Property Financials module via `target="_top"` (breaks out of iframe)

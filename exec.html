@@ -522,9 +522,9 @@
     <div class="cf-header">
       <h2>Net Income</h2>
       <div class="cf-toggle">
-        <button onclick="setCfMode('monthly')">Monthly</button>
+        <button class="active" onclick="setCfMode('monthly')">Monthly</button>
         <button onclick="setCfMode('quarterly')">Quarterly</button>
-        <button class="active" onclick="setCfMode('yearly')">Yearly</button>
+        <button onclick="setCfMode('yearly')">Yearly</button>
       </div>
     </div>
     <div class="cf-chart" id="cfChart"></div>
@@ -827,7 +827,7 @@ let propertyLinks = {};     // recordId -> property_id (links income to a proper
 let liabilityLinks = {};    // recordId -> liability_id (links interest expense to a liability)
 let reviewedItems = {};     // recordId -> true (dismissed from review as OK)
 let payrollSplits = {};     // recordId -> payroll amount to deduct from PM fee
-let cfMode = 'yearly';
+let cfMode = 'monthly';
 let selectedPeriodIndex = -1; // -1 means latest
 let periods = [];
 let lastPeriodComp = null; // Store latest computePeriod result for balance sheet
