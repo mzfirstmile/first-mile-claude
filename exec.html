@@ -2073,7 +2073,7 @@ async function updateLoanName(recordId, newName) {
   renderPeriodDashboard();
 }
 
-// Recompute distributed amounts on bsInvestments from linked Investment Income transactions
+// Recompute distributed amounts: base (editable, for historical) + linked Investment Income transactions
 function recomputeDistributed() {
   const distByInv = {};
   allRecords.forEach(r => {
@@ -2085,7 +2085,7 @@ function recomputeDistributed() {
     }
   });
   bsInvestments.forEach(inv => {
-    inv.distributed = distByInv[inv.id] || 0;
+    inv.distributed = (inv.distributedBase || 0) + (distByInv[inv.id] || 0);
   });
 }
 
@@ -2710,7 +2710,7 @@ function uploadLinkInvestment(idx, investmentId, selectEl) {
       .then(newInv => {
         if (newInv && newInv.length > 0) {
           const created = newInv[0];
-          bsInvestments.push({ id: created.id, name: created.name, ownership: created.ownership_pct, committed: 0, contributed: 0, distributed: 0, unreturned: 0, netEquity: 0, valuation: 0, capRate: null, propertyId: null, propertyName: null, propertyValuation: null, propertyNOI: 0, propertyDebt: 0, status: 'Active', membershipClass: '' });
+          bsInvestments.push({ id: created.id, name: created.name, ownership: created.ownership_pct, committed: 0, contributed: 0, distributedBase: 0, distributed: 0, unreturned: 0, netEquity: 0, valuation: 0, capRate: null, propertyId: null, propertyName: null, propertyValuation: null, propertyNOI: 0, propertyDebt: 0, status: 'Active', membershipClass: '' });
           uploadReviewChoices[idx].investment_id = created.id;
           showToast(`Created: ${name.trim()}`);
           // Re-render review to update all investment dropdowns
@@ -3417,7 +3417,8 @@ async function loadBalanceSheet() {
         ownership: r.ownership_pct,
         committed: r.committed,
         contributed: r.contributed,
-        distributed: r.distributed,
+        distributedBase: r.distributed || 0,
+        distributed: r.distributed || 0,
         unreturned: r.unreturned_capital,
         netEquity: r.net_equity,
         valuation: r.valuation,
@@ -3442,20 +3443,8 @@ async function loadBalanceSheet() {
       status: r.status || '',
       notes: r.notes || ''
     }));
-    // Compute distributed amounts from linked Investment Income transactions
-    const distByInv = {};
-    allRecords.forEach(r => {
-      const invId = investmentLinks[r.id];
-      if (!invId) return;
-      const cat = categorize(r);
-      if (cat.type === 'Investment Income') {
-        const amt = Math.abs(getAmount(r));
-        distByInv[invId] = (distByInv[invId] || 0) + amt;
-      }
-    });
-    bsInvestments.forEach(inv => {
-      if (distByInv[inv.id] != null) inv.distributed = distByInv[inv.id];
-    });
+    // Compute distributed = base (historical, editable) + linked Investment Income transactions
+    recomputeDistributed();
 
     renderBalanceSheet();
     // Re-populate revenue filter now that bsProperties/bsInvestments are loaded
@@ -3735,8 +3724,8 @@ function renderBalanceSheet() {
                 <div class="bs-metric-value">${fmt(inv.contributed)}</div>
               </div>
               <div class="bs-metric">
-                <div class="bs-metric-label">Distributed</div>
-                <div class="bs-metric-value green">${fmt(inv.distributed)}</div>
+                <div class="bs-metric-label">Distributed <button class="bs-edit-btn" onclick="event.stopPropagation();editDistributed('${inv.id}')" title="Edit base distributed amount" style="font-size:10px;">✏️</button></div>
+                <div class="bs-metric-value green" id="dist-${inv.id}">${fmt(inv.distributed)}</div>
               </div>
             </div>${capRateRow}
           </div>
@@ -3983,6 +3972,33 @@ async function saveCapRate(recordId) {
   } catch(e) { showToast('Error: ' + e.message); }
 }
 
+function editDistributed(recordId) {
+  const inv = bsInvestments.find(i => i.id === recordId);
+  if (!inv) return;
+  const el = document.getElementById(`dist-${recordId}`);
+  if (!el) return;
+  const base = inv.distributedBase || 0;
+  el.innerHTML = `<input class="bs-edit-input" id="distInput-${recordId}" type="number" step="0.01" value="${base.toFixed(2)}" placeholder="Base distributed" style="width:80px;font-size:12px;" onkeydown="if(event.key==='Enter')saveDistributed('${recordId}');if(event.key==='Escape'){recomputeDistributed();renderBalanceSheet();}">
+    <button class="bs-edit-btn" onclick="saveDistributed('${recordId}')" style="font-size:10px;">✓</button>`;
+  const inp = document.getElementById(`distInput-${recordId}`);
+  inp.focus();
+  inp.select();
+}
+
+async function saveDistributed(recordId) {
+  const inp = document.getElementById(`distInput-${recordId}`);
+  const val = parseFloat(inp.value);
+  if (isNaN(val) || val < 0) { showToast('Enter a valid amount'); return; }
+  const inv = bsInvestments.find(i => i.id === recordId);
+  if (inv) inv.distributedBase = val;
+  try {
+    await supaWrite('exec_investments', 'PATCH', { distributed: val }, `?id=eq.${recordId}`);
+    showToast('Distributed base updated');
+    recomputeDistributed();
+    renderBalanceSheet();
+  } catch(e) { showToast('Error: ' + e.message); }
+}
+
 // ── Investment CRUD ──
 function buildPropertyOptions(selectedId) {
   const opts = ['<option value="">— None (manual valuation) —</option>'];
@@ -4065,7 +4081,7 @@ function openEditInvestment(recordId) {
   const name = r.name || '';
   const ownership = r.ownership || 0;
   const contributed = r.contributed || 0;
-  const distributed = r.distributed || 0;
+  const distributedBase = r.distributedBase || 0;
   const valuation = r.valuation || '';
   const capRate = r.capRate || '';
   const isLinked = !!r.propertyId;
@@ -4083,8 +4099,8 @@ function openEditInvestment(recordId) {
     </div>
     <label>Contributed ($)</label>
     <input id="invContributed" type="number" step="0.01" value="${contributed}">
-    <label>Distributed ($)</label>
-    <input id="invDistributed" type="number" step="0.01" value="${distributed}">
+    <label>Distributed Base ($) <span style="font-size:11px;color:var(--text-dim);">Linked distributions added automatically</span></label>
+    <input id="invDistributed" type="number" step="0.01" value="${distributedBase}">
     <label id="invValuationLabel" ${isLinked ? 'style="opacity:0.5"' : ''}>Position Value ($)</label>
     <input id="invValuation" type="number" step="0.01" value="${valuation}" ${isLinked ? 'disabled placeholder="Auto: (NOI ÷ Cap Rate) − Debt × Equity %"' : ''}>
     <div class="modal-actions">
@@ -4101,11 +4117,11 @@ async function saveEditInvestment(recordId) {
   const capRateEl = document.getElementById('invCapRate');
   const capRate = capRateEl ? (parseFloat(capRateEl.value) || null) : null;
   const contributed = parseFloat(document.getElementById('invContributed').value) || 0;
-  const distributed = parseFloat(document.getElementById('invDistributed').value) || 0;
+  const distributedBase = parseFloat(document.getElementById('invDistributed').value) || 0;
   const valuation = propertyId ? null : (parseFloat(document.getElementById('invValuation').value) || null);
   if (!name) { showToast('Name required'); return; }
   try {
-    await supaWrite('exec_investments', 'PATCH', { name, ownership_pct: ownership, contributed, distributed, valuation: valuation || 0, property_id: propertyId, cap_rate: capRate }, `?id=eq.${recordId}`);
+    await supaWrite('exec_investments', 'PATCH', { name, ownership_pct: ownership, contributed, distributed: distributedBase, valuation: valuation || 0, property_id: propertyId, cap_rate: capRate }, `?id=eq.${recordId}`);
     closeModal();
     showToast('Investment updated');
     await loadBalanceSheet();
