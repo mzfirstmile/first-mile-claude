@@ -56,7 +56,7 @@ The embedded Claude chat has access to these tools:
 - **SMS integration:** WORKING. Telnyx send/receive deployed. Auto-reply via Claude on inbound texts + email forwarding to Morris. Deploy with `--no-verify-jwt` (Telnyx webhook has no auth header).
 - **Budget system:** Batch upload system for property budgets, GL account mapping.
 - **Accounting:** Calendar and deadline tracking imported from Google Sheets.
-- **Executive Dashboard (exec-v2.js):** PARTIALLY COMPLETE 2026-03-30. Core structure ported, module integration tested. Remaining work: complete chart rendering (SVG), implement full upload/review flow, implement pattern learning, complete investment/liability CRUD, complete transaction review panel. exec.html can remain as fallback standalone view.
+- **Executive Dashboard (exec-v2.js):** PRIMARY MODULE as of 2026-03-30. Renamed from "Exec Financials v2" to "Executive Financials". Old exec.html iframe hidden in sidebar (data-view="exec", display:none). Home module card links to exec2. Core features working: balance sheet, P&L, chart with hover tooltips, transaction upload, investment/liability CRUD, property photos on cards. Remaining work: complete pattern learning, complete transaction review panel.
 
 ## Quarterly Financial Report
 - **What:** Quarterly email + PDF to Morris summarizing YTD financials — net position, net income, cash flow, P&L breakdown, balance sheet, investments, and narrative highlights (positives + areas to watch)
@@ -94,7 +94,7 @@ The embedded Claude chat has access to these tools:
 - **Investment contribution → auto-update contributed amount:** When linking a wire to an investment via dropdown, should also increment that investment's `contributed` field. Not yet implemented.
 - **~~Investment distributions → auto-update distributed amount~~:** DONE 2026-03-30. When Investment Income transactions are linked to an investment, the `distributed` field on the balance sheet is computed dynamically by summing all linked Investment Income transactions. Updates in real time when linking/unlinking via `recomputeDistributed()`. Distributed = editable base (historical, stored in Supabase `distributed` column) + sum of linked Investment Income transactions. Base is editable via ✏️ pencil on the balance sheet card or the full edit modal.
 - **Net Position line chart (quarterly snapshot):** Once quarterly books are officially closed, create a snapshot of balance sheet net position so we can build a line chart tracking net position over time (same style as the existing net income line chart). Needs a DB table for quarterly snapshots (e.g. `exec_quarterly_snapshots` with columns: quarter, year, net_position, total_assets, total_liabilities, net_income, snapshot_date).
-- **~~Cash flow chart should show Net Income P&L~~:** DONE 2026-03-30. Chart now shows Net Income (P&L) — revenue bars, opex bars, cumulative net income line. Changed from cash flow which included balance sheet items.
+- **~~Cash flow chart should show Net Income P&L~~:** DONE 2026-03-30. Chart now shows Net Income (P&L) — revenue bars, opex bars, cumulative net income line. Changed from cash flow which included balance sheet items. Hover tooltips show Revenue, Expenses, and cumulative Net Income per period.
 - **Git push from sandbox not possible:** `git push` returns 403 from proxy. Morris pushes from his machine. Always commit locally and remind Morris to push.
 
 ## Email Signature (include in ALL outbound emails as HTML)
@@ -146,10 +146,10 @@ The embedded Claude chat has access to these tools:
 - Browser back button closes drilldown (uses History API pushState/popstate)
 - Linked investments show subtle ↗ arrow icon (not "Linked" text badge) — clicking navigates to Property Financials module via `target="_top"` (breaks out of iframe)
 - PM Fee Income and Payroll rows show NET values (display only — doesn't affect totals). PM Fee shows "Gross | Less payroll" sub-note. Payroll shows "Out | In" sub-note.
-- 132-40 Metropolitan Ave: 7.47% ownership, $400K contributed, ~$1.12M NOI (2026, excl RET pass-throughs), ~$1.39M NOI (2027 per Morris), 6% cap rate, $15.085M mortgage. Position value ≈ $273K = ((NOI/cap) - mortgage) × equity%. 36,186 SF.
-- 60-18 Metropolitan Ave: 3,180 SF.
+- 132-40 Metropolitan Ave: 7.47% ownership, $400K contributed, ~$1.12M NOI (2026, excl RET pass-throughs), ~$1.39M NOI (2027 per Morris), 6% cap rate, $15.085M mortgage. Position value ≈ $273K = ((NOI/cap) - mortgage) × equity%. 36,186 SF. Closed Jan 2026.
+- 60-18 Metropolitan Ave: 20% ownership, 3,180 SF. Closed May 2024.
 - 132-40 Metropolitan budget format is tenant-by-tenant (not GL summary) — parsed by aggregating income categories (Rent→4010, RET→4120, CAM→4110, Insurance Recovery→4130, W/S Recovery→4140) across all tenants, then mapping expenses to GL codes. Budget file: `data/2026 Budget/Metropolitan *.xlsx`
-- Property photos stored in `assets/Property Photos/` — mapped by `PROP_PHOTOS` object in both exec-v2.js and exec.html. Shown as thumbnails on investment cards when expanded. Photos: 132-40 Metro Ave, 60-18 Metro, 61 South, 340 MK, Paramus Plaza, 1700 East Putnam, 575 Broadway.
+- Property photos stored in `assets/Property Photos/` — mapped by `PROP_PHOTOS` in exec-v2.js/exec.html (partial name match via `includes()`) and `FB_PHOTOS` in index.html (exact name match). Shown as thumbnails on investment cards when expanded and as card header images in Property Financials. Photos: 132-40 Metro Ave, 60-18 Metro, 61 South, 340 MK, Paramus Plaza, 1700 East Putnam, 575 Broadway. **IMPORTANT:** Photo paths with spaces must be URL-encoded (`Property%20Photos/132-40%20Metro%20Ave%20corner%20view.png`). When renaming a property, update FB_PHOTOS key to match (it uses exact match, not partial).
 - RET (Real Estate Tax Recovery) is a pass-through — tenants reimburse RE tax, so it offsets the expense. Exclude from NOI calculations (GL 4120). Same principle for Insurance Recovery (4130) and W/S Recovery (4140) if material.
 - SQL migrations should be run via the admin website (admin.firstmilecap.com → SQL Console), NOT via Supabase dashboard directly. Claude CAN and SHOULD run SQL itself using the browser (Chrome MCP tools) — navigate to localhost:8000/#sql or admin.firstmilecap.com/#sql, paste into textarea, click Run. Do NOT ask Morris to run SQL manually.
 - Category dropdown in drilldowns is grouped into sections: 💰 Income, 📋 Expenses, 📊 Balance Sheet, 🔄 Other — uses `<optgroup>` with `buildCategoryOptions()` helper
@@ -170,10 +170,16 @@ The embedded Claude chat has access to these tools:
 - Balance sheet investment valuation: `(NOI / cap_rate%) × equity%` for property-linked investments
 - `FB_PROP_META` in index.html maps property IDs to names for Property Financials module
 - Hash param `#financials&prop=PropertyName` auto-navigates to that property in index.html
+- **Investment close dates** (in exec_investments.close_date): 1700 East Putnam 7/1/21, 61 South Paramus 12/28/23, 60-18 Metropolitan Ave 5/10/24, Paramus Plaza 6/28/24, FM 340 Kemble 1/21/25, 575 Broadway 8/1/25, 132-40 Metropolitan Ave 1/1/26. Investments sorted newest-first by close date on both exec-v2 balance sheet and Property Financials cards.
+- **Property Financials cards** (fbRenderCards in index.html): show photo, close date ("Closed Mon YYYY"), Revenue/Expenses/NOI, SF, NOI/SF, Exp Ratio. Close dates fetched from exec_investments at load time. Sorted by close date (newest first).
+- **CSS scoping pitfall:** index.html defines `.bs-card-title` with `border-bottom:1px solid; padding:12px 16px` for Property Financials balance sheet. Since exec-v2 renders INSIDE index.html (not iframe), these styles leak into exec-v2 investment cards. Fix: scope exec-v2 card styles under `#exec2Root` and explicitly reset `border-bottom:none; padding:0;` on `.bs-card-title`.
+- **`</script>` in template literals:** NEVER put literal `</script>` inside a JS template string within a `<script>` tag — the HTML parser sees it as the closing tag and truncates the file. This was root cause of exec-v2 launch bugs.
+- **exec-v2 init sequence:** `_injectCSS()` → `_injectHTML()` → `_initNOI()` → `initDashboard()`. All must happen in this order. Auto-init at bottom of IIFE detects if view is already active when script loads (handles script-load-after-switchView race).
+- **1700 East Putnam and 575 Broadway** were added to exec_investments on 2026-03-30 (previously only in properties table, not tracked as investments). Both have ownership_pct=0 and valuation=0 — Morris needs to fill in actual values.
 
 ## Database Schema Notes
 - `exec_transactions`: main bank transaction table. Key columns: `category_override` (TEXT), `category_name` (TEXT), `investment_id` (UUID FK → exec_investments). Index: `idx_exec_txn_investment` on `investment_id`
-- `exec_investments`: investment/asset tracking. Columns: id (UUID PK), name, ownership_pct, contributed, distributed, valuation, cap_rate, property_id (FK → properties), status, membership_class, committed, unreturned_capital, net_equity
+- `exec_investments`: investment/asset tracking. Columns: id (UUID PK), name, ownership_pct, contributed, distributed, valuation, cap_rate, property_id (FK → properties), status, membership_class, committed, unreturned_capital, net_equity, close_date (DATE)
 - `exec_liabilities`: debt tracking. Columns: lender, related_deal, principal, currency, usd_equivalent, maturity_date
 - `budget_line_items`: property budgets by GL code/month
 - `properties`: property master table with Airtable record IDs as primary keys (id, property_name, current_valuation)
