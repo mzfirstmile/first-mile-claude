@@ -779,13 +779,13 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       <span>Strategic Forecasting</span>
     </a>
-    <a class="sidebar-item" data-view="exec">
+    <a class="sidebar-item" data-view="exec2">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
       <span>Executive Financials</span>
     </a>
-    <a class="sidebar-item" data-view="exec2">
+    <a class="sidebar-item" data-view="exec" style="display:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
-      <span>Exec Financials v2</span>
+      <span>Exec Financials Old</span>
     </a>
   </div>
 
@@ -863,7 +863,7 @@
       </div>
 
       <!-- Executive Financials -->
-      <div class="module-card" data-module="exec" onclick="switchView('exec')" style="cursor:pointer">
+      <div class="module-card" data-module="exec" onclick="switchView('exec2')" style="cursor:pointer">
         <div class="module-card-icon" style="background:linear-gradient(135deg,#283d55,#1e2d44)">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 010-4h14v4"/><path d="M3 5v14a2 2 0 002 2h16v-5"/><path d="M18 12a2 2 0 000 4h4v-4h-4z"/></svg>
         </div>
@@ -1412,7 +1412,8 @@
     document.querySelectorAll('.sidebar-item[data-view]').forEach(el => {
       const view = el.dataset.view;
       if (view === 'home') return; // always visible
-      const key = view === 'exec' ? 'exec' : view;
+      if (view === 'exec') { el.style.display = 'none'; return; } // old exec hidden, replaced by exec2
+      const key = view === 'exec2' ? 'exec' : view; // exec2 uses 'exec' access key
       if (access[key] === false) {
         el.style.display = 'none';
       } else {
@@ -1468,8 +1469,8 @@
     forecasting: 'Strategic <span>Forecasting</span>',
     properties: 'Manage <span>Properties</span>',
     users: 'Manage <span>Users</span>',
-    exec: 'Executive <span>Financials</span>',
-    exec2: 'Exec <span>Financials v2</span>',
+    exec: 'Exec <span>Financials (Old)</span>',
+    exec2: 'Executive <span>Financials</span>',
     jobs: 'Scheduled <span>Jobs</span>',
     sql: 'SQL <span>Console</span>',
   };
