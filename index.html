@@ -1072,8 +1072,17 @@
             <select id="crudProperty"></select>
           </div>
           <div class="crud-row">
-            <label>Payment Type <span style="font-weight:400;color:var(--text-dim);font-size:11px;">(optional)</span></label>
-            <input type="text" id="crudType" placeholder="e.g. Mortgage, Insurance, Tax">
+            <label>Type</label>
+            <select id="crudType">
+              <option value="">— Select —</option>
+              <option value="Lender Reporting">Lender Reporting</option>
+              <option value="Owner Reporting">Owner Reporting</option>
+              <option value="Mortgage">Mortgage</option>
+              <option value="Insurance">Insurance</option>
+              <option value="Tax">Tax</option>
+              <option value="Utility">Utility</option>
+              <option value="Other">Other</option>
+            </select>
           </div>
         </div>
 
@@ -2347,8 +2356,8 @@ $$;</pre></div>`;
         const c = calGetColor(ev.property);
         const tc = TEAM_COLORS[ev.teams[0]] || '#888';
         const done = ev.status === 'Done';
-        html += `<div class="cal-ev${done ? ' done' : ''}" style="background:${calHexA(c,.12)};border-color:${c};"
-          onmouseenter="calShowTip(event,${ev.idx})" onmouseleave="calHideTip()">
+        html += `<div class="cal-ev${done ? ' done' : ''}" style="background:${calHexA(c,.12)};border-color:${c};cursor:pointer;"
+          onmouseenter="calShowTip(event,${ev.idx})" onmouseleave="calHideTip()" onclick="calHideTip();calCrudEdit(${ev.idx})">
           <div class="cal-ev-cb${done ? ' on' : ''}" style="border-color:${done ? 'var(--green)' : c}" onclick="event.stopPropagation();calToggle(${ev.idx})">${done ? '✓' : ''}</div>
           <span class="cal-ev-txt" style="color:${c}">${ev.property || ev.task}</span>
           ${ev.teams.map(t => `<span class="cal-team-badge" style="background:${TEAM_COLORS[t]||'#888'}20;color:${TEAM_COLORS[t]||'#888'}">${t.substring(0,4)}</span>`).join('')}
@@ -2601,6 +2610,7 @@ $$;</pre></div>`;
       if (!prop) return;
     }
     const dueDate = document.getElementById('crudDueDate').value;
+    const recordId = document.getElementById('crudId').value;
     const body = {
       day_of_month: isOneTime ? (dueDate ? new Date(dueDate + 'T00:00:00').getDate() : 1) : (parseInt(document.getElementById('crudDay').value) || 1),
       cadence: crudSelectedCadence,
@@ -2611,7 +2621,10 @@ $$;</pre></div>`;
       team: crudSelectedTeams.length ? crudSelectedTeams.join(', ') : null,
       due_date: isOneTime && dueDate ? dueDate : null,
     };
-    const recordId = document.getElementById('crudId').value;
+    // Auto-set owner on new tasks to current user
+    if (!recordId) {
+      body.owner = currentUser ? currentUser.name : 'Unknown';
+    }
     try {
       if (recordId) {
         // Update existing
