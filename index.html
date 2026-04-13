@@ -1063,6 +1063,16 @@
 
         <!-- Recurring-only fields -->
         <div id="crudRecurringFields" style="display:none;">
+          <div class="crud-row" id="crudDueMonthRow" style="display:none;">
+            <label>Due Month</label>
+            <select id="crudDueMonth">
+              <option value="">— Select —</option>
+              <option value="1">January</option><option value="2">February</option><option value="3">March</option>
+              <option value="4">April</option><option value="5">May</option><option value="6">June</option>
+              <option value="7">July</option><option value="8">August</option><option value="9">September</option>
+              <option value="10">October</option><option value="11">November</option><option value="12">December</option>
+            </select>
+          </div>
           <div class="crud-row">
             <label>Day of Month</label>
             <input type="number" id="crudDay" min="1" max="31" placeholder="1-31">
@@ -1081,6 +1091,8 @@
               <option value="Insurance">Insurance</option>
               <option value="Tax">Tax</option>
               <option value="Utility">Utility</option>
+              <option value="Payment">Payment</option>
+              <option value="A/R">A/R</option>
               <option value="Other">Other</option>
             </select>
           </div>
@@ -2240,6 +2252,7 @@ $$;</pre></div>`;
         day: rec.day_of_month,
         cadence: rec.cadence || 'Monthly',
         dueDate: rec.due_date || '',
+        dueMonth: rec.due_month || null,
         property: rec.property || '',
         type: rec.payment_type || '',
         task: rec.description || '',
@@ -2336,7 +2349,7 @@ $$;</pre></div>`;
     if (calSelectedProp) visible = visible.filter(e => e.property === calSelectedProp);
     const monthly = visible.filter(e => e.cadence === 'Monthly');
     const quarterly = visible.filter(e => e.cadence === 'Quarterly' && [0,3,6,9].includes(m));
-    const annual = visible.filter(e => e.cadence === 'Annual');
+    const annual = visible.filter(e => e.cadence === 'Annual' && e.dueMonth && (e.dueMonth - 1) === m);
     const oneTime = visible.filter(e => e.cadence === 'One-Time' && e.dueDate).filter(e => {
       const d = new Date(e.dueDate + 'T00:00:00');
       return d.getMonth() === m && d.getFullYear() === year;
@@ -2535,6 +2548,7 @@ $$;</pre></div>`;
     // Show/hide contextual fields
     document.getElementById('crudRecurringFields').style.display = selected === 'One-Time' ? 'none' : '';
     document.getElementById('crudOneTimeFields').style.display = selected === 'One-Time' ? '' : 'none';
+    document.getElementById('crudDueMonthRow').style.display = selected === 'Annual' ? '' : 'none';
   }
 
   function calCrudSetCadence(c) {
@@ -2574,6 +2588,7 @@ $$;</pre></div>`;
     document.getElementById('crudNotes').value = '';
     document.getElementById('crudDay').value = '';
     document.getElementById('crudDueDate').value = '';
+    document.getElementById('crudDueMonth').value = '';
     document.getElementById('crudType').value = '';
     calCrudBuildCadencePicker('Monthly');
     calCrudBuildTeamPicker([]);
@@ -2591,6 +2606,7 @@ $$;</pre></div>`;
     document.getElementById('crudNotes').value = ev.notes || '';
     document.getElementById('crudDay').value = ev.day;
     document.getElementById('crudDueDate').value = ev.dueDate || '';
+    document.getElementById('crudDueMonth').value = ev.dueMonth || '';
     document.getElementById('crudType').value = ev.type;
     calCrudBuildCadencePicker(ev.cadence);
     calCrudBuildTeamPicker([...ev.teams]);
@@ -2622,6 +2638,7 @@ $$;</pre></div>`;
       notes: document.getElementById('crudNotes').value || null,
       team: crudSelectedTeams.length ? crudSelectedTeams.join(', ') : null,
       due_date: isOneTime && dueDate ? dueDate : null,
+      due_month: crudSelectedCadence === 'Annual' ? (parseInt(document.getElementById('crudDueMonth').value) || null) : null,
     };
     // Auto-set owner on new tasks to current user
     if (!recordId) {
