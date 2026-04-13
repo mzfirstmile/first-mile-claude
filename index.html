@@ -2220,7 +2220,7 @@ $$;</pre></div>`;
     Administrative: [],
   };
 
-  let calEvents = [], calColors = {}, calColorIdx = 0, calMonth = new Date().getMonth();
+  let calEvents = [], calColors = {}, calColorIdx = 0, calMonth = new Date().getMonth(), calYear = new Date().getFullYear();
   let calFiltersActive = new Set(), calInited = false, calSelectedProp = null;
   let calSelectedTeam = null;
   let calShowOneTime = false;
@@ -2323,7 +2323,7 @@ $$;</pre></div>`;
 
   function calRender() {
     const grid = document.getElementById('calGrid');
-    const year = 2026;
+    const year = calYear;
     const m = calMonth;
     const firstDay = new Date(year, m, 1).getDay();
     const daysInMonth = new Date(year, m + 1, 0).getDate();
@@ -2434,7 +2434,9 @@ $$;</pre></div>`;
   }
 
   function calChangeMonth(delta) {
-    calMonth = Math.max(0, Math.min(11, calMonth + delta));
+    calMonth += delta;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    else if (calMonth < 0) { calMonth = 11; calYear--; }
     calRender();
   }
 
