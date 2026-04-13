@@ -2396,6 +2396,19 @@ $$;</pre></div>`;
         });
       });
     } catch(e) { console.warn('Could not load team roster:', e); }
+    // Default team filter to the logged-in user's team(s)
+    if (currentUser && currentUser.email) {
+      const userEmail = currentUser.email.toLowerCase();
+      const userTeams = Object.keys(TEAM_ROSTER).filter(t =>
+        TEAM_ROSTER[t].some(m => m.email.toLowerCase() === userEmail)
+      );
+      if (userTeams.length === 1) {
+        calSelectedTeam = userTeams[0];
+      } else if (userTeams.length > 1) {
+        // Multiple teams — pick the first non-Executive team, or first if all executive
+        calSelectedTeam = userTeams.find(t => t !== 'Executive') || userTeams[0];
+      }
+    }
     const ok = await calFetchData();
     if (ok) { calBuildFilters(); calRender(); }
     else {
