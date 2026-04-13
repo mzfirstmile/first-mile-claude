@@ -2237,6 +2237,7 @@ $$;</pre></div>`;
   let calSelectedTeam = null;
   let calShowOneTime = false;
   let calShowTerminated = false;
+  let calSelectedType = null;
 
   function calGetColor(p) {
     if (!calColors[p]) { calColors[p] = CAL_PALETTE[calColorIdx % CAL_PALETTE.length]; calColorIdx++; }
@@ -2416,6 +2417,7 @@ $$;</pre></div>`;
     } else {
       cadenceFiltered = allVisible.filter(e => e.cadence !== 'One-Time');
     }
+    if (calSelectedType) cadenceFiltered = cadenceFiltered.filter(e => e.type === calSelectedType);
     const sortedTasks = cadenceFiltered.slice().sort((a, b) => a.day - b.day || a.property.localeCompare(b.property));
     const recCount = allVisible.filter(e => e.cadence !== 'One-Time').length;
     const otCount = allVisible.filter(e => e.cadence === 'One-Time').length;
@@ -2427,7 +2429,13 @@ $$;</pre></div>`;
         <div class="cal-team-chip${activeTab==='ot' ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${activeTab==='ot' ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calShowOneTime=true;calShowTerminated=false;calRender();">One-Time <span class="team-count">${otCount}</span></div>
         ${termCount > 0 ? `<div class="cal-team-chip${activeTab==='term' ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${activeTab==='term' ? 'background:#e74c3c;border-color:#e74c3c;color:#fff;' : 'color:#e74c3c;border-color:#e74c3c33;'}" onclick="calShowTerminated=true;calRender();">Terminated <span class="team-count">${termCount}</span></div>` : ''}
       </div>
-      <button class="cal-btn accent" style="font-size:11px;padding:4px 12px;" onclick="calCrudNew()">+ Add Task</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <select style="font-size:11px;padding:3px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);" onchange="calSelectedType=this.value||null;calRender();">
+          <option value="">All Types</option>
+          ${[...new Set(calEvents.filter(e=>e.type).map(e=>e.type))].sort().map(t => `<option value="${t}"${calSelectedType===t?' selected':''}>${t}</option>`).join('')}
+        </select>
+        <button class="cal-btn accent" style="font-size:11px;padding:4px 12px;" onclick="calCrudNew()">+ Add Task</button>
+      </div>
     </div>`;
     tblHtml += `<table><thead><tr>
       <th class="cal-tbl-status"></th>
