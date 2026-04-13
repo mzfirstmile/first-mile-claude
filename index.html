@@ -2501,8 +2501,8 @@ $$;</pre></div>`;
     calCrudCadenceChange();
     // Populate property dropdown
     const propSel = document.getElementById('crudProperty');
-    const props = [...new Set(calEvents.map(e => e.property))].sort();
-    propSel.innerHTML = props.map(p => `<option>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
+    const props = [...new Set(calEvents.map(e => e.property).filter(p => p && p !== 'General'))].sort();
+    propSel.innerHTML = '<option value="General">General</option>' + props.map(p => `<option>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
     document.getElementById('crudModal').style.display = '';
   }
 
@@ -2519,8 +2519,9 @@ $$;</pre></div>`;
     document.getElementById('crudTeam').value = ev.team || '';
     calCrudCadenceChange();
     const propSel = document.getElementById('crudProperty');
-    const props = [...new Set(calEvents.map(e => e.property))].sort();
-    propSel.innerHTML = props.map(p => `<option${p === ev.property ? ' selected' : ''}>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
+    const props = [...new Set(calEvents.map(e => e.property).filter(p => p && p !== 'General'))].sort();
+    propSel.innerHTML = '<option value="General">General</option>' + props.map(p => `<option${p === ev.property ? ' selected' : ''}>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
+    if (ev.property && ev.property !== 'General') propSel.value = ev.property;
     document.getElementById('crudModal').style.display = '';
   }
 
