@@ -78,6 +78,148 @@ async function getGraphToken(): Promise<string> {
   return (await res.json()).access_token;
 }
 
+// ── Task Reminder Reply Handler ──
+// Detects replies to task reminder emails and marks tasks as Done
+
+function isTaskReminderReply(subject: string): boolean {
+  const s = (subject || "").toLowerCase();
+  return s.includes("tasks due tomorrow") || s.includes("past due task") || s.includes("task reminder");
+}
+
+async function handleTaskReminderReply(
+  sb: any,
+  email: any
+): Promise<{ handled: boolean; replyHtml?: string; markedDone?: string[] }> {
+  const body = (email.body_text || email.body_preview || "").toLowerCase();
+  const subject = (email.subject || "").toLowerCase();
+
+  // Get the date from the subject to find relevant tasks
+  // Subject format: "📋 N Tasks Due Tomorrow — Tuesday, April 15, 2026 [TEST]"
+  // or "⚠️ N Past Due Tasks — Were Due Tuesday, April 15, 2026"
+
+  // Fetch all non-terminated, non-done tasks to match against
+  const { data: tasks, error: taskErr } = await sb
+    .from("calendar_tasks")
+    .select("id, property, payment_type, description, cadence, day_of_month, due_month, team, status")
+    .neq("status", "Terminated")
+    .neq("status", "Done");
+
+  if (taskErr || !tasks || tasks.length === 0) {
+    return { handled: false };
+  }
+
+  // Parse the reply body for task completion markers
+  // Users might write:
+  //   "done" on its own line (mark all tasks in the email)
+  //   "340 Mt Kemble - done"
+  //   "Monthly report to Balfin - done" (or "done" next to the task text)
+  //   "1. done 2. done 3. not yet" (numbered)
+  //   "all done" / "all completed"
+
+  const lines = body.split(/[\n\r]+/).map((l: string) => l.trim()).filter(Boolean);
+
+  // Check for "all done" / "all completed" pattern
+  const allDone = /\ball\s*(done|completed|complete|finished)\b/i.test(body);
+
+  // Try to match specific tasks mentioned as done
+  const markedTaskIds: string[] = [];
+  const markedTaskNames: string[] = [];
+
+  if (allDone) {
+    // Mark all tasks that were in the reminder email as done
+    // We need to figure out which tasks were in the original email
+    // Best approach: match tasks by what's due around the date in the subject
+    // For now, look at the quoted content in the reply to find property names/descriptions
+    const fullBody = email.body_text || email.body_preview || "";
+
+    for (const task of tasks) {
+      // Check if this task's property or description appears in the email thread
+      const propMatch = fullBody.toLowerCase().includes(task.property.toLowerCase());
+      const descMatch = task.description && fullBody.toLowerCase().includes(task.description.substring(0, 30).toLowerCase());
+      if (propMatch && descMatch) {
+        markedTaskIds.push(task.id);
+        markedTaskNames.push(`${task.property}: ${task.description.substring(0, 60)}`);
+      }
+    }
+  } else {
+    // Look for individual "done" markers
+    for (const task of tasks) {
+      const propLower = task.property.toLowerCase();
+      const descLower = (task.description || "").toLowerCase().substring(0, 40);
+      const typeLower = (task.payment_type || "").toLowerCase();
+
+      for (const line of lines) {
+        // Check if this line mentions the task (property, description, or type) AND has "done"/"completed"
+        const hasDone = /\b(done|completed|complete|finished|✓|✅)\b/i.test(line);
+        if (!hasDone) continue;
+
+        const matchesProp = line.includes(propLower);
+        const matchesDesc = descLower.length > 10 && line.includes(descLower.substring(0, 20));
+        const matchesType = typeLower.length > 2 && line.includes(typeLower);
+
+        if (matchesProp || matchesDesc || matchesType) {
+          if (!markedTaskIds.includes(task.id)) {
+            markedTaskIds.push(task.id);
+            markedTaskNames.push(`${task.property}: ${task.description.substring(0, 60)}`);
+          }
+        }
+      }
+    }
+
+    // If the reply is just "done" or "all done" with no specifics, and the email
+    // contains quoted task content, try to match from the full email body (including quotes)
+    if (markedTaskIds.length === 0) {
+      const justDone = lines.length <= 3 && lines.some((l: string) => /^\s*(done|completed|all done|yes|yep)\s*[.!]?\s*$/i.test(l));
+      if (justDone) {
+        // Treat as "all done" — match tasks from the quoted email content
+        const fullBody = email.body_text || email.body_preview || "";
+        for (const task of tasks) {
+          const propMatch = fullBody.toLowerCase().includes(task.property.toLowerCase());
+          const descMatch = task.description && fullBody.toLowerCase().includes(task.description.substring(0, 30).toLowerCase());
+          if (propMatch && descMatch) {
+            markedTaskIds.push(task.id);
+            markedTaskNames.push(`${task.property}: ${task.description.substring(0, 60)}`);
+          }
+        }
+      }
+    }
+  }
+
+  if (markedTaskIds.length === 0) {
+    return { handled: false }; // Couldn't parse — let Claude handle the reply
+  }
+
+  // Mark tasks as Done in the database
+  const senderName = email.from_name || email.from_address.split("@")[0];
+  const now = new Date().toISOString().split("T")[0];
+
+  for (const taskId of markedTaskIds) {
+    await sb
+      .from("calendar_tasks")
+      .update({
+        status: "Done",
+        completed_by: senderName,
+        completed_date: now,
+      })
+      .eq("id", taskId);
+  }
+
+  // Build confirmation reply
+  const taskList = markedTaskNames
+    .map((n) => `<li style="margin-bottom:4px;">${n}</li>`)
+    .join("");
+
+  const replyHtml = `
+<p>Hi ${senderName.split(" ")[0]},</p>
+<p>Got it! I've marked <strong>${markedTaskIds.length}</strong> task${markedTaskIds.length > 1 ? "s" : ""} as completed:</p>
+<ul style="margin:8px 0; padding-left:20px; color:#059669;">
+${taskList}
+</ul>
+<p style="font-size:13px; color:#6b7280;">You can always review your tasks at <a href="https://admin.firstmilecap.com/#calendar">Calendars & Tasks</a>.</p>`;
+
+  return { handled: true, replyHtml, markedDone: markedTaskNames };
+}
+
 async function generateReply(email: any): Promise<string> {
   const claudeKey = Deno.env.get("CLAUDE_API_KEY")!;
 
@@ -292,14 +434,33 @@ serve(async (req: Request) => {
 
     console.log(`Generating reply for email ${emailId} from ${email.from_address}: "${email.subject}"`);
 
-    // Generate reply via Claude
+    // Check if this is a reply to a task reminder email
     let replyHtml: string;
-    try {
-      replyHtml = await generateReply(email);
-    } catch (genErr) {
-      // Release the lock if reply generation fails
-      await sb.from("emails").update({ replied_at: null }).eq("id", emailId);
-      throw genErr;
+    if (isTaskReminderReply(email.subject)) {
+      console.log(`Detected task reminder reply from ${email.from_address}`);
+      const taskResult = await handleTaskReminderReply(sb, email);
+      if (taskResult.handled && taskResult.replyHtml) {
+        console.log(`Marked ${taskResult.markedDone?.length || 0} tasks as Done`);
+        replyHtml = taskResult.replyHtml;
+      } else {
+        // Couldn't parse task completions — fall through to Claude
+        console.log(`Could not parse task completions, falling back to Claude`);
+        try {
+          replyHtml = await generateReply(email);
+        } catch (genErr) {
+          await sb.from("emails").update({ replied_at: null }).eq("id", emailId);
+          throw genErr;
+        }
+      }
+    } else {
+      // Standard email — generate reply via Claude
+      try {
+        replyHtml = await generateReply(email);
+      } catch (genErr) {
+        // Release the lock if reply generation fails
+        await sb.from("emails").update({ replied_at: null }).eq("id", emailId);
+        throw genErr;
+      }
     }
 
     // Send via Graph API
