@@ -1033,37 +1033,62 @@
 
     <!-- Task edit modal -->
     <div class="crud-modal-bg" id="crudModal" style="display:none;" onclick="if(event.target===this)calCrudClose()">
-      <div class="crud-modal">
+      <div class="crud-modal" style="max-width:480px;">
         <h3 id="crudModalTitle">Add Task</h3>
         <input type="hidden" id="crudId">
-        <div class="crud-row" id="crudDayRow">
-          <label>Day of Month</label>
-          <input type="number" id="crudDay" min="1" max="31" placeholder="1-31">
-        </div>
-        <div class="crud-row" id="crudDueDateRow" style="display:none;">
-          <label>Due Date</label>
-          <input type="date" id="crudDueDate">
-        </div>
+
+        <!-- Step 1: Cadence (always visible) -->
         <div class="crud-row">
           <label>Cadence</label>
-          <select id="crudCadence" onchange="calCrudCadenceChange()"><option>Monthly</option><option>Quarterly</option><option>Annual</option><option>One-Time</option></select>
+          <div id="crudCadencePicker" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
         </div>
+
+        <!-- Step 2: Task name (always visible) -->
         <div class="crud-row">
-          <label>Property</label>
-          <select id="crudProperty"></select>
+          <label>Task Name</label>
+          <input type="text" id="crudDesc" placeholder="e.g. Pay mortgage, File quarterly taxes">
         </div>
+
+        <!-- Step 3: Description (long text, always visible) -->
         <div class="crud-row">
-          <label>Payment Type</label>
-          <input type="text" id="crudType" placeholder="e.g. Mortgage, Insurance, Tax">
+          <label>Description <span style="font-weight:400;color:var(--text-dim);font-size:11px;">(optional)</span></label>
+          <textarea id="crudNotes" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;resize:vertical;background:var(--surface);color:var(--text);" placeholder="Additional details, notes, or instructions..."></textarea>
         </div>
-        <div class="crud-row">
-          <label>Description</label>
-          <input type="text" id="crudDesc" placeholder="Task description">
-        </div>
+
+        <!-- Team (multi-select checkboxes) -->
         <div class="crud-row">
           <label>Team</label>
-          <select id="crudTeam"><option value="">— Select —</option><option>Accounting</option><option>Operations</option><option>Executive</option><option>Administrative</option></select>
+          <div id="crudTeamPicker" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
         </div>
+
+        <!-- Recurring-only fields -->
+        <div id="crudRecurringFields" style="display:none;">
+          <div class="crud-row">
+            <label>Day of Month</label>
+            <input type="number" id="crudDay" min="1" max="31" placeholder="1-31">
+          </div>
+          <div class="crud-row">
+            <label>Property</label>
+            <select id="crudProperty"></select>
+          </div>
+          <div class="crud-row">
+            <label>Payment Type <span style="font-weight:400;color:var(--text-dim);font-size:11px;">(optional)</span></label>
+            <input type="text" id="crudType" placeholder="e.g. Mortgage, Insurance, Tax">
+          </div>
+        </div>
+
+        <!-- One-time-only fields -->
+        <div id="crudOneTimeFields" style="display:none;">
+          <div class="crud-row">
+            <label>Due Date</label>
+            <input type="date" id="crudDueDate">
+          </div>
+          <div class="crud-row">
+            <label>Property <span style="font-weight:400;color:var(--text-dim);font-size:11px;">(optional)</span></label>
+            <select id="crudPropertyOT"></select>
+          </div>
+        </div>
+
         <div class="crud-actions">
           <button class="cal-btn" onclick="calCrudClose()">Cancel</button>
           <button class="cal-btn accent" onclick="calCrudSave()">Save</button>
@@ -2209,11 +2234,13 @@ $$;</pre></div>`;
         property: rec.property || '',
         type: rec.payment_type || '',
         task: rec.description || '',
+        notes: rec.notes || '',
         owner: rec.owner || '',
         status: rec.status || '',
         completedBy: rec.completed_by || '',
         completedDate: rec.completed_date || '',
         team: rec.team || '',
+        teams: (rec.team || '').split(',').map(t => t.trim()).filter(Boolean),
       }));
       // Build color map
       calColorIdx = 0; calColors = {};
@@ -2240,7 +2267,7 @@ $$;</pre></div>`;
     teamHtml += teams.map(t => {
       const c = TEAM_COLORS[t];
       const on = calSelectedTeam === t;
-      const count = calEvents.filter(e => e.team === t).length;
+      const count = calEvents.filter(e => e.teams.includes(t)).length;
       const icon = TEAM_ICONS[t] || '';
       return `<div class="cal-team-chip${on ? ' on' : ''}" style="${on ? `background:${c};border-color:${c};` : `border-color:${c}40;`}" onclick="calSelectTeam('${t}')">${icon} ${t}<span class="team-count">${count}</span></div>`;
     }).join('');
@@ -2252,7 +2279,7 @@ $$;</pre></div>`;
 
     // Property filters
     const el = document.getElementById('calFilters');
-    const filtered = calSelectedTeam ? calEvents.filter(e => e.team === calSelectedTeam) : calEvents;
+    const filtered = calSelectedTeam ? calEvents.filter(e => e.teams.includes(calSelectedTeam)) : calEvents;
     const props = [...new Set(filtered.map(e => e.property))].sort();
     const allOn = calSelectedProp === null;
     let html = `<div class="cal-chip${allOn ? ' on' : ''}" style="${allOn ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calSelectProp(null)">All Properties</div>`;
@@ -2296,7 +2323,7 @@ $$;</pre></div>`;
 
     // Filter events for this month (by team + property)
     let visible = calEvents.filter(e => calFiltersActive.has(e.property));
-    if (calSelectedTeam) visible = visible.filter(e => e.team === calSelectedTeam);
+    if (calSelectedTeam) visible = visible.filter(e => e.teams.includes(calSelectedTeam));
     if (calSelectedProp) visible = visible.filter(e => e.property === calSelectedProp);
     const monthly = visible.filter(e => e.cadence === 'Monthly');
     const quarterly = visible.filter(e => e.cadence === 'Quarterly' && [0,3,6,9].includes(m));
@@ -2318,13 +2345,13 @@ $$;</pre></div>`;
       html += `<div class="dnum">${d}</div>`;
       dayEvents.forEach(ev => {
         const c = calGetColor(ev.property);
-        const tc = TEAM_COLORS[ev.team] || '#888';
+        const tc = TEAM_COLORS[ev.teams[0]] || '#888';
         const done = ev.status === 'Done';
         html += `<div class="cal-ev${done ? ' done' : ''}" style="background:${calHexA(c,.12)};border-color:${c};"
           onmouseenter="calShowTip(event,${ev.idx})" onmouseleave="calHideTip()">
           <div class="cal-ev-cb${done ? ' on' : ''}" style="border-color:${done ? 'var(--green)' : c}" onclick="event.stopPropagation();calToggle(${ev.idx})">${done ? '✓' : ''}</div>
-          <span class="cal-ev-txt" style="color:${c}">${ev.property}</span>
-          ${ev.team ? `<span class="cal-team-badge" style="background:${tc}20;color:${tc}">${ev.team.substring(0,4)}</span>` : ''}
+          <span class="cal-ev-txt" style="color:${c}">${ev.property || ev.task}</span>
+          ${ev.teams.map(t => `<span class="cal-team-badge" style="background:${TEAM_COLORS[t]||'#888'}20;color:${TEAM_COLORS[t]||'#888'}">${t.substring(0,4)}</span>`).join('')}
         </div>`;
       });
       html += '</div>';
@@ -2374,20 +2401,17 @@ $$;</pre></div>`;
     }
     sortedTasks.forEach(ev => {
       const isDone = ev.status === 'Done';
-      const tc = TEAM_COLORS[ev.team] || '#888';
-      const teamOpts = ['', 'Accounting', 'Operations', 'Executive', 'Administrative'].map(t =>
-        `<option value="${t}"${t === (ev.team||'') ? ' selected' : ''}>${t ? (TEAM_ICONS[t]||'') + ' ' + t : '—'}</option>`
-      ).join('');
+      const teamBadges = ev.teams.map(t => `<span class="cal-tbl-team" style="background:${TEAM_COLORS[t]||'#888'}15;color:${TEAM_COLORS[t]||'#888'}">${t}</span>`).join(' ') || '<span style="color:var(--text-dim);font-size:10px;">—</span>';
       const dayDisplay = ev.cadence === 'One-Time' && ev.dueDate
         ? new Date(ev.dueDate + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
         : ev.day;
       tblHtml += `<tr class="${isDone ? 'cal-tbl-done' : ''}">
         <td class="cal-tbl-status"><div class="cal-tbl-cb${isDone ? ' on' : ''}" onclick="calToggle(${ev.idx})">${isDone ? '✓' : ''}</div></td>
         <td class="cal-tbl-day">${dayDisplay}</td>
-        <td style="color:${calGetColor(ev.property)};font-weight:600;font-size:11px;">${ev.property}</td>
-        <td>${ev.task}</td>
+        <td style="color:${ev.property ? calGetColor(ev.property) : 'var(--text-dim)'};font-weight:600;font-size:11px;">${ev.property || 'General'}</td>
+        <td>${ev.task}${ev.notes ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">${ev.notes}</div>` : ''}</td>
         <td style="font-size:11px;">${ev.type}</td>
-        <td><select style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);cursor:pointer;" onchange="calCrudInlineTeam(${ev.idx},this.value)">${teamOpts}</select></td>
+        <td>${teamBadges}</td>
         <td style="font-size:11px;color:var(--text-dim);">${ev.owner}</td>
         <td style="font-size:11px;color:var(--text-dim);">${ev.cadence}</td>
         <td><div style="display:flex;gap:4px;">
@@ -2428,9 +2452,12 @@ $$;</pre></div>`;
   function calShowTip(e, idx) {
     const ev = calEvents[idx];
     const tip = document.getElementById('calTooltip');
-    const tc = TEAM_COLORS[ev.team] || '#888';
-    const teamMembers = TEAM_ROSTER[ev.team] || [];
-    tip.innerHTML = `<div class="tt-prop">${ev.property}</div><div class="tt-type">${ev.cadence} · ${ev.type}</div><div class="tt-task">${ev.task}</div>${ev.team ? `<div style="margin:4px 0;"><span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:${tc}20;color:${tc};text-transform:uppercase;letter-spacing:.3px;">${TEAM_ICONS[ev.team] || ''} ${ev.team}</span></div>` : ''}<div class="tt-owner">Owner: ${ev.owner}</div>${teamMembers.length ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;">Team: ${teamMembers.map(m=>m.name).join(', ')}</div>` : ''}`;
+    const teamBadges = ev.teams.map(t => {
+      const tc = TEAM_COLORS[t] || '#888';
+      return `<span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:${tc}20;color:${tc};text-transform:uppercase;letter-spacing:.3px;margin-right:4px;">${TEAM_ICONS[t] || ''} ${t}</span>`;
+    }).join('');
+    const allMembers = ev.teams.flatMap(t => TEAM_ROSTER[t] || []);
+    tip.innerHTML = `<div class="tt-prop">${ev.property || 'General'}</div><div class="tt-type">${ev.cadence}${ev.type ? ' · ' + ev.type : ''}</div><div class="tt-task">${ev.task}</div>${ev.notes ? `<div style="font-size:11px;color:var(--text-dim);margin:4px 0;white-space:pre-wrap;">${ev.notes}</div>` : ''}${teamBadges ? `<div style="margin:4px 0;">${teamBadges}</div>` : ''}<div class="tt-owner">Owner: ${ev.owner || '—'}</div>${allMembers.length ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;">Team: ${allMembers.map(m=>m.name).join(', ')}</div>` : ''}`;
     tip.style.left = Math.min(e.clientX + 12, window.innerWidth - 320) + 'px';
     tip.style.top = (e.clientY + 12) + 'px';
     tip.classList.add('show');
@@ -2483,26 +2510,64 @@ $$;</pre></div>`;
   // ══════════════════════════════════════
 
 
-  function calCrudCadenceChange() {
-    const isOneTime = document.getElementById('crudCadence').value === 'One-Time';
-    document.getElementById('crudDayRow').style.display = isOneTime ? 'none' : '';
-    document.getElementById('crudDueDateRow').style.display = isOneTime ? '' : 'none';
+  let crudSelectedCadence = 'Monthly';
+  let crudSelectedTeams = [];
+
+  function calCrudBuildCadencePicker(selected) {
+    crudSelectedCadence = selected;
+    const el = document.getElementById('crudCadencePicker');
+    const options = ['Monthly', 'Quarterly', 'Annual', 'One-Time'];
+    el.innerHTML = options.map(o => {
+      const on = o === selected;
+      return `<div class="cal-team-chip${on ? ' on' : ''}" style="font-size:12px;padding:5px 14px;cursor:pointer;${on ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calCrudSetCadence('${o}')">${o}</div>`;
+    }).join('');
+    // Show/hide contextual fields
+    document.getElementById('crudRecurringFields').style.display = selected === 'One-Time' ? 'none' : '';
+    document.getElementById('crudOneTimeFields').style.display = selected === 'One-Time' ? '' : 'none';
+  }
+
+  function calCrudSetCadence(c) {
+    calCrudBuildCadencePicker(c);
+  }
+
+  function calCrudBuildTeamPicker(selectedTeams) {
+    crudSelectedTeams = selectedTeams || [];
+    const el = document.getElementById('crudTeamPicker');
+    const teams = ['Accounting', 'Operations', 'Executive', 'Administrative'];
+    el.innerHTML = teams.map(t => {
+      const on = crudSelectedTeams.includes(t);
+      const tc = TEAM_COLORS[t];
+      return `<div class="cal-team-chip${on ? ' on' : ''}" style="font-size:12px;padding:5px 12px;cursor:pointer;${on ? `background:${tc};border-color:${tc};color:#fff;` : `border-color:${tc}40;`}" onclick="calCrudToggleTeam('${t}')">${TEAM_ICONS[t]} ${t}</div>`;
+    }).join('');
+  }
+
+  function calCrudToggleTeam(t) {
+    if (crudSelectedTeams.includes(t)) {
+      crudSelectedTeams = crudSelectedTeams.filter(x => x !== t);
+    } else {
+      crudSelectedTeams.push(t);
+    }
+    calCrudBuildTeamPicker(crudSelectedTeams);
+  }
+
+  function calCrudPopulateProps(selEl, selectedProp) {
+    const props = [...new Set(calEvents.map(e => e.property).filter(p => p && p !== 'General'))].sort();
+    selEl.innerHTML = '<option value="General">General (no property)</option>' + props.map(p => `<option value="${p}"${p === selectedProp ? ' selected' : ''}>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
+    if (selectedProp && selectedProp !== 'General') selEl.value = selectedProp;
   }
 
   function calCrudNew() {
     document.getElementById('crudModalTitle').textContent = 'Add Task';
     document.getElementById('crudId').value = '';
+    document.getElementById('crudDesc').value = '';
+    document.getElementById('crudNotes').value = '';
     document.getElementById('crudDay').value = '';
     document.getElementById('crudDueDate').value = '';
-    document.getElementById('crudCadence').value = 'Monthly';
     document.getElementById('crudType').value = '';
-    document.getElementById('crudDesc').value = '';
-    document.getElementById('crudTeam').value = '';
-    calCrudCadenceChange();
-    // Populate property dropdown
-    const propSel = document.getElementById('crudProperty');
-    const props = [...new Set(calEvents.map(e => e.property).filter(p => p && p !== 'General'))].sort();
-    propSel.innerHTML = '<option value="General">General</option>' + props.map(p => `<option>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
+    calCrudBuildCadencePicker('Monthly');
+    calCrudBuildTeamPicker([]);
+    calCrudPopulateProps(document.getElementById('crudProperty'), null);
+    calCrudPopulateProps(document.getElementById('crudPropertyOT'), null);
     document.getElementById('crudModal').style.display = '';
   }
 
@@ -2511,17 +2576,15 @@ $$;</pre></div>`;
     if (!ev) return;
     document.getElementById('crudModalTitle').textContent = 'Edit Task';
     document.getElementById('crudId').value = ev.supaId || '';
+    document.getElementById('crudDesc').value = ev.task;
+    document.getElementById('crudNotes').value = ev.notes || '';
     document.getElementById('crudDay').value = ev.day;
     document.getElementById('crudDueDate').value = ev.dueDate || '';
-    document.getElementById('crudCadence').value = ev.cadence;
     document.getElementById('crudType').value = ev.type;
-    document.getElementById('crudDesc').value = ev.task;
-    document.getElementById('crudTeam').value = ev.team || '';
-    calCrudCadenceChange();
-    const propSel = document.getElementById('crudProperty');
-    const props = [...new Set(calEvents.map(e => e.property).filter(p => p && p !== 'General'))].sort();
-    propSel.innerHTML = '<option value="General">General</option>' + props.map(p => `<option${p === ev.property ? ' selected' : ''}>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
-    if (ev.property && ev.property !== 'General') propSel.value = ev.property;
+    calCrudBuildCadencePicker(ev.cadence);
+    calCrudBuildTeamPicker([...ev.teams]);
+    calCrudPopulateProps(document.getElementById('crudProperty'), ev.property);
+    calCrudPopulateProps(document.getElementById('crudPropertyOT'), ev.property);
     document.getElementById('crudModal').style.display = '';
   }
 
@@ -2530,21 +2593,22 @@ $$;</pre></div>`;
   }
 
   async function calCrudSave() {
-    let prop = document.getElementById('crudProperty').value;
+    const isOneTime = crudSelectedCadence === 'One-Time';
+    const propEl = isOneTime ? document.getElementById('crudPropertyOT') : document.getElementById('crudProperty');
+    let prop = propEl.value;
     if (prop === '__new') {
       prop = prompt('Enter new property name:');
       if (!prop) return;
     }
-    const cadence = document.getElementById('crudCadence').value;
-    const isOneTime = cadence === 'One-Time';
     const dueDate = document.getElementById('crudDueDate').value;
     const body = {
       day_of_month: isOneTime ? (dueDate ? new Date(dueDate + 'T00:00:00').getDate() : 1) : (parseInt(document.getElementById('crudDay').value) || 1),
-      cadence: cadence,
-      property: prop,
-      payment_type: document.getElementById('crudType').value,
+      cadence: crudSelectedCadence,
+      property: prop || 'General',
+      payment_type: isOneTime ? '' : document.getElementById('crudType').value,
       description: document.getElementById('crudDesc').value,
-      team: document.getElementById('crudTeam').value || null,
+      notes: document.getElementById('crudNotes').value || null,
+      team: crudSelectedTeams.length ? crudSelectedTeams.join(', ') : null,
       due_date: isOneTime && dueDate ? dueDate : null,
     };
     const recordId = document.getElementById('crudId').value;
