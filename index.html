@@ -1086,14 +1086,17 @@
             <label>Type</label>
             <select id="crudType">
               <option value="">— Select —</option>
+              <option value="PM Fee">PM Fee</option>
+              <option value="AM Fee">AM Fee</option>
+              <option value="Investor Payment">Investor Payment</option>
               <option value="Lender Reporting">Lender Reporting</option>
               <option value="Owner Reporting">Owner Reporting</option>
               <option value="Mortgage">Mortgage</option>
               <option value="Insurance">Insurance</option>
               <option value="Tax">Tax</option>
-              <option value="Utility">Utility</option>
-              <option value="Payment">Payment</option>
+              <option value="Budget">Budget</option>
               <option value="A/R">A/R</option>
+              <option value="Reporting">Reporting</option>
               <option value="Other">Other</option>
             </select>
           </div>
@@ -2380,7 +2383,7 @@ $$;</pre></div>`;
     // Filter events for this month (by team + property + type) — exclude terminated
     let visible = calEvents.filter(e => e.status !== 'Terminated' && calFiltersActive.has(e.property));
     if (calSelectedTeam) visible = visible.filter(e => e.teams.includes(calSelectedTeam));
-    if (calSelectedProp) visible = visible.filter(e => e.property === calSelectedProp);
+    if (calSelectedProp) visible = visible.filter(e => e.property === calSelectedProp || e.property === 'ALL');
     if (calSelectedType) visible = visible.filter(e => e.type === calSelectedType);
     const monthly = visible.filter(e => e.cadence === 'Monthly');
     const quarterly = visible.filter(e => e.cadence === 'Quarterly' && [0,3,6,9].includes(m));
@@ -2437,7 +2440,7 @@ $$;</pre></div>`;
     // Terminated tasks (separate from allVisible which excludes them)
     let terminatedVisible = calEvents.filter(e => e.status === 'Terminated' && calFiltersActive.has(e.property));
     if (calSelectedTeam) terminatedVisible = terminatedVisible.filter(e => e.teams.includes(calSelectedTeam));
-    if (calSelectedProp) terminatedVisible = terminatedVisible.filter(e => e.property === calSelectedProp);
+    if (calSelectedProp) terminatedVisible = terminatedVisible.filter(e => e.property === calSelectedProp || e.property === 'ALL');
     if (calSelectedType) terminatedVisible = terminatedVisible.filter(e => e.type === calSelectedType);
     const termCount = terminatedVisible.length;
     // Apply cadence filter (default: recurring)
