@@ -2613,7 +2613,13 @@ function proceedToUploadReview() {
   lowConf.sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
   highConf.sort((a, b) => new Date(b.date) - new Date(a.date));
 
-  let html = '';
+  let html = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:var(--bg-card);border-radius:8px;border:1px solid var(--border);">
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text);">
+      <input type="checkbox" id="approveAllCheckbox" onchange="uploadApproveAll(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+      Approve All
+    </label>
+    <span style="font-size:11px;color:var(--text-dim);">Check items you've reviewed. Unchecked items will appear in the persistent Review panel after import.</span>
+  </div>`;
 
   // Low confidence section
   if (lowConf.length > 0) {
@@ -2688,7 +2694,11 @@ function renderUploadTxnRow(t) {
     </select>`;
   }
 
-  return `<div class="upload-txn-row" data-idx="${t.idx}">
+  const isChecked = uploadReviewChoices[t.idx]?.userApproved ? 'checked' : '';
+  return `<div class="upload-txn-row" data-idx="${t.idx}" style="position:relative;">
+    <label class="upload-approve-check" title="Mark as reviewed" style="display:flex;align-items:center;justify-content:center;min-width:28px;cursor:pointer;">
+      <input type="checkbox" ${isChecked} onchange="uploadApproveItem(${t.idx}, this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--accent);">
+    </label>
     <div class="txn-date">${dateStr}</div>
     <div class="txn-desc">${t.description.slice(0, 80)}${t.description.length > 80 ? '…' : ''}
       <div style="font-size:10px;color:var(--text-dim);margin-top:1px;">${t.acctName}</div>
@@ -2700,6 +2710,35 @@ function renderUploadTxnRow(t) {
     ${linkDropdownHtml}
     <div class="txn-amount ${amtClass}">${amtStr}</div>
   </div>`;
+}
+
+function uploadApproveItem(idx, checked) {
+  if (uploadReviewChoices[idx]) {
+    uploadReviewChoices[idx].userApproved = checked;
+  }
+  // Update the approve-all checkbox state
+  updateApproveAllCheckbox();
+}
+
+function uploadApproveAll(checked) {
+  uploadStagedTxns.forEach((_, idx) => {
+    if (uploadReviewChoices[idx]) {
+      uploadReviewChoices[idx].userApproved = checked;
+    }
+  });
+  // Update all individual checkboxes
+  document.querySelectorAll('.upload-approve-check input[type="checkbox"]').forEach(cb => {
+    cb.checked = checked;
+  });
+}
+
+function updateApproveAllCheckbox() {
+  const allBtn = document.getElementById('approveAllCheckbox');
+  if (!allBtn) return;
+  const total = Object.keys(uploadReviewChoices).length;
+  const approved = Object.values(uploadReviewChoices).filter(c => c.userApproved).length;
+  allBtn.checked = approved === total;
+  allBtn.indeterminate = approved > 0 && approved < total;
 }
 
 function uploadChangeCategory(idx, newCategory, selectEl) {
@@ -2786,8 +2825,8 @@ async function confirmImport() {
     row.property_id = choice.property_id || null;
     row.liability_id = choice.liability_id || null;
     row.category_name = null;
-    // Mark as reviewed if high confidence or user explicitly changed the category
-    row.reviewed = (choice.confidence === 'high' || choice.userModified) ? true : false;
+    // Mark as reviewed if: high confidence, user changed category, or user explicitly approved
+    row.reviewed = (choice.confidence === 'high' || choice.userModified || choice.userApproved) ? true : false;
     return row;
   });
 
@@ -4481,7 +4520,7 @@ const _exposeFns = {
   linkToInvestment, linkToLiability, linkToLoan, linkToPropOrInv,
   onPropertyLinkChange, reviewChangeCategory, reviewLinkInvestment,
   reviewLinkLiability, reviewLinkLoan, reviewLinkPropOrInv,
-  updateLoanName, uploadChangeCategory, uploadLinkInvestment,
+  updateLoanName, uploadApproveItem, uploadApproveAll, uploadChangeCategory, uploadLinkInvestment,
   uploadLinkLiability, uploadLinkProperty,
   saveAssetValue, editAssetValue, editCapRate, editDistributed,
   openEditInvestment, openEditLiability
