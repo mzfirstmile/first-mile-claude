@@ -2236,6 +2236,7 @@ $$;</pre></div>`;
   let calFiltersActive = new Set(), calInited = false, calSelectedProp = null;
   let calSelectedTeam = null;
   let calShowOneTime = false;
+  let calShowTerminated = false;
 
   function calGetColor(p) {
     if (!calColors[p]) { calColors[p] = CAL_PALETTE[calColorIdx % CAL_PALETTE.length]; calColorIdx++; }
@@ -2261,6 +2262,8 @@ $$;</pre></div>`;
         status: rec.status || '',
         completedBy: rec.completed_by || '',
         completedDate: rec.completed_date || '',
+        terminatedAt: rec.terminated_at || '',
+        terminatedReason: rec.terminated_reason || '',
         team: rec.team || '',
         teams: (rec.team || '').split(',').map(t => t.trim()).filter(Boolean),
       }));
@@ -2343,8 +2346,8 @@ $$;</pre></div>`;
     const today = new Date();
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === m;
 
-    // Filter events for this month (by team + property)
-    let visible = calEvents.filter(e => calFiltersActive.has(e.property));
+    // Filter events for this month (by team + property) — exclude terminated
+    let visible = calEvents.filter(e => e.status !== 'Terminated' && calFiltersActive.has(e.property));
     if (calSelectedTeam) visible = visible.filter(e => e.teams.includes(calSelectedTeam));
     if (calSelectedProp) visible = visible.filter(e => e.property === calSelectedProp);
     const monthly = visible.filter(e => e.cadence === 'Monthly');
@@ -2399,18 +2402,30 @@ $$;</pre></div>`;
 
     // Task list table below calendar
     const tbl = document.getElementById('calTaskTable');
+    // Terminated tasks (separate from allVisible which excludes them)
+    let terminatedVisible = calEvents.filter(e => e.status === 'Terminated' && calFiltersActive.has(e.property));
+    if (calSelectedTeam) terminatedVisible = terminatedVisible.filter(e => e.teams.includes(calSelectedTeam));
+    if (calSelectedProp) terminatedVisible = terminatedVisible.filter(e => e.property === calSelectedProp);
+    const termCount = terminatedVisible.length;
     // Apply cadence filter (default: recurring)
-    const cadenceFiltered = calShowOneTime
-      ? allVisible.filter(e => e.cadence === 'One-Time')
-      : allVisible.filter(e => e.cadence !== 'One-Time');
+    let cadenceFiltered;
+    if (calShowTerminated) {
+      cadenceFiltered = terminatedVisible;
+    } else if (calShowOneTime) {
+      cadenceFiltered = allVisible.filter(e => e.cadence === 'One-Time');
+    } else {
+      cadenceFiltered = allVisible.filter(e => e.cadence !== 'One-Time');
+    }
     const sortedTasks = cadenceFiltered.slice().sort((a, b) => a.day - b.day || a.property.localeCompare(b.property));
     const recCount = allVisible.filter(e => e.cadence !== 'One-Time').length;
     const otCount = allVisible.filter(e => e.cadence === 'One-Time').length;
+    const activeTab = calShowTerminated ? 'term' : (calShowOneTime ? 'ot' : 'rec');
     let tblHtml = `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface2);">
       <div style="display:flex;align-items:center;gap:8px;">
         <span style="font-size:12px;font-weight:600;color:var(--text);">Tasks</span>
-        <div class="cal-team-chip${!calShowOneTime ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${!calShowOneTime ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calShowOneTime=false;calRender();">Recurring <span class="team-count">${recCount}</span></div>
-        <div class="cal-team-chip${calShowOneTime ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${calShowOneTime ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calShowOneTime=true;calRender();">One-Time <span class="team-count">${otCount}</span></div>
+        <div class="cal-team-chip${activeTab==='rec' ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${activeTab==='rec' ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calShowOneTime=false;calShowTerminated=false;calRender();">Recurring <span class="team-count">${recCount}</span></div>
+        <div class="cal-team-chip${activeTab==='ot' ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${activeTab==='ot' ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calShowOneTime=true;calShowTerminated=false;calRender();">One-Time <span class="team-count">${otCount}</span></div>
+        ${termCount > 0 ? `<div class="cal-team-chip${activeTab==='term' ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${activeTab==='term' ? 'background:#e74c3c;border-color:#e74c3c;color:#fff;' : 'color:#e74c3c;border-color:#e74c3c33;'}" onclick="calShowTerminated=true;calRender();">Terminated <span class="team-count">${termCount}</span></div>` : ''}
       </div>
       <button class="cal-btn accent" style="font-size:11px;padding:4px 12px;" onclick="calCrudNew()">+ Add Task</button>
     </div>`;
@@ -2423,23 +2438,25 @@ $$;</pre></div>`;
     }
     sortedTasks.forEach(ev => {
       const isDone = ev.status === 'Done';
+      const isTerm = ev.status === 'Terminated';
       const teamBadges = ev.teams.map(t => `<span class="cal-tbl-team" style="background:${TEAM_COLORS[t]||'#888'}15;color:${TEAM_COLORS[t]||'#888'}">${t}</span>`).join(' ') || '<span style="color:var(--text-dim);font-size:10px;">—</span>';
       const dayDisplay = ev.cadence === 'One-Time' && ev.dueDate
         ? new Date(ev.dueDate + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
         : ev.day;
-      tblHtml += `<tr class="${isDone ? 'cal-tbl-done' : ''}">
-        <td class="cal-tbl-status"><div class="cal-tbl-cb${isDone ? ' on' : ''}" onclick="calToggle(${ev.idx})">${isDone ? '✓' : ''}</div></td>
+      const termNote = isTerm ? `<div style="font-size:10px;color:#e74c3c;margin-top:2px;">Terminated ${ev.terminatedAt || ''}${ev.terminatedReason ? ' — ' + ev.terminatedReason : ''}</div>` : '';
+      tblHtml += `<tr class="${isDone ? 'cal-tbl-done' : ''}${isTerm ? ' cal-tbl-done' : ''}" style="${isTerm ? 'opacity:0.6;' : ''}">
+        <td class="cal-tbl-status">${isTerm ? '<span style="color:#e74c3c;font-size:10px;">⏹</span>' : `<div class="cal-tbl-cb${isDone ? ' on' : ''}" onclick="calToggle(${ev.idx})">${isDone ? '✓' : ''}</div>`}</td>
         <td class="cal-tbl-day">${dayDisplay}</td>
         <td style="color:${ev.property ? calGetColor(ev.property) : 'var(--text-dim)'};font-weight:600;font-size:11px;">${ev.property || 'General'}</td>
-        <td>${ev.task}${ev.notes ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">${ev.notes}</div>` : ''}</td>
+        <td>${ev.task}${ev.notes ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">${ev.notes}</div>` : ''}${termNote}</td>
         <td style="font-size:11px;">${ev.type}</td>
         <td>${teamBadges}</td>
         <td style="font-size:11px;color:var(--text-dim);">${ev.owner}</td>
         <td style="font-size:11px;color:var(--text-dim);">${ev.cadence}</td>
-        <td><div style="display:flex;gap:4px;">
+        <td>${isTerm ? '' : `<div style="display:flex;gap:4px;">
           <button style="font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--text);" onclick="calCrudEdit(${ev.idx})">✎</button>
-          <button style="font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:#e74c3c;" onclick="calCrudDelete(${ev.idx})">✕</button>
-        </div></td>
+          <button style="font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:#e74c3c;" title="Terminate" onclick="calCrudTerminate(${ev.idx})">⏹</button>
+        </div>`}</td>
       </tr>`;
     });
     tblHtml += '</tbody></table>';
@@ -2670,20 +2687,22 @@ $$;</pre></div>`;
     }
   }
 
-  async function calCrudDelete(idx) {
+  async function calCrudTerminate(idx) {
     const ev = calEvents[idx];
     if (!ev || !ev.supaId) return;
-    if (!confirm(`Delete task: "${ev.task || ev.property + ' - ' + ev.type}"?`)) return;
+    const reason = prompt(`Terminate task: "${ev.task || ev.property + ' - ' + ev.type}"\n\nReason (e.g. property sold, agreement ended):`);
+    if (reason === null) return; // cancelled
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/calendar_tasks?id=eq.${ev.supaId}`, {
-        method: 'DELETE',
-        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Terminated', terminated_at: new Date().toISOString().split('T')[0], terminated_reason: reason || null })
       });
       await calFetchData();
       calBuildFilters();
       calRender();
     } catch (e) {
-      alert('Delete failed: ' + e.message);
+      alert('Terminate failed: ' + e.message);
     }
   }
 
