@@ -79,8 +79,9 @@ function daysInMonth(year: number, month: number): number {
   return new Date(year, month, 0).getDate();
 }
 
-function isQuarterEnd(month: number): boolean {
-  return [3, 6, 9, 12].includes(month);
+function isQuarterStart(month: number): boolean {
+  // Quarterly tasks show in Jan(1), Apr(4), Jul(7), Oct(10) — first month of each quarter
+  return [1, 4, 7, 10].includes(month);
 }
 
 interface Task {
@@ -117,7 +118,7 @@ function taskIsDueOnDate(task: Task, year: number, month: number, day: number): 
   if (effectiveDay !== day) return false;
 
   if (task.cadence === "Monthly") return true;
-  if (task.cadence === "Quarterly") return isQuarterEnd(month);
+  if (task.cadence === "Quarterly") return isQuarterStart(month);
   if (task.cadence === "Annual") return task.due_month ? task.due_month === month : false;
 
   return false;
@@ -139,14 +140,39 @@ function buildEmailHtml(
     ? `You have <strong>${tasks.length}</strong> task${tasks.length > 1 ? "s" : ""} due tomorrow. Please make sure these are completed on time.`
     : `The following <strong>${tasks.length}</strong> task${tasks.length > 1 ? "s" : ""} ${tasks.length > 1 ? "were" : "was"} due and ${tasks.length > 1 ? "have" : "has"} not been marked as completed yet. Please complete ${tasks.length > 1 ? "them" : "it"} ASAP and mark as done.`;
 
-  let taskRows = "";
+  // Group tasks by property
+  const grouped: Record<string, Task[]> = {};
   for (const t of tasks) {
-    taskRows += `
-      <tr>
-        <td style="padding:10px 14px; border-bottom:1px solid #eee; font-size:14px; font-weight:600;">${t.property}</td>
-        <td style="padding:10px 14px; border-bottom:1px solid #eee; font-size:14px;">${t.payment_type || "—"}</td>
-        <td style="padding:10px 14px; border-bottom:1px solid #eee; font-size:14px;">${t.description}</td>
+    const p = t.property;
+    if (!grouped[p]) grouped[p] = [];
+    grouped[p].push(t);
+  }
+  const propCount = Object.keys(grouped).length;
+
+  let taskSections = "";
+  for (const [prop, propTasks] of Object.entries(grouped).sort((a, b) => a[0].localeCompare(b[0]))) {
+    let rows = "";
+    for (const t of propTasks) {
+      rows += `<tr>
+        <td style="padding:8px 14px; border-bottom:1px solid #f0f0f0; font-size:13px; color:#6b7280;">${t.payment_type || "—"}</td>
+        <td style="padding:8px 14px; border-bottom:1px solid #f0f0f0; font-size:13px;">${t.description}</td>
       </tr>`;
+    }
+    taskSections += `
+    <div style="margin-bottom:16px;">
+      <div style="padding:8px 14px; background:#f8fafc; border:1px solid #e2e8f0; border-bottom:none; border-radius:8px 8px 0 0; font-weight:700; font-size:14px; color:#1e293b;">
+        ${prop === "ALL" ? "🏢 All Properties" : prop}
+      </div>
+      <table style="width:100%; border-collapse:collapse; background:#fff; border:1px solid #e2e8f0; border-top:none; border-radius:0 0 8px 8px; overflow:hidden;">
+        <thead>
+          <tr style="background:#f9fafb;">
+            <th style="padding:6px 14px; text-align:left; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:0.5px; width:140px;">Type</th>
+            <th style="padding:6px 14px; text-align:left; font-size:11px; font-weight:600; color:#9ca3af; text-transform:uppercase; letter-spacing:0.5px;">Task</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
   }
 
   return `
@@ -156,20 +182,9 @@ function buildEmailHtml(
   </div>
   <div style="padding:20px; background:#f9fafb; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 10px 10px;">
     <p style="font-size:14px; color:#374151; margin:0 0 16px 0;">Hi ${recipientName.split(" ")[0]},</p>
-    <p style="font-size:14px; color:#374151; margin:0 0 16px 0;">${introText}</p>
+    <p style="font-size:14px; color:#374151; margin:0 0 16px 0;">${introText.replace("tomorrow", `tomorrow across <strong>${propCount}</strong> properties`)}</p>
 
-    <table style="width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-      <thead>
-        <tr style="background:#f3f4f6;">
-          <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px;">Property</th>
-          <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px;">Type</th>
-          <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:600; color:#6b7280; text-transform:uppercase; letter-spacing:0.5px;">Task</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${taskRows}
-      </tbody>
-    </table>
+    ${taskSections}
 
     <div style="margin-top:20px; padding:14px 16px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;">
       <p style="font-size:13px; color:#1e40af; margin:0 0 8px 0; font-weight:600;">✅ How to mark tasks as completed:</p>

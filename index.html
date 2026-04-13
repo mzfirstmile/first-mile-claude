@@ -1383,6 +1383,11 @@
     // Hide login overlay
     document.getElementById('loginOverlay').classList.add('hidden');
     setTimeout(() => { document.getElementById('loginOverlay').style.display = 'none'; }, 400);
+
+    // Re-init current view now that auth is ready (fixes direct-link loading issue)
+    if (currentView === 'calendar') { calInited = false; calInit(); }
+    else if (currentView === 'financials') fbInit();
+    else if (currentView === 'exec2' && typeof exec2Init === 'function') exec2Init();
   }
 
   async function checkUserAccess(email, displayName) {
@@ -2557,7 +2562,6 @@ $$;</pre></div>`;
 
   async function calInit() {
     if (calInited) return;
-    calInited = true;
     // Load team roster from app_users (supports comma-separated multi-team)
     try {
       const users = await supaFetch('app_users', '?select=display_name,email,team&team=not.is.null');
@@ -2584,7 +2588,7 @@ $$;</pre></div>`;
       }
     }
     const ok = await calFetchData();
-    if (ok) { calBuildFilters(); calRender(); }
+    if (ok) { calInited = true; calBuildFilters(); calRender(); }
     else {
       document.getElementById('calGrid').innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-dim);">Could not load calendar data. Check Supabase connection.</div>';
     }
