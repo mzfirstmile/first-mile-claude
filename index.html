@@ -2349,7 +2349,7 @@ $$;</pre></div>`;
 
     for (let d = 1; d <= daysInMonth; d++) {
       const isToday = isCurrentMonth && d === today.getDate();
-      const dayEvents = [...monthly, ...quarterly, ...annual, ...oneTime].filter(e => e.day === d);
+      const dayEvents = [...monthly, ...quarterly, ...annual, ...oneTime].filter(e => e.day === d || (d === daysInMonth && e.day > daysInMonth));
       html += `<div class="cal-cell${isToday ? ' today' : ''}">`;
       html += `<div class="dnum">${d}</div>`;
       dayEvents.forEach(ev => {
