@@ -1012,7 +1012,6 @@
       </div>
       <div class="cal-right">
         <button class="cal-btn" onclick="calRefresh()">↻ Refresh</button>
-        <button class="cal-btn accent" onclick="calToggleManage()" id="calManageBtn">✎ Manage Data</button>
       </div>
     </div>
 
@@ -1032,63 +1031,42 @@
       <div class="cal-tooltip" id="calTooltip"></div>
     </div>
 
-    <!-- Manage data table (hidden by default) -->
-    <div id="calManagePane" style="display:none;">
-      <div class="crud-toolbar">
-        <button class="cal-btn accent" onclick="calCrudNew()">+ Add Task</button>
-        <span class="crud-count" id="crudCount"></span>
-      </div>
-      <div class="crud-table-wrap">
-        <table class="crud-table">
-          <thead>
-            <tr>
-              <th style="width:60px">Day</th>
-              <th style="width:90px">Cadence</th>
-              <th>Property</th>
-              <th>Payment Type</th>
-              <th>Description</th>
-              <th style="width:130px">Team</th>
-              <th style="width:80px">Status</th>
-              <th style="width:90px">Actions</th>
-            </tr>
-          </thead>
-          <tbody id="crudBody"></tbody>
-        </table>
-      </div>
-
-      <!-- Inline edit modal -->
-      <div class="crud-modal-bg" id="crudModal" style="display:none;" onclick="if(event.target===this)calCrudClose()">
-        <div class="crud-modal">
-          <h3 id="crudModalTitle">Add Task</h3>
-          <input type="hidden" id="crudId">
-          <div class="crud-row">
-            <label>Day of Month</label>
-            <input type="number" id="crudDay" min="1" max="31" placeholder="1-31">
-          </div>
-          <div class="crud-row">
-            <label>Cadence</label>
-            <select id="crudCadence"><option>Monthly</option><option>Quarterly</option><option>Annual</option></select>
-          </div>
-          <div class="crud-row">
-            <label>Property</label>
-            <select id="crudProperty"></select>
-          </div>
-          <div class="crud-row">
-            <label>Payment Type</label>
-            <input type="text" id="crudType" placeholder="e.g. Mortgage, Insurance, Tax">
-          </div>
-          <div class="crud-row">
-            <label>Description</label>
-            <input type="text" id="crudDesc" placeholder="Task description">
-          </div>
-          <div class="crud-row">
-            <label>Team</label>
-            <select id="crudTeam"><option value="">— Select —</option><option>Accounting</option><option>Operations</option><option>Executive</option><option>Administrative</option></select>
-          </div>
-          <div class="crud-actions">
-            <button class="cal-btn" onclick="calCrudClose()">Cancel</button>
-            <button class="cal-btn accent" onclick="calCrudSave()">Save</button>
-          </div>
+    <!-- Task edit modal -->
+    <div class="crud-modal-bg" id="crudModal" style="display:none;" onclick="if(event.target===this)calCrudClose()">
+      <div class="crud-modal">
+        <h3 id="crudModalTitle">Add Task</h3>
+        <input type="hidden" id="crudId">
+        <div class="crud-row" id="crudDayRow">
+          <label>Day of Month</label>
+          <input type="number" id="crudDay" min="1" max="31" placeholder="1-31">
+        </div>
+        <div class="crud-row" id="crudDueDateRow" style="display:none;">
+          <label>Due Date</label>
+          <input type="date" id="crudDueDate">
+        </div>
+        <div class="crud-row">
+          <label>Cadence</label>
+          <select id="crudCadence" onchange="calCrudCadenceChange()"><option>Monthly</option><option>Quarterly</option><option>Annual</option><option>One-Time</option></select>
+        </div>
+        <div class="crud-row">
+          <label>Property</label>
+          <select id="crudProperty"></select>
+        </div>
+        <div class="crud-row">
+          <label>Payment Type</label>
+          <input type="text" id="crudType" placeholder="e.g. Mortgage, Insurance, Tax">
+        </div>
+        <div class="crud-row">
+          <label>Description</label>
+          <input type="text" id="crudDesc" placeholder="Task description">
+        </div>
+        <div class="crud-row">
+          <label>Team</label>
+          <select id="crudTeam"><option value="">— Select —</option><option>Accounting</option><option>Operations</option><option>Executive</option><option>Administrative</option></select>
+        </div>
+        <div class="crud-actions">
+          <button class="cal-btn" onclick="calCrudClose()">Cancel</button>
+          <button class="cal-btn accent" onclick="calCrudSave()">Save</button>
         </div>
       </div>
     </div>
@@ -2211,6 +2189,7 @@ $$;</pre></div>`;
   let calEvents = [], calColors = {}, calColorIdx = 0, calMonth = new Date().getMonth();
   let calFiltersActive = new Set(), calInited = false, calSelectedProp = null;
   let calSelectedTeam = null;
+  let calShowOneTime = false;
 
   function calGetColor(p) {
     if (!calColors[p]) { calColors[p] = CAL_PALETTE[calColorIdx % CAL_PALETTE.length]; calColorIdx++; }
@@ -2226,6 +2205,7 @@ $$;</pre></div>`;
         supaId: rec.id,
         day: rec.day_of_month,
         cadence: rec.cadence || 'Monthly',
+        dueDate: rec.due_date || '',
         property: rec.property || '',
         type: rec.payment_type || '',
         task: rec.description || '',
@@ -2320,6 +2300,11 @@ $$;</pre></div>`;
     if (calSelectedProp) visible = visible.filter(e => e.property === calSelectedProp);
     const monthly = visible.filter(e => e.cadence === 'Monthly');
     const quarterly = visible.filter(e => e.cadence === 'Quarterly' && [0,3,6,9].includes(m));
+    const annual = visible.filter(e => e.cadence === 'Annual');
+    const oneTime = visible.filter(e => e.cadence === 'One-Time' && e.dueDate).filter(e => {
+      const d = new Date(e.dueDate + 'T00:00:00');
+      return d.getMonth() === m && d.getFullYear() === year;
+    });
 
     let html = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="cal-hdr">${d}</div>`).join('');
 
@@ -2328,7 +2313,7 @@ $$;</pre></div>`;
 
     for (let d = 1; d <= daysInMonth; d++) {
       const isToday = isCurrentMonth && d === today.getDate();
-      const dayEvents = [...monthly, ...quarterly].filter(e => e.day === d);
+      const dayEvents = [...monthly, ...quarterly, ...annual, ...oneTime].filter(e => e.day === d);
       html += `<div class="cal-cell${isToday ? ' today' : ''}">`;
       html += `<div class="dnum">${d}</div>`;
       dayEvents.forEach(ev => {
@@ -2354,7 +2339,7 @@ $$;</pre></div>`;
     document.getElementById('calMonthLabel').textContent = `${CAL_MONTHS[m]} ${year}`;
 
     // Progress
-    const allVisible = [...monthly, ...quarterly];
+    const allVisible = [...monthly, ...quarterly, ...annual, ...oneTime];
     const done = allVisible.filter(e => e.status === 'Done').length;
     const total = allVisible.length;
     const pct = total ? Math.round((done / total) * 100) : 0;
@@ -2365,23 +2350,50 @@ $$;</pre></div>`;
 
     // Task list table below calendar
     const tbl = document.getElementById('calTaskTable');
-    const sortedTasks = allVisible.slice().sort((a, b) => a.day - b.day || a.property.localeCompare(b.property));
-    let tblHtml = `<table><thead><tr>
+    // Apply cadence filter (default: recurring)
+    const cadenceFiltered = calShowOneTime
+      ? allVisible.filter(e => e.cadence === 'One-Time')
+      : allVisible.filter(e => e.cadence !== 'One-Time');
+    const sortedTasks = cadenceFiltered.slice().sort((a, b) => a.day - b.day || a.property.localeCompare(b.property));
+    const recCount = allVisible.filter(e => e.cadence !== 'One-Time').length;
+    const otCount = allVisible.filter(e => e.cadence === 'One-Time').length;
+    let tblHtml = `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--surface2);">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:12px;font-weight:600;color:var(--text);">Tasks</span>
+        <div class="cal-team-chip${!calShowOneTime ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${!calShowOneTime ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calShowOneTime=false;calRender();">Recurring <span class="team-count">${recCount}</span></div>
+        <div class="cal-team-chip${calShowOneTime ? ' on' : ''}" style="font-size:11px;padding:3px 10px;${calShowOneTime ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calShowOneTime=true;calRender();">One-Time <span class="team-count">${otCount}</span></div>
+      </div>
+      <button class="cal-btn accent" style="font-size:11px;padding:4px 12px;" onclick="calCrudNew()">+ Add Task</button>
+    </div>`;
+    tblHtml += `<table><thead><tr>
       <th class="cal-tbl-status"></th>
-      <th>Day</th><th>Property</th><th>Task</th><th>Type</th><th>Team</th><th>Owner</th><th>Cadence</th>
+      <th>${calShowOneTime ? 'Due Date' : 'Day'}</th><th>Property</th><th>Task</th><th>Type</th><th>Team</th><th>Owner</th><th>Cadence</th><th style="width:60px;"></th>
     </tr></thead><tbody>`;
+    if (sortedTasks.length === 0) {
+      tblHtml += `<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text-dim);font-size:12px;">No ${calShowOneTime ? 'one-time' : 'recurring'} tasks for this view</td></tr>`;
+    }
     sortedTasks.forEach(ev => {
       const isDone = ev.status === 'Done';
       const tc = TEAM_COLORS[ev.team] || '#888';
+      const teamOpts = ['', 'Accounting', 'Operations', 'Executive', 'Administrative'].map(t =>
+        `<option value="${t}"${t === (ev.team||'') ? ' selected' : ''}>${t ? (TEAM_ICONS[t]||'') + ' ' + t : '—'}</option>`
+      ).join('');
+      const dayDisplay = ev.cadence === 'One-Time' && ev.dueDate
+        ? new Date(ev.dueDate + 'T00:00:00').toLocaleDateString('en-US', {month:'short', day:'numeric', year:'numeric'})
+        : ev.day;
       tblHtml += `<tr class="${isDone ? 'cal-tbl-done' : ''}">
         <td class="cal-tbl-status"><div class="cal-tbl-cb${isDone ? ' on' : ''}" onclick="calToggle(${ev.idx})">${isDone ? '✓' : ''}</div></td>
-        <td class="cal-tbl-day">${ev.day}</td>
-        <td style="color:${calGetColor(ev.property)};font-weight:600;">${ev.property}</td>
+        <td class="cal-tbl-day">${dayDisplay}</td>
+        <td style="color:${calGetColor(ev.property)};font-weight:600;font-size:11px;">${ev.property}</td>
         <td>${ev.task}</td>
         <td style="font-size:11px;">${ev.type}</td>
-        <td>${ev.team ? `<span class="cal-tbl-team" style="background:${tc}15;color:${tc}">${ev.team}</span>` : ''}</td>
+        <td><select style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:var(--text);cursor:pointer;" onchange="calCrudInlineTeam(${ev.idx},this.value)">${teamOpts}</select></td>
         <td style="font-size:11px;color:var(--text-dim);">${ev.owner}</td>
         <td style="font-size:11px;color:var(--text-dim);">${ev.cadence}</td>
+        <td><div style="display:flex;gap:4px;">
+          <button style="font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--text);" onclick="calCrudEdit(${ev.idx})">✎</button>
+          <button style="font-size:10px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;background:var(--surface);cursor:pointer;color:#e74c3c;" onclick="calCrudDelete(${ev.idx})">✕</button>
+        </div></td>
       </tr>`;
     });
     tblHtml += '</tbody></table>';
@@ -2469,50 +2481,24 @@ $$;</pre></div>`;
   // ══════════════════════════════════════
   // ── CRUD MANAGE DATA ──
   // ══════════════════════════════════════
-  let calManageOpen = false;
 
-  function calToggleManage() {
-    calManageOpen = !calManageOpen;
-    document.getElementById('calCalendarPane').style.display = calManageOpen ? 'none' : '';
-    document.getElementById('calManagePane').style.display = calManageOpen ? '' : 'none';
-    document.getElementById('calManageBtn').innerHTML = calManageOpen ? '← Back to Calendar' : '✎ Manage Data';
-    document.getElementById('calManageBtn').className = calManageOpen ? 'cal-btn' : 'cal-btn accent';
-    if (calManageOpen) calCrudRender();
-  }
 
-  function calCrudRender() {
-    const tbody = document.getElementById('crudBody');
-    const sorted = [...calEvents].sort((a, b) => a.day - b.day || a.property.localeCompare(b.property));
-    document.getElementById('crudCount').textContent = `${sorted.length} tasks`;
-    tbody.innerHTML = sorted.map(ev => {
-      const isDone = ev.status === 'Done';
-      const teamOpts = ['', 'Accounting', 'Operations', 'Executive', 'Administrative'].map(t =>
-        `<option value="${t}"${t === (ev.team||'') ? ' selected' : ''}>${t ? (TEAM_ICONS[t]||'') + ' ' + t : '— None —'}</option>`
-      ).join('');
-      return `<tr>
-        <td style="font-weight:600;color:var(--accent);">${ev.day}</td>
-        <td>${ev.cadence}</td>
-        <td style="font-weight:600;">${ev.property}</td>
-        <td>${ev.type}</td>
-        <td>${ev.task}</td>
-        <td><select style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);cursor:pointer;" onchange="calCrudInlineTeam(${ev.idx},this.value)">${teamOpts}</select></td>
-        <td><span class="crud-tag ${isDone ? 'done' : 'open'}">${isDone ? 'Done' : 'Open'}</span></td>
-        <td><div class="crud-act">
-          <button onclick="calCrudEdit(${ev.idx})">Edit</button>
-          <button class="del" onclick="calCrudDelete(${ev.idx})">Del</button>
-        </div></td>
-      </tr>`;
-    }).join('');
+  function calCrudCadenceChange() {
+    const isOneTime = document.getElementById('crudCadence').value === 'One-Time';
+    document.getElementById('crudDayRow').style.display = isOneTime ? 'none' : '';
+    document.getElementById('crudDueDateRow').style.display = isOneTime ? '' : 'none';
   }
 
   function calCrudNew() {
     document.getElementById('crudModalTitle').textContent = 'Add Task';
     document.getElementById('crudId').value = '';
     document.getElementById('crudDay').value = '';
+    document.getElementById('crudDueDate').value = '';
     document.getElementById('crudCadence').value = 'Monthly';
     document.getElementById('crudType').value = '';
     document.getElementById('crudDesc').value = '';
     document.getElementById('crudTeam').value = '';
+    calCrudCadenceChange();
     // Populate property dropdown
     const propSel = document.getElementById('crudProperty');
     const props = [...new Set(calEvents.map(e => e.property))].sort();
@@ -2526,10 +2512,12 @@ $$;</pre></div>`;
     document.getElementById('crudModalTitle').textContent = 'Edit Task';
     document.getElementById('crudId').value = ev.supaId || '';
     document.getElementById('crudDay').value = ev.day;
+    document.getElementById('crudDueDate').value = ev.dueDate || '';
     document.getElementById('crudCadence').value = ev.cadence;
     document.getElementById('crudType').value = ev.type;
     document.getElementById('crudDesc').value = ev.task;
     document.getElementById('crudTeam').value = ev.team || '';
+    calCrudCadenceChange();
     const propSel = document.getElementById('crudProperty');
     const props = [...new Set(calEvents.map(e => e.property))].sort();
     propSel.innerHTML = props.map(p => `<option${p === ev.property ? ' selected' : ''}>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
@@ -2546,13 +2534,17 @@ $$;</pre></div>`;
       prop = prompt('Enter new property name:');
       if (!prop) return;
     }
+    const cadence = document.getElementById('crudCadence').value;
+    const isOneTime = cadence === 'One-Time';
+    const dueDate = document.getElementById('crudDueDate').value;
     const body = {
-      day_of_month: parseInt(document.getElementById('crudDay').value) || 1,
-      cadence: document.getElementById('crudCadence').value,
+      day_of_month: isOneTime ? (dueDate ? new Date(dueDate + 'T00:00:00').getDate() : 1) : (parseInt(document.getElementById('crudDay').value) || 1),
+      cadence: cadence,
       property: prop,
       payment_type: document.getElementById('crudType').value,
       description: document.getElementById('crudDesc').value,
       team: document.getElementById('crudTeam').value || null,
+      due_date: isOneTime && dueDate ? dueDate : null,
     };
     const recordId = document.getElementById('crudId').value;
     try {
@@ -2575,7 +2567,7 @@ $$;</pre></div>`;
       // Refresh data
       await calFetchData();
       calBuildFilters();
-      calCrudRender();
+      calRender();
     } catch (e) {
       alert('Save failed: ' + e.message);
     }
@@ -2592,7 +2584,7 @@ $$;</pre></div>`;
       });
       await calFetchData();
       calBuildFilters();
-      calCrudRender();
+      calRender();
     } catch (e) {
       alert('Delete failed: ' + e.message);
     }
