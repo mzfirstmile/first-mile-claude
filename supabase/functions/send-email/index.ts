@@ -51,7 +51,7 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { to, cc, subject, body, bodyType, sentBy, attachments } = await req.json();
+    const { to, cc, bcc, subject, body, bodyType, sentBy, attachments, replyToGraphId } = await req.json();
 
     // Validate required fields
     if (!to || !subject || !body) {
@@ -76,6 +76,71 @@ serve(async (req: Request) => {
         )
       : [];
 
+    const bccRecipients = bcc
+      ? (Array.isArray(bcc) ? bcc : [bcc]).map((r: any) =>
+          typeof r === "string"
+            ? { emailAddress: { address: r } }
+            : { emailAddress: { address: r.email, name: r.name } }
+        )
+      : [];
+
+    const token = await getGraphToken();
+
+    // If replyToGraphId is provided, use Graph /reply endpoint for proper threading
+    if (replyToGraphId) {
+      const replyPayload: any = {
+        message: {
+          body: {
+            contentType: bodyType === "text" ? "Text" : "HTML",
+            content: body,
+          },
+        },
+      };
+      if (ccRecipients.length > 0) replyPayload.message.ccRecipients = ccRecipients;
+      if (bccRecipients.length > 0) replyPayload.message.bccRecipients = bccRecipients;
+      if (attachments && Array.isArray(attachments) && attachments.length > 0) {
+        replyPayload.message.attachments = attachments.map((a: any) => ({
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name: a.name,
+          contentType: a.contentType || "application/octet-stream",
+          contentBytes: a.contentBytes,
+        }));
+      }
+
+      const replyUrl = `https://graph.microsoft.com/v1.0/users/aiassistant@firstmilecap.com/messages/${replyToGraphId}/reply`;
+      const graphRes = await fetch(replyUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(replyPayload),
+      });
+
+      if (!graphRes.ok) {
+        const err = await graphRes.text();
+        throw new Error(`Graph reply error: ${graphRes.status} ${err}`);
+      }
+
+      // Log and return (skip sendMail path)
+      const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+      const supabaseKey = Deno.env.get("SB_SERVICE_KEY")!;
+      const sb = createClient(supabaseUrl, supabaseKey);
+      await sb.from("email_sent_log").insert({
+        to_addresses: toRecipients.map((r: any) => ({ email: r.emailAddress.address, name: r.emailAddress.name || null })),
+        cc_addresses: ccRecipients.map((r: any) => ({ email: r.emailAddress.address, name: r.emailAddress.name || null })),
+        subject,
+        body_html: bodyType === "text" ? null : body,
+        sent_by: sentBy || "ai-assistant",
+      });
+
+      return new Response(
+        JSON.stringify({ success: true, message: `Reply sent in-thread to ${toRecipients.map((r: any) => r.emailAddress.address).join(", ")}` }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Standard sendMail path (new email, not a reply)
     // Build Graph API payload
     const message: any = {
       subject,
@@ -87,6 +152,10 @@ serve(async (req: Request) => {
       ccRecipients,
     };
 
+    if (bccRecipients.length > 0) {
+      message.bccRecipients = bccRecipients;
+    }
+
     // Add attachments if provided
     // Each attachment: { name: "file.pdf", contentType: "application/pdf", contentBytes: "<base64>" }
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
@@ -97,8 +166,6 @@ serve(async (req: Request) => {
         contentBytes: a.contentBytes,
       }));
     }
-
-    const token = await getGraphToken();
 
     const graphRes = await fetch(GRAPH_SEND_URL, {
       method: "POST",

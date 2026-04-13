@@ -55,7 +55,7 @@ The embedded Claude chat has access to these tools:
 - **Email integration:** WORKING. Azure AD app registered, Graph API permissions granted (Mail.Read, Mail.Send, Mail.ReadWrite) with admin consent. Edge functions deployed. Send confirmed working 2026-03-27.
 - **SMS integration:** WORKING. Telnyx send/receive deployed. Auto-reply via Claude on inbound texts + email forwarding to Morris. Deploy with `--no-verify-jwt` (Telnyx webhook has no auth header).
 - **Budget system:** Batch upload system for property budgets, GL account mapping.
-- **Accounting:** Calendar and deadline tracking imported from Google Sheets.
+- **Calendars & Tasks:** WORKING (renamed from "Accounting Calendar" 2026-04-13). 36 PMA-derived recurring tasks across 6 properties. Team categorization: Accounting (14 tasks), Operations (7 tasks), Executive (13 tasks). Team filter bar + property filters. Team roster stored in code (TEAM_ROSTER constant) — PostgREST schema cache wouldn't pick up team_members table. DB table: `calendar_tasks` with `team` TEXT column. CRUD modal includes team dropdown. Team members: Anthony Alapatt (Accounting), Morris/Toby/Ricky (Executive), Operations & Administrative TBD.
 - **Executive Dashboard (exec-v2.js):** PRIMARY MODULE as of 2026-03-30. Renamed from "Exec Financials v2" to "Executive Financials". Old exec.html iframe hidden in sidebar (data-view="exec", display:none). Home module card links to exec2. Core features working: balance sheet, P&L, chart with hover tooltips, transaction upload, investment/liability CRUD, property photos on cards. Remaining work: complete pattern learning, complete transaction review panel.
 
 ## Quarterly Financial Report
@@ -185,6 +185,28 @@ The embedded Claude chat has access to these tools:
 - `properties`: property master table with Airtable record IDs as primary keys (id, property_name, current_valuation)
 - `balance_sheet_items`: property-level balance sheet line items (property_id, bs_code, amount, account_section, account_name, is_header, is_total)
 - Migration files in `migration/` folder — run via Supabase SQL Editor
+
+## Dropbox Folder Structure (First Mile Prop Dropbox)
+- **Root structure:** Numbered prefix system for organization
+  - `0.1 General`, `0.2 FMC Executive` — Company-wide
+  - `1.1 Projects - Prospective`, `1.2 Projects - Diligence`, `1.3 Projects - Stale` — Deal pipeline
+  - `2.1 FMC Property Management` — Active managed properties
+  - `2.2 Passive Investments` — Non-managed investments
+  - `2.4 Crown Star (MBP)` — Specific JV
+  - `3.0 Realized Investments` — Exited deals
+  - `9.0 Archived Completed Projects`
+  - `Crown Property Accounting`, `FM Accounting - Shared LJ` — Accounting shared folders
+  - `Morris Zeitouni` — Personal folder (quarterly reports saved here)
+- **Per-property folder structure** (under `2.1 FMC Property Management/{PropertyName}/`):
+  - `0 - Executive` — High-level docs, board materials
+  - `1 - DD, Disclosures & Closing` — Due diligence, closing docs
+  - `2 - Leasing_Marketing` — Leasing activity, marketing materials
+  - `3 - Operations` — Day-to-day ops, PMA agreements (`3 - Operations/B. PMA/`)
+  - `4 - Accounting` — Financial records, GL mappings
+  - `5 - Construction` — Cap-ex, renovation projects
+  - `6 - Investors` — Investor communications, K-1s
+- **Properties in 2.1:** 1700 East Putnam Greenwich, 340 Mt Kemble Morristown, 41 Flatbush, 575 Broadway, 61 S Paramus, Paramus Plaza, Red Bank - 1 River Centre
+- **PMA locations:** Each property's PMA is in `3 - Operations/B. PMA/` (exception: 41 Flatbush uses `Agreement/` folder)
 
 ## Preferences
 - Morris works fast — keep things concise, skip unnecessary explanation

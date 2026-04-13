@@ -8,6 +8,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const MAILBOX = "aiassistant@firstmilecap.com";
 const GRAPH_SEND_URL = `https://graph.microsoft.com/v1.0/users/${MAILBOX}/sendMail`;
+const GRAPH_REPLY_URL = (messageId: string) =>
+  `https://graph.microsoft.com/v1.0/users/${MAILBOX}/messages/${messageId}/reply`;
 const TOKEN_URL = (tenant: string) =>
   `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
 
@@ -115,20 +117,72 @@ ${email.body_text || email.body_preview || "(empty email)"}`;
 }
 
 async function sendReply(token: string, original: any, replyHtml: string): Promise<void> {
+  const fullBody = `${replyHtml}\n<br>\n${SIGNATURE_HTML}`;
+
+  // If we have the original Graph message ID, use the /reply endpoint
+  // This properly threads the response (conversationId, In-Reply-To, References headers)
+  if (original.graph_id) {
+    console.log(`Using Graph /reply endpoint for message ${original.graph_id}`);
+
+    // Build CC list: all original to/cc minus our mailbox and the sender
+    const allRecipients = [
+      ...(original.to_addresses || []),
+      ...(original.cc_addresses || []),
+    ].filter((r: any) => r.email && r.email.toLowerCase() !== MAILBOX.toLowerCase());
+
+    const senderEmail = original.from_address.toLowerCase();
+    const seenEmails = new Set([senderEmail, MAILBOX.toLowerCase()]);
+    const ccRecipients: any[] = [];
+    for (const r of allRecipients) {
+      const email = r.email.toLowerCase();
+      if (!seenEmails.has(email)) {
+        seenEmails.add(email);
+        ccRecipients.push({
+          emailAddress: { address: r.email, name: r.name || undefined },
+        });
+      }
+    }
+
+    // Graph /reply endpoint payload — "message" overrides only the fields you specify
+    // The reply automatically goes to the sender; we add CC for reply-all behavior
+    const payload: any = {
+      message: {
+        body: { contentType: "HTML", content: fullBody },
+      },
+    };
+    if (ccRecipients.length > 0) {
+      payload.message.ccRecipients = ccRecipients;
+    }
+
+    const res = await fetch(GRAPH_REPLY_URL(original.graph_id), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.text();
+      // If reply fails (e.g. message no longer in mailbox), fall back to sendMail
+      console.warn(`Graph /reply failed (${res.status}), falling back to sendMail: ${err}`);
+    } else {
+      return; // Success — reply sent in-thread
+    }
+  }
+
+  // Fallback: use sendMail (won't thread, but at least the reply goes out)
+  console.log(`Falling back to sendMail for email from ${original.from_address}`);
   const replySubject = original.subject.startsWith("Re:")
     ? original.subject
     : `Re: ${original.subject}`;
 
-  const fullBody = `${replyHtml}\n<br>\n${SIGNATURE_HTML}`;
-
-  // Reply-all: send to the original sender, CC everyone else on the thread
-  // Collect all recipients from original to/cc, excluding our own mailbox
   const allRecipients = [
     ...(original.to_addresses || []),
     ...(original.cc_addresses || []),
   ].filter((r: any) => r.email && r.email.toLowerCase() !== MAILBOX.toLowerCase());
 
-  // The sender gets the reply as "To"
   const toRecipients = [
     {
       emailAddress: {
@@ -138,7 +192,6 @@ async function sendReply(token: string, original: any, replyHtml: string): Promi
     },
   ];
 
-  // Everyone else on the thread goes in CC (deduped, excluding the sender)
   const senderEmail = original.from_address.toLowerCase();
   const seenEmails = new Set([senderEmail, MAILBOX.toLowerCase()]);
   const ccRecipients: any[] = [];
@@ -161,16 +214,13 @@ async function sendReply(token: string, original: any, replyHtml: string): Promi
     message.ccRecipients = ccRecipients;
   }
 
-  // If there's a conversation ID, try to reply in-thread
-  const payload: any = { message, saveToSentItems: true };
-
   const res = await fetch(GRAPH_SEND_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ message, saveToSentItems: true }),
   });
 
   if (!res.ok) {

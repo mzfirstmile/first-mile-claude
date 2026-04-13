@@ -402,6 +402,12 @@
   .cal-progress-fill { height:100%; background:linear-gradient(90deg,var(--accent),var(--green)); border-radius:3px; transition:width .4s; }
   .cal-all-done { margin-top:8px; padding:8px 14px; background:rgba(26,154,107,.06); border:1px solid rgba(26,154,107,.3); border-radius:7px; font-size:12px; color:var(--green); font-weight:600; text-align:center; display:none; }
   .cal-all-done.show { display:block; }
+  .cal-team-filters { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px; align-items:center; }
+  .cal-team-chip { padding:6px 14px; border-radius:20px; font-size:11px; font-weight:600; cursor:pointer; border:1.5px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .2s; user-select:none; display:flex; align-items:center; gap:5px; }
+  .cal-team-chip.on { color:#fff; border-color:transparent; }
+  .cal-team-chip .team-count { font-size:10px; opacity:.7; margin-left:2px; }
+  .cal-team-label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); opacity:.6; margin-right:4px; }
+  .cal-team-badge { display:inline-block; font-size:8px; font-weight:700; padding:1px 5px; border-radius:3px; text-transform:uppercase; letter-spacing:.3px; margin-left:auto; flex-shrink:0; }
   .cal-filters { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:20px; }
   .cal-chip { padding:5px 12px; border-radius:18px; font-size:11px; font-weight:500; cursor:pointer; border:1.5px solid var(--border); background:var(--surface); color:var(--text-dim); transition:all .2s; user-select:none; }
   .cal-chip.on { color:#fff; font-weight:600; }
@@ -769,7 +775,7 @@
     </a>
     <a class="sidebar-item" data-view="calendar">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-      <span>Accounting Calendar</span>
+      <span>Calendars & Tasks</span>
     </a>
     <a class="sidebar-item" data-view="financials">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
@@ -836,7 +842,7 @@
     </div>
 
     <div class="module-grid">
-      <!-- Accounting Calendar -->
+      <!-- Calendars & Tasks -->
       <div class="module-card" data-module="calendar" onclick="switchView('calendar')" style="cursor:pointer">
         <div class="module-card-icon calendar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
@@ -844,8 +850,8 @@
         <div class="module-card-arrow">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </div>
-        <h3>Accounting Calendar</h3>
-        <p>Track recurring deadlines, payment schedules, and compliance tasks across all properties.</p>
+        <h3>Calendars & Tasks</h3>
+        <p>Track recurring deadlines, payment schedules, and team tasks across all properties.</p>
         <div class="module-card-status live"><span class="dot"></span> Live</div>
       </div>
 
@@ -1004,6 +1010,7 @@
         <div class="cal-progress"><div class="cal-progress-fill" id="calProgress" style="width:0%"></div></div>
         <div class="cal-all-done" id="calAllDone">All tasks complete for this view!</div>
       </div>
+      <div class="cal-team-filters" id="calTeamFilters"></div>
       <div class="cal-filters" id="calFilters"></div>
       <div class="cal-grid" id="calGrid"></div>
       <div class="cal-tooltip" id="calTooltip"></div>
@@ -1024,7 +1031,7 @@
               <th>Property</th>
               <th>Payment Type</th>
               <th>Description</th>
-              <th style="width:100px">Owner</th>
+              <th style="width:130px">Team</th>
               <th style="width:80px">Status</th>
               <th style="width:90px">Actions</th>
             </tr>
@@ -1059,8 +1066,8 @@
             <input type="text" id="crudDesc" placeholder="Task description">
           </div>
           <div class="crud-row">
-            <label>Owner</label>
-            <input type="text" id="crudOwner" placeholder="Who is responsible">
+            <label>Team</label>
+            <select id="crudTeam"><option value="">— Select —</option><option>Accounting</option><option>Operations</option><option>Executive</option><option>Administrative</option></select>
           </div>
           <div class="crud-actions">
             <button class="cal-btn" onclick="calCrudClose()">Cancel</button>
@@ -1464,7 +1471,7 @@
   // ── View Switching ──
   const VIEW_TITLES = {
     home: '',
-    calendar: 'Accounting <span>Calendar</span>',
+    calendar: 'Calendars & <span>Tasks</span>',
     financials: 'Property <span>Financials & Budgeting</span>',
     forecasting: 'Strategic <span>Forecasting</span>',
     properties: 'Manage <span>Properties</span>',
@@ -1991,6 +1998,7 @@ $$;</pre></div>`;
         isBlocked: u.is_blocked || false,
         firstLogin: u.first_login,
         lastLogin: u.last_login,
+        team: u.team || '',
         access_calendar: u.access_calendar !== false,
         access_financials: u.access_financials !== false,
         access_forecasting: u.access_forecasting !== false,
@@ -2016,11 +2024,12 @@ $$;</pre></div>`;
     thead.innerHTML = `
       <th style="text-align:left">Name</th>
       <th style="text-align:left">Email</th>
+      <th style="text-align:center">Team</th>
       <th style="text-align:center">Last Login</th>
       ${MODULE_DEFS.map(m => `<th style="text-align:center;font-size:10px;min-width:60px">${m.label}</th>`).join('')}
       <th style="text-align:center">Status</th>`;
 
-    const colCount = 3 + MODULE_DEFS.length + 1;
+    const colCount = 4 + MODULE_DEFS.length + 1;
     if (!usersData.length) {
       tbody.innerHTML = `<tr><td colspan="${colCount}" style="text-align:center;color:var(--text-dim);padding:32px;">No users have signed in yet.</td></tr>`;
       return;
@@ -2065,9 +2074,24 @@ $$;</pre></div>`;
       }
 
       const nameExtra = u.isAdmin ? ' <span style="background:var(--accent);color:#fff;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:700;vertical-align:middle">ADMIN</span>' : '';
+      const userTeams = u.team ? u.team.split(',').map(t=>t.trim()).filter(Boolean) : [];
+      let teamCell = '';
+      if (isAdmin) {
+        const teamChecks = ['Accounting','Operations','Executive','Administrative'].map(t => {
+          const checked = userTeams.includes(t) ? 'checked' : '';
+          const tc = TEAM_COLORS[t] || '#888';
+          return `<label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:10px;font-weight:600;color:${tc};white-space:nowrap;"><input type="checkbox" ${checked} onchange="toggleUserTeam(${u.id},'${t}',this.checked)" style="width:13px;height:13px;accent-color:${tc};cursor:pointer;">${TEAM_ICONS[t]||''} ${t.substring(0,4)}</label>`;
+        }).join(' ');
+        teamCell = `<div style="display:flex;flex-wrap:wrap;gap:4px 8px;justify-content:center;">${teamChecks}</div>`;
+      } else {
+        teamCell = userTeams.length
+          ? userTeams.map(t => `<span style="font-size:10px;font-weight:600;padding:2px 6px;border-radius:4px;background:${(TEAM_COLORS[t]||'#888')}15;color:${TEAM_COLORS[t]||'#888'};">${TEAM_ICONS[t]||''} ${t}</span>`).join(' ')
+          : '<span style="color:var(--text-dim)">—</span>';
+      }
       return `<tr style="${u.isBlocked ? 'opacity:.5' : ''}">
         <td style="text-align:left;font-weight:600">${u.name}${nameExtra}</td>
         <td style="text-align:left;font-size:12px"><a href="mailto:${u.email}" style="color:var(--accent);text-decoration:none">${u.email}</a></td>
+        <td style="text-align:center">${teamCell}</td>
         <td style="text-align:center;font-size:11px;color:var(--text-dim)">${fmtTime(u.lastLogin)}</td>
         ${modCells}
         <td style="text-align:center">${statusCell}</td>
@@ -2094,6 +2118,32 @@ $$;</pre></div>`;
     }
   }
 
+  async function toggleUserTeam(userId, team, checked) {
+    const user = usersData.find(u => u.id === userId);
+    if (!user) return;
+    let teams = user.team ? user.team.split(',').map(t=>t.trim()).filter(Boolean) : [];
+    if (checked && !teams.includes(team)) teams.push(team);
+    if (!checked) teams = teams.filter(t => t !== team);
+    const newTeam = teams.length ? teams.join(',') : null;
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify({ team: newTeam })
+      });
+      user.team = newTeam || '';
+    } catch (e) {
+      console.error('Toggle user team error:', e);
+      alert('Failed to update team: ' + e.message);
+      loadUsers();
+    }
+  }
+
   async function toggleUserBlock(userId, block) {
     try {
       await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
@@ -2114,13 +2164,26 @@ $$;</pre></div>`;
   }
 
   // ══════════════════════════════════════
-  // ── ACCOUNTING CALENDAR (Supabase) ──
+  // ── CALENDARS & TASKS (Supabase) ──
   // ══════════════════════════════════════
   const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const CAL_PALETTE = ['#00b0d4','#50dcb4','#ff8c5a','#dc78ff','#ffd250','#50c8ff','#ff6482','#a78bfa','#f472b6','#38bdf8','#4ade80','#fb923c'];
+  const TEAM_COLORS = { Accounting: '#50dcb4', Operations: '#ff8c5a', Executive: '#a78bfa', Administrative: '#38bdf8' };
+  const TEAM_ICONS = { Accounting: '📊', Operations: '🔧', Executive: '👔', Administrative: '📋' };
+  const TEAM_ROSTER = {
+    Accounting: [{ name: 'Anthony Alapatt', email: 'aalapatt@firstmilecap.com' }],
+    Executive: [
+      { name: 'Morris Zeitouni', email: 'mz@firstmilecap.com' },
+      { name: 'Toby Yedid', email: 'ty@firstmilecap.com' },
+      { name: 'Ricky Chera', email: 'rc@firstmilecap.com' },
+    ],
+    Operations: [],
+    Administrative: [],
+  };
 
   let calEvents = [], calColors = {}, calColorIdx = 0, calMonth = new Date().getMonth();
   let calFiltersActive = new Set(), calInited = false, calSelectedProp = null;
+  let calSelectedTeam = null;
 
   function calGetColor(p) {
     if (!calColors[p]) { calColors[p] = CAL_PALETTE[calColorIdx % CAL_PALETTE.length]; calColorIdx++; }
@@ -2143,6 +2206,7 @@ $$;</pre></div>`;
         status: rec.status || '',
         completedBy: rec.completed_by || '',
         completedDate: rec.completed_date || '',
+        team: rec.team || '',
       }));
       // Build color map
       calColorIdx = 0; calColors = {};
@@ -2160,10 +2224,31 @@ $$;</pre></div>`;
   }
 
   function calBuildFilters() {
+    // Team filters
+    const teamEl = document.getElementById('calTeamFilters');
+    const teams = Object.keys(TEAM_COLORS);
+    const allTeamsOn = calSelectedTeam === null;
+    let teamHtml = `<span class="cal-team-label">Team</span>`;
+    teamHtml += `<div class="cal-team-chip${allTeamsOn ? ' on' : ''}" style="${allTeamsOn ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calSelectTeam(null)">All</div>`;
+    teamHtml += teams.map(t => {
+      const c = TEAM_COLORS[t];
+      const on = calSelectedTeam === t;
+      const count = calEvents.filter(e => e.team === t).length;
+      const icon = TEAM_ICONS[t] || '';
+      return `<div class="cal-team-chip${on ? ' on' : ''}" style="${on ? `background:${c};border-color:${c};` : `border-color:${c}40;`}" onclick="calSelectTeam('${t}')">${icon} ${t}<span class="team-count">${count}</span></div>`;
+    }).join('');
+    // Team members summary
+    if (calSelectedTeam && TEAM_ROSTER[calSelectedTeam] && TEAM_ROSTER[calSelectedTeam].length > 0) {
+      teamHtml += `<span style="font-size:10px;color:var(--text-dim);margin-left:8px;">Members: ${TEAM_ROSTER[calSelectedTeam].map(m => m.name.split(' ')[0]).join(', ')}</span>`;
+    }
+    teamEl.innerHTML = teamHtml;
+
+    // Property filters
     const el = document.getElementById('calFilters');
-    const props = [...new Set(calEvents.map(e => e.property))].sort();
+    const filtered = calSelectedTeam ? calEvents.filter(e => e.team === calSelectedTeam) : calEvents;
+    const props = [...new Set(filtered.map(e => e.property))].sort();
     const allOn = calSelectedProp === null;
-    let html = `<div class="cal-chip${allOn ? ' on' : ''}" style="${allOn ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calSelectProp(null)">All</div>`;
+    let html = `<div class="cal-chip${allOn ? ' on' : ''}" style="${allOn ? 'background:var(--accent);border-color:var(--accent);color:#fff;' : ''}" onclick="calSelectProp(null)">All Properties</div>`;
     html += props.map(p => {
       const c = calGetColor(p);
       const on = calSelectedProp === p;
@@ -2172,17 +2257,23 @@ $$;</pre></div>`;
     el.innerHTML = html;
   }
 
-  function calSelectProp(p) {
+  function calSelectTeam(t) {
+    if (t === calSelectedTeam) { calSelectedTeam = null; } else { calSelectedTeam = t; }
+    calSelectedProp = null; // reset property filter on team change
     const allProps = [...new Set(calEvents.map(e => e.property))];
+    calFiltersActive = new Set(allProps);
+    calBuildFilters();
+    calRender();
+  }
+
+  function calSelectProp(p) {
     if (p === null || calSelectedProp === p) {
-      // Click "All" or click the already-selected prop → show all
       calSelectedProp = null;
-      calFiltersActive = new Set(allProps);
     } else {
-      // Click a specific property → isolate it
       calSelectedProp = p;
-      calFiltersActive = new Set([p]);
     }
+    const allProps = [...new Set(calEvents.map(e => e.property))];
+    calFiltersActive = new Set(allProps);
     calBuildFilters();
     calRender();
   }
@@ -2196,8 +2287,10 @@ $$;</pre></div>`;
     const today = new Date();
     const isCurrentMonth = today.getFullYear() === year && today.getMonth() === m;
 
-    // Filter events for this month
-    const visible = calEvents.filter(e => calFiltersActive.has(e.property));
+    // Filter events for this month (by team + property)
+    let visible = calEvents.filter(e => calFiltersActive.has(e.property));
+    if (calSelectedTeam) visible = visible.filter(e => e.team === calSelectedTeam);
+    if (calSelectedProp) visible = visible.filter(e => e.property === calSelectedProp);
     const monthly = visible.filter(e => e.cadence === 'Monthly');
     const quarterly = visible.filter(e => e.cadence === 'Quarterly' && [0,3,6,9].includes(m));
 
@@ -2213,11 +2306,13 @@ $$;</pre></div>`;
       html += `<div class="dnum">${d}</div>`;
       dayEvents.forEach(ev => {
         const c = calGetColor(ev.property);
+        const tc = TEAM_COLORS[ev.team] || '#888';
         const done = ev.status === 'Done';
         html += `<div class="cal-ev${done ? ' done' : ''}" style="background:${calHexA(c,.12)};border-color:${c};"
           onmouseenter="calShowTip(event,${ev.idx})" onmouseleave="calHideTip()">
           <div class="cal-ev-cb${done ? ' on' : ''}" style="border-color:${done ? 'var(--green)' : c}" onclick="event.stopPropagation();calToggle(${ev.idx})">${done ? '✓' : ''}</div>
           <span class="cal-ev-txt" style="color:${c}">${ev.property}</span>
+          ${ev.team ? `<span class="cal-team-badge" style="background:${tc}20;color:${tc}">${ev.team.substring(0,4)}</span>` : ''}
         </div>`;
       });
       html += '</div>';
@@ -2270,7 +2365,9 @@ $$;</pre></div>`;
   function calShowTip(e, idx) {
     const ev = calEvents[idx];
     const tip = document.getElementById('calTooltip');
-    tip.innerHTML = `<div class="tt-prop">${ev.property}</div><div class="tt-type">${ev.cadence} · ${ev.type}</div><div class="tt-task">${ev.task}</div><div class="tt-owner">Owner: ${ev.owner}</div>`;
+    const tc = TEAM_COLORS[ev.team] || '#888';
+    const teamMembers = TEAM_ROSTER[ev.team] || [];
+    tip.innerHTML = `<div class="tt-prop">${ev.property}</div><div class="tt-type">${ev.cadence} · ${ev.type}</div><div class="tt-task">${ev.task}</div>${ev.team ? `<div style="margin:4px 0;"><span style="display:inline-block;font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px;background:${tc}20;color:${tc};text-transform:uppercase;letter-spacing:.3px;">${TEAM_ICONS[ev.team] || ''} ${ev.team}</span></div>` : ''}<div class="tt-owner">Owner: ${ev.owner}</div>${teamMembers.length ? `<div style="font-size:10px;color:var(--text-dim);margin-top:2px;">Team: ${teamMembers.map(m=>m.name).join(', ')}</div>` : ''}`;
     tip.style.left = Math.min(e.clientX + 12, window.innerWidth - 320) + 'px';
     tip.style.top = (e.clientY + 12) + 'px';
     tip.classList.add('show');
@@ -2287,6 +2384,18 @@ $$;</pre></div>`;
   async function calInit() {
     if (calInited) return;
     calInited = true;
+    // Load team roster from app_users (supports comma-separated multi-team)
+    try {
+      const users = await supaFetch('app_users', '?select=display_name,email,team&team=not.is.null');
+      Object.keys(TEAM_ROSTER).forEach(t => TEAM_ROSTER[t] = []);
+      users.forEach(u => {
+        if (!u.team) return;
+        u.team.split(',').map(t=>t.trim()).filter(Boolean).forEach(t => {
+          if (!TEAM_ROSTER[t]) TEAM_ROSTER[t] = [];
+          TEAM_ROSTER[t].push({ name: u.display_name || u.email.split('@')[0], email: u.email });
+        });
+      });
+    } catch(e) { console.warn('Could not load team roster:', e); }
     const ok = await calFetchData();
     if (ok) { calBuildFilters(); calRender(); }
     else {
@@ -2314,13 +2423,16 @@ $$;</pre></div>`;
     document.getElementById('crudCount').textContent = `${sorted.length} tasks`;
     tbody.innerHTML = sorted.map(ev => {
       const isDone = ev.status === 'Done';
+      const teamOpts = ['', 'Accounting', 'Operations', 'Executive', 'Administrative'].map(t =>
+        `<option value="${t}"${t === (ev.team||'') ? ' selected' : ''}>${t ? (TEAM_ICONS[t]||'') + ' ' + t : '— None —'}</option>`
+      ).join('');
       return `<tr>
         <td style="font-weight:600;color:var(--accent);">${ev.day}</td>
         <td>${ev.cadence}</td>
         <td style="font-weight:600;">${ev.property}</td>
         <td>${ev.type}</td>
         <td>${ev.task}</td>
-        <td>${ev.owner}</td>
+        <td><select style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:5px;background:var(--surface);color:var(--text);cursor:pointer;" onchange="calCrudInlineTeam(${ev.idx},this.value)">${teamOpts}</select></td>
         <td><span class="crud-tag ${isDone ? 'done' : 'open'}">${isDone ? 'Done' : 'Open'}</span></td>
         <td><div class="crud-act">
           <button onclick="calCrudEdit(${ev.idx})">Edit</button>
@@ -2337,7 +2449,7 @@ $$;</pre></div>`;
     document.getElementById('crudCadence').value = 'Monthly';
     document.getElementById('crudType').value = '';
     document.getElementById('crudDesc').value = '';
-    document.getElementById('crudOwner').value = '';
+    document.getElementById('crudTeam').value = '';
     // Populate property dropdown
     const propSel = document.getElementById('crudProperty');
     const props = [...new Set(calEvents.map(e => e.property))].sort();
@@ -2354,7 +2466,7 @@ $$;</pre></div>`;
     document.getElementById('crudCadence').value = ev.cadence;
     document.getElementById('crudType').value = ev.type;
     document.getElementById('crudDesc').value = ev.task;
-    document.getElementById('crudOwner').value = ev.owner;
+    document.getElementById('crudTeam').value = ev.team || '';
     const propSel = document.getElementById('crudProperty');
     const props = [...new Set(calEvents.map(e => e.property))].sort();
     propSel.innerHTML = props.map(p => `<option${p === ev.property ? ' selected' : ''}>${p}</option>`).join('') + '<option value="__new">+ New Property</option>';
@@ -2377,7 +2489,7 @@ $$;</pre></div>`;
       property: prop,
       payment_type: document.getElementById('crudType').value,
       description: document.getElementById('crudDesc').value,
-      owner: document.getElementById('crudOwner').value,
+      team: document.getElementById('crudTeam').value || null,
     };
     const recordId = document.getElementById('crudId').value;
     try {
@@ -2421,6 +2533,19 @@ $$;</pre></div>`;
     } catch (e) {
       alert('Delete failed: ' + e.message);
     }
+  }
+
+  async function calCrudInlineTeam(idx, team) {
+    const ev = calEvents[idx];
+    if (!ev || !ev.supaId) return;
+    ev.team = team;
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/calendar_tasks?id=eq.${ev.supaId}`, {
+        method: 'PATCH',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ team: team || null })
+      });
+    } catch (e) { console.error('Inline team update error:', e); }
   }
 
   // ══════════════════════════════════════
