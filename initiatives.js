@@ -1373,24 +1373,71 @@
     return 'other';
   }
 
-  // ── CRUD: Add Document ──────────────────────────────────
+  // ── CRUD: Add Document (with file upload to Supabase Storage) ──
   async function _addDoc() {
     if (!_currentInitiative) return;
     _showModal('Add Document', `
-      <label>Document Name / Filename</label>
-      <input id="initDocName" placeholder="e.g. Buyout_Analysis_v2.xlsx" />
-      <label>URL (Dropbox, Google Drive, or direct link)</label>
-      <input id="initDocUrl" placeholder="https://..." />
+      <label>Upload File</label>
+      <div id="initDocDropzone" style="border:2px dashed #cbd5e1;border-radius:10px;padding:24px;text-align:center;cursor:pointer;margin-bottom:16px;transition:all .15s;">
+        <input type="file" id="initDocFile" style="display:none;" />
+        <div style="font-size:28px;margin-bottom:6px;">📂</div>
+        <div style="font-size:13px;color:#64748b;">Click to select a file or drag & drop</div>
+        <div id="initDocFileName" style="font-size:13px;font-weight:600;color:#0ea5e9;margin-top:8px;display:none;"></div>
+      </div>
       <label>Description</label>
-      <textarea id="initDocDesc" placeholder="Brief description of the document..." style="min-height:70px;"></textarea>
+      <textarea id="initDocDesc" placeholder="Brief description..." style="min-height:60px;"></textarea>
       <label>Source</label>
       <input id="initDocSource" placeholder="e.g. PowerFlex, AI Assistant, Newmark" />
+      <div style="border-top:1px solid #e2e8f0;margin:12px 0 8px;padding-top:12px;">
+        <label style="color:#94a3b8;font-size:11px;">Or paste a URL instead of uploading</label>
+        <input id="initDocUrl" placeholder="https://..." />
+      </div>
     `, async () => {
-      const filename = document.getElementById('initDocName').value.trim();
-      const url = document.getElementById('initDocUrl').value.trim();
+      const fileInput = document.getElementById('initDocFile');
+      const file = fileInput?.files?.[0];
+      const urlInput = document.getElementById('initDocUrl').value.trim();
       const desc = document.getElementById('initDocDesc').value.trim();
       const source = document.getElementById('initDocSource').value.trim();
-      if (!filename) return alert('Document name is required');
+
+      if (!file && !urlInput) return alert('Please select a file or enter a URL');
+
+      let url = urlInput;
+      let filename = file ? file.name : (urlInput.split('/').pop() || 'document');
+
+      // Upload file to Supabase Storage if selected
+      if (file) {
+        const saveBtn = document.getElementById('initModalSave');
+        saveBtn.textContent = 'Uploading...';
+        saveBtn.disabled = true;
+
+        try {
+          const initSlug = _currentInitiative.id.substring(0, 8);
+          const storagePath = initSlug + '/' + Date.now() + '_' + file.name;
+          const resp = await fetch(SUPABASE_URL + '/storage/v1/object/initiative-docs/' + storagePath, {
+            method: 'POST',
+            headers: {
+              'apikey': SUPABASE_KEY,
+              'Authorization': 'Bearer ' + SUPABASE_KEY,
+              'Content-Type': file.type || 'application/octet-stream'
+            },
+            body: file
+          });
+
+          if (!resp.ok) {
+            const err = await resp.text();
+            saveBtn.textContent = 'Save';
+            saveBtn.disabled = false;
+            return alert('Upload failed: ' + err);
+          }
+
+          url = SUPABASE_URL + '/storage/v1/object/public/initiative-docs/' + storagePath;
+          filename = file.name;
+        } catch (e) {
+          saveBtn.textContent = 'Save';
+          saveBtn.disabled = false;
+          return alert('Upload error: ' + e.message);
+        }
+      }
 
       const ext = _getFileExt(filename);
       await window.supaWrite('initiative_entries', 'POST', {
@@ -1410,8 +1457,49 @@
       await _loadData();
       _renderDocs();
       _renderTimeline();
-      _toast('Document added');
+      _renderOverview();
+      _toast('Document uploaded');
     });
+
+    // Wire up dropzone behavior
+    const dropzone = document.getElementById('initDocDropzone');
+    const fileInput = document.getElementById('initDocFile');
+    const fileNameEl = document.getElementById('initDocFileName');
+    dropzone.onclick = () => fileInput.click();
+    dropzone.ondragover = (e) => { e.preventDefault(); dropzone.style.borderColor = '#0ea5e9'; dropzone.style.background = '#f0f9ff'; };
+    dropzone.ondragleave = () => { dropzone.style.borderColor = '#cbd5e1'; dropzone.style.background = ''; };
+    dropzone.ondrop = (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = '#cbd5e1'; dropzone.style.background = '';
+      if (e.dataTransfer.files.length) {
+        fileInput.files = e.dataTransfer.files;
+        fileNameEl.textContent = e.dataTransfer.files[0].name;
+        fileNameEl.style.display = 'block';
+      }
+    };
+    fileInput.onchange = () => {
+      if (fileInput.files.length) {
+        fileNameEl.textContent = fileInput.files[0].name;
+        fileNameEl.style.display = 'block';
+      }
+    };
+  }
+
+  // ── Helper: Upload file to Supabase Storage ──────────────
+  async function _uploadToStorage(initiativeId, file) {
+    const initSlug = initiativeId.substring(0, 8);
+    const storagePath = initSlug + '/' + Date.now() + '_' + file.name;
+    const resp = await fetch(SUPABASE_URL + '/storage/v1/object/initiative-docs/' + storagePath, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': file.type || 'application/octet-stream'
+      },
+      body: file
+    });
+    if (!resp.ok) throw new Error('Upload failed: ' + (await resp.text()));
+    return SUPABASE_URL + '/storage/v1/object/public/initiative-docs/' + storagePath;
   }
 
   // ── Overview Dashboard rendering ──────────────────────────
