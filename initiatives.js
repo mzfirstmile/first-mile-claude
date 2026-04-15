@@ -853,6 +853,69 @@
         color: #1e293b;
         font-weight: 700;
       }
+
+      /* ── Docs Tab ──────────────────────────── */
+      #initRoot .init-docs-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 14px;
+      }
+      #initRoot .init-doc-card {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        background: #fff;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 16px 18px;
+        transition: border-color .15s, box-shadow .15s;
+      }
+      #initRoot .init-doc-card:hover {
+        border-color: #0ea5e9;
+        box-shadow: 0 2px 8px rgba(0,0,0,.06);
+      }
+      #initRoot .init-doc-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        flex-shrink: 0;
+      }
+      #initRoot .init-doc-icon.xlsx { background: #dcfce7; }
+      #initRoot .init-doc-icon.pdf  { background: #fee2e2; }
+      #initRoot .init-doc-icon.doc  { background: #dbeafe; }
+      #initRoot .init-doc-icon.pptx { background: #fef3c7; }
+      #initRoot .init-doc-icon.img  { background: #ede9fe; }
+      #initRoot .init-doc-icon.other{ background: #f1f5f9; }
+      #initRoot .init-doc-info { flex: 1; min-width: 0; }
+      #initRoot .init-doc-name {
+        font-size: 14px;
+        font-weight: 600;
+        color: #1e293b;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #initRoot .init-doc-desc {
+        font-size: 12px;
+        color: #64748b;
+        margin-top: 3px;
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      #initRoot .init-doc-meta {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 6px;
+        display: flex;
+        gap: 10px;
+      }
     `;
     document.head.appendChild(style);
   }
@@ -903,6 +966,7 @@
           <button class="init-tab active" data-tab="overview">Overview</button>
           <button class="init-tab" data-tab="activity">Activity</button>
           <button class="init-tab" data-tab="milestones">Milestones</button>
+          <button class="init-tab" data-tab="docs">Docs</button>
           <button class="init-tab" data-tab="team">Team</button>
         </div>
 
@@ -918,6 +982,13 @@
             <button class="init-btn-primary" onclick="initAddMilestone()" style="padding:6px 14px;font-size:12px;">+ Add Milestone</button>
           </div>
           <div class="init-milestones" id="initMilestonesList"></div>
+        </div>
+        <div class="init-tab-panel" id="initPanelDocs">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <span style="font-size:14px;font-weight:600;color:#475569;">Documents</span>
+            <button class="init-btn-primary" onclick="initAddDoc()" style="padding:6px 14px;font-size:12px;">+ Add Document</button>
+          </div>
+          <div class="init-docs-grid" id="initDocsList"></div>
         </div>
         <div class="init-tab-panel" id="initPanelTeam">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
@@ -1059,6 +1130,7 @@
     _renderOverview();
     _renderTimeline();
     _renderMilestones();
+    _renderDocs();
     _renderTeam();
 
     // Push history for back button
@@ -1197,6 +1269,117 @@
         </div>
       `;
     }).join('');
+  }
+
+  // ── Docs tab rendering ───────────────────────────────────
+  function _renderDocs() {
+    const el = document.getElementById('initDocsList');
+    if (!el || !_currentInitiative) return;
+
+    const docs = _entries
+      .filter(e => e.initiative_id === _currentInitiative.id && e.entry_type === 'document')
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (docs.length === 0) {
+      el.innerHTML = `
+        <div class="init-empty" style="grid-column:1/-1;padding:40px;">
+          <div class="init-empty-icon">📄</div>
+          <h3 style="font-size:15px;">No documents yet</h3>
+          <p style="font-size:13px;">Add documents, spreadsheets, or files to keep everything in one place.</p>
+        </div>
+      `;
+      return;
+    }
+
+    el.innerHTML = docs.map(doc => {
+      const meta = doc.metadata || {};
+      const filename = meta.filename || doc.title || 'Untitled';
+      const ext = _getFileExt(filename);
+      const icon = _fileIcon(ext);
+      const iconClass = _fileIconClass(ext);
+      const date = new Date(doc.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      const source = meta.source || '';
+      const desc = doc.content && doc.content !== 'key_metrics' ? doc.content : doc.title || '';
+
+      return `
+        <div class="init-doc-card">
+          <div class="init-doc-icon ${iconClass}">${icon}</div>
+          <div class="init-doc-info">
+            <div class="init-doc-name" title="${_esc(filename)}">${_esc(filename)}</div>
+            ${desc ? `<div class="init-doc-desc">${_esc(desc)}</div>` : ''}
+            <div class="init-doc-meta">
+              <span>${date}</span>
+              ${source ? `<span>${_esc(source)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function _getFileExt(filename) {
+    if (!filename) return '';
+    const parts = filename.split('.');
+    return parts.length > 1 ? parts.pop().toLowerCase() : '';
+  }
+
+  function _fileIcon(ext) {
+    const icons = {
+      xlsx: '📊', xls: '📊', csv: '📊',
+      pdf: '📕',
+      doc: '📘', docx: '📘',
+      pptx: '📙', ppt: '📙',
+      png: '🖼️', jpg: '🖼️', jpeg: '🖼️', gif: '🖼️',
+      zip: '📦', rar: '📦',
+    };
+    return icons[ext] || '📄';
+  }
+
+  function _fileIconClass(ext) {
+    if (['xlsx', 'xls', 'csv'].includes(ext)) return 'xlsx';
+    if (['pdf'].includes(ext)) return 'pdf';
+    if (['doc', 'docx'].includes(ext)) return 'doc';
+    if (['pptx', 'ppt'].includes(ext)) return 'pptx';
+    if (['png', 'jpg', 'jpeg', 'gif'].includes(ext)) return 'img';
+    return 'other';
+  }
+
+  // ── CRUD: Add Document ──────────────────────────────────
+  async function _addDoc() {
+    if (!_currentInitiative) return;
+    _showModal('Add Document', `
+      <label>Document Name / Filename</label>
+      <input id="initDocName" placeholder="e.g. Buyout_Analysis_v2.xlsx" />
+      <label>Description</label>
+      <textarea id="initDocDesc" placeholder="Brief description of the document..." style="min-height:70px;"></textarea>
+      <label>Source</label>
+      <input id="initDocSource" placeholder="e.g. PowerFlex, AI Assistant, Newmark" />
+    `, async () => {
+      const filename = document.getElementById('initDocName').value.trim();
+      const desc = document.getElementById('initDocDesc').value.trim();
+      const source = document.getElementById('initDocSource').value.trim();
+      if (!filename) return alert('Document name is required');
+
+      const ext = _getFileExt(filename);
+      await window.supaWrite('initiative_entries', 'POST', {
+        initiative_id: _currentInitiative.id,
+        entry_type: 'document',
+        title: filename,
+        content: desc || null,
+        metadata: { filename, type: ext || 'unknown', source: source || null },
+        created_by: _currentUser?.email || 'mz@firstmilecap.com'
+      });
+
+      await window.supaWrite('initiatives', 'PATCH', {
+        updated_at: new Date().toISOString()
+      }, `?id=eq.${_currentInitiative.id}`);
+
+      _closeModal();
+      await _loadData();
+      _renderDocs();
+      _renderTimeline();
+      _toast('Document added');
+    });
   }
 
   // ── Overview Dashboard rendering ──────────────────────────
@@ -1765,6 +1948,7 @@
   window.initAddMilestone = function () { _addMilestone(); };
   window.initToggleMilestone = function (id) { _toggleMilestone(id); };
   window.initAddMember = function () { _addMember(); };
+  window.initAddDoc = function () { _addDoc(); };
   window.initCloseModal = function () { _closeModal(); };
 
   // ── Main init (called by switchView) ─────────────────────
