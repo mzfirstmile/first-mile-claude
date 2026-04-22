@@ -646,6 +646,46 @@
   .fb-nav-btn:hover { color:var(--text); background:var(--surface2); }
   .fb-nav-btn.active { background:var(--accent); color:#fff; }
 
+  /* Overview tab: KPI cards, trend chart, variance list */
+  .fb-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:22px; }
+  .fb-kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .fb-kpi-label { font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); font-weight:600; margin-bottom:8px; }
+  .fb-kpi-value { font-size:22px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+  .fb-kpi-sub { display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11.5px; }
+  .fb-kpi-sub .fb-chip { padding:2px 8px; border-radius:6px; font-weight:600; font-variant-numeric:tabular-nums; font-size:11px; }
+  .fb-chip-pos { background:rgba(26,154,107,0.1); color:var(--green); }
+  .fb-chip-neg { background:rgba(220,90,90,0.1); color:#c94646; }
+  .fb-chip-neutral { background:var(--surface2); color:var(--text-dim); }
+  .fb-kpi-meta { color:var(--text-dim); }
+  .fb-kpi-stub { background:var(--surface2); color:var(--text-dim); }
+  .fb-chart-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:22px; }
+  .fb-chart-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:12px; flex-wrap:wrap; }
+  .fb-chart-title { font-size:13px; font-weight:700; }
+  .fb-chart-legend { display:flex; gap:14px; font-size:11px; color:var(--text-dim); flex-wrap:wrap; }
+  .fb-legend-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .fb-chart-svg { width:100%; height:240px; display:block; }
+  .fb-variance-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:900px) { .fb-variance-grid { grid-template-columns:1fr; } }
+  .fb-variance-col { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .fb-variance-col h3 { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .fb-variance-col h3 .fb-vc-icon { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .fb-variance-col.pos h3 .fb-vc-icon { background:var(--green); }
+  .fb-variance-col.neg h3 .fb-vc-icon { background:#c94646; }
+  .fb-variance-row { display:flex; justify-content:space-between; padding:8px 0; font-size:12.5px; border-bottom:1px dashed var(--border); gap:12px; }
+  .fb-variance-row:last-child { border-bottom:none; }
+  .fb-variance-label { color:var(--text); }
+  .fb-variance-val { font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .fb-variance-val.pos { color:var(--green); }
+  .fb-variance-val.neg { color:#c94646; }
+  .fb-drill-segments { display:inline-flex; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; margin-bottom:16px; }
+  .fb-drill-seg-btn { padding:7px 14px; border:none; background:transparent; border-radius:6px; font-size:12px; font-weight:500; color:var(--text-dim); cursor:pointer; }
+  .fb-drill-seg-btn.active { background:var(--accent); color:#fff; }
+  .fb-closed-months { display:flex; gap:3px; }
+  .fb-closed-mo-dot { padding:2px 5px; border-radius:3px; font-size:9.5px; font-weight:600; }
+  .fb-closed-mo-dot.closed { background:var(--green); color:#fff; }
+  .fb-closed-mo-dot.open { background:var(--surface2); color:var(--text-dim); }
+  .fb-section-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:14px; }
+
   /* Detail tab: monthly table */
   .fb-monthly-wrap { border-radius:10px; border:1px solid var(--border); overflow-x:auto; }
   .fb-monthly-table thead tr { position:relative; }
@@ -997,12 +1037,8 @@
       </div>
       <div class="fb-year-bar" id="fbYearBar"></div>
       <div id="fbDetailHeader" style="display:none"></div>
-      <div class="fb-detail-nav">
-        <button class="fb-nav-btn active" onclick="fbShowTab('summary')">Summary</button>
-        <button class="fb-nav-btn" onclick="fbShowTab('revenue')">Revenue</button>
-        <button class="fb-nav-btn" onclick="fbShowTab('opex')">Operating Expenses</button>
-        <button class="fb-nav-btn" onclick="fbShowTab('capital')">Capital &amp; Debt</button>
-        <button class="fb-nav-btn" onclick="fbShowTab('balancesheet')">Balance Sheet</button>
+      <div class="fb-detail-nav" id="fbDetailNav">
+        <!-- Tab buttons populated dynamically by fbRenderTabBar() based on year status -->
         <div class="fb-nav-spacer"></div>
         <div class="bgt-toggle" id="fbModeToggle" style="margin-right:4px">
           <button class="bgt-tog-btn active" onclick="fbSetMode('nominal')">$</button>
@@ -3191,7 +3227,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
   // ── Property Financials & Budgeting Module ──
   /* bgtData declared earlier (before sendNOIToExec) */
   let bgtLoaded = false;
-  let fbSelectedIdx = -1, fbActiveTab = 'summary', fbMode = 'nominal';
+  let fbSelectedIdx = -1, fbActiveTab = 'overview', fbMode = 'nominal';
   let fbSelectedYear = 2026;
   const FB_YEARS = [
     { year: 2025, status: 'historical', label: 'Historical' },
@@ -3544,6 +3580,11 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           console.log('Balance sheet items loaded for', Object.keys(fbBsAccountNames).length, 'properties');
         } catch(e) { console.warn('Balance sheet items not loaded:', e); }
 
+        // Tag rows with their source so we can build separate actuals/budget
+        // views per year (needed for YTD-blended Active-year Summary column).
+        budgetRows.forEach(r => { r._source = 'budget'; });
+        actualsRows.forEach(r => { r._source = 'actuals'; });
+
         // Combine both sources
         const allRows = [...budgetRows, ...actualsRows];
         console.log('Total rows loaded:', allRows.length);
@@ -3562,13 +3603,38 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           const meta = FB_PROP_META[propId];
           if (!meta) continue;
 
-          // Build year-specific data
+          // Build year-specific data. For each year we keep budget and
+          // actuals as separate sub-objects so the Summary view can blend
+          // (YTD actuals + ROY budget) for the active year. The canonical
+          // summary rows at yd.summaryRows default to budget when present,
+          // else actuals (preserves behavior for 2025 actuals-only years).
           const years = {};
           fbYearTotals[meta.name] = {};
           for (const [yr, rows] of Object.entries(yearMap)) {
-            const yd = fbBuildYearData(rows, gl, glLookup, propId, parseInt(yr));
+            const budgetRowsYr = rows.filter(r => r._source === 'budget');
+            const actualsRowsYr = rows.filter(r => r._source === 'actuals');
+            const budgetYd = budgetRowsYr.length
+              ? fbBuildYearData(budgetRowsYr, gl, glLookup, propId, parseInt(yr))
+              : null;
+            const actualsYd = actualsRowsYr.length
+              ? fbBuildYearData(actualsRowsYr, gl, glLookup, propId, parseInt(yr))
+              : null;
+            // Pick a canonical yd for card/total display
+            const canonical = budgetYd || actualsYd || {
+              totalIncome: 0, totalExpenses: 0, noi: 0,
+              summaryRows: [], detailRows: []
+            };
+            const yd = {
+              ...canonical,
+              budget: budgetYd,
+              actuals: actualsYd,
+            };
             years[yr] = yd;
-            fbYearTotals[meta.name][parseInt(yr)] = { rev: Math.abs(yd.totalIncome), exp: Math.abs(yd.totalExpenses), noi: yd.noi };
+            fbYearTotals[meta.name][parseInt(yr)] = {
+              rev: Math.abs(yd.totalIncome),
+              exp: Math.abs(yd.totalExpenses),
+              noi: yd.noi
+            };
           }
 
           // Use 2026 as primary display (for cards)
@@ -3693,12 +3759,15 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
   function fbSelectProp(idx) {
     fbSelectedIdx = idx;
-    fbActiveTab = 'summary';
+    // Reset to the default tab for the current year status
+    const status = fbGetYearStatus();
+    fbActiveTab = FB_DEFAULT_TAB[status] || 'overview';
     document.getElementById('fbCards').style.display = 'none';
     document.getElementById('fbDetail').style.display = '';
     fbRenderTabs();
     fbRenderYearBar();
     fbRenderDetailHeader();
+    fbUpdateNavForYear();
     fbRenderDetail();
   }
 
@@ -3766,12 +3835,54 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     fbRenderDetail();
   }
 
+  // Tabs are status-aware: different year statuses expose different tabs,
+  // and each status has its own default landing tab.
+  const FB_TABS_BY_STATUS = {
+    active: [
+      { id: 'overview',     label: 'Overview' },
+      { id: 'pl',           label: 'P&L' },
+      { id: 'trend',        label: 'Monthly Trend' },
+      { id: 'drill',        label: 'Drilldown' },
+      { id: 'balancesheet', label: 'Balance Sheet' },
+    ],
+    planning: [
+      { id: 'budget',       label: 'Budget' },
+      { id: 'drill',        label: 'Drilldown' },
+      { id: 'balancesheet', label: 'Balance Sheet' },
+    ],
+    historical: [
+      { id: 'actuals',      label: 'Actuals' },
+      { id: 'vstory',       label: 'Variance Story' },
+      { id: 'balancesheet', label: 'Balance Sheet' },
+    ],
+  };
+  const FB_DEFAULT_TAB = { active: 'overview', planning: 'budget', historical: 'vstory' };
+
   function fbUpdateNavForYear() {
     const status = fbGetYearStatus();
-    const nav = document.querySelector('.fb-detail-nav');
+    const nav = document.getElementById('fbDetailNav');
     if (!nav) return;
-    // Planning mode: show same tabs but Summary changes context
-    // For now tabs stay the same; the render functions handle the mode
+    const tabs = FB_TABS_BY_STATUS[status] || FB_TABS_BY_STATUS.active;
+
+    // Keep existing tab if it still makes sense; otherwise snap to the status default
+    const validIds = new Set(tabs.map(t => t.id));
+    if (!validIds.has(fbActiveTab)) {
+      fbActiveTab = FB_DEFAULT_TAB[status] || tabs[0].id;
+    }
+
+    // Rebuild the nav buttons, preserving the spacer + mode toggle at the end
+    const spacer = nav.querySelector('.fb-nav-spacer');
+    const toggle = document.getElementById('fbModeToggle');
+    // Remove existing tab buttons
+    nav.querySelectorAll('.fb-nav-btn').forEach(b => b.remove());
+    // Insert tab buttons before the spacer
+    tabs.forEach(t => {
+      const btn = document.createElement('button');
+      btn.className = 'fb-nav-btn' + (t.id === fbActiveTab ? ' active' : '');
+      btn.textContent = t.label;
+      btn.onclick = () => fbShowTab(t.id);
+      nav.insertBefore(btn, spacer);
+    });
   }
 
   function fbRenderDetailHeader() {
@@ -3913,12 +4024,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
   function fbShowTab(tab) {
     fbActiveTab = tab;
-    document.querySelectorAll('.fb-nav-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.fb-nav-btn').forEach(b => {
-      const txt = b.textContent.trim().toLowerCase();
-      const match = tab === 'opex' ? 'operating' : tab === 'capital' ? 'capital' : tab === 'balancesheet' ? 'balance' : tab;
-      if (txt.includes(match)) b.classList.add('active');
-    });
+    document.querySelectorAll('#fbDetailNav .fb-nav-btn').forEach(b => b.classList.remove('active'));
+    const tabs = FB_TABS_BY_STATUS[fbGetYearStatus()] || FB_TABS_BY_STATUS.active;
+    const match = tabs.find(t => t.id === tab);
+    if (match) {
+      document.querySelectorAll('#fbDetailNav .fb-nav-btn').forEach(b => {
+        if (b.textContent.trim() === match.label) b.classList.add('active');
+      });
+    }
     fbRenderDetail();
   }
 
@@ -4070,13 +4183,548 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     if (!base) return;
     const p = fbGetPropForYear(base);
 
-    if (fbActiveTab === 'summary') {
-      fbRenderSummary(body, p, base);
-    } else if (fbActiveTab === 'balancesheet') {
-      fbRenderBalanceSheet(body, base);
-    } else {
-      fbRenderMonthlyDetail(body, p, fbActiveTab);
+    switch (fbActiveTab) {
+      case 'overview':
+        return fbRenderOverview(body, p, base);
+      case 'pl':
+      case 'budget':
+      case 'actuals':
+      case 'summary':      // legacy id from URL hash
+        return fbRenderSummary(body, p, base);
+      case 'trend':
+      case 'monthly':      // legacy id
+        return fbRenderMonthlyActVsBgt(body, base);
+      case 'drill':
+        return fbRenderDrilldown(body, p, base);
+      case 'vstory':
+        return fbRenderVarianceStory(body, p, base);
+      case 'balancesheet':
+        return fbRenderBalanceSheet(body, base);
+      case 'revenue':
+      case 'opex':
+      case 'capital':
+        return fbRenderMonthlyDetail(body, p, fbActiveTab);
+      default:
+        return fbRenderOverview(body, p, base);
     }
+  }
+
+  // ── Overview tab (active year default) ──
+  // KPI cards + YTD cumulative NOI trend chart + top variance leaderboards.
+  // Consumes the same per-year actuals/budget sub-objects built by the loader.
+  function fbRenderOverview(body, p, baseProp) {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const yr = fbSelectedYear;
+    const sqft = baseProp.sqft;
+    const isPsf = fbMode === 'psf';
+    const fmt = isPsf ? (v) => fbFmtPsf(v, sqft) : fbFmt;
+
+    const yd = baseProp.years && baseProp.years[yr];
+    const actualsYd = yd && yd.actuals;
+    const budgetYd = yd && yd.budget;
+
+    // Compute closed months (same heuristic as Summary)
+    const sentinels = ['TOTAL INCOME', 'NET OPERATING INCOME', 'TOTAL BUILDING EXPENSES', 'TOTAL OPERATING EXPENSES'];
+    const closedMonths = new Set();
+    if (actualsYd && actualsYd.summaryRows) {
+      const senRows = actualsYd.summaryRows.filter(r => sentinels.includes(r.label));
+      MONTHS.forEach(m => {
+        const any = senRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005);
+        if (any) closedMonths.add(m);
+      });
+      if (closedMonths.size === 0) {
+        MONTHS.forEach(m => {
+          const any = actualsYd.summaryRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005);
+          if (any) closedMonths.add(m);
+        });
+      }
+    }
+    const lastClosed = MONTHS.filter(m => closedMonths.has(m)).slice(-1)[0];
+
+    const sumMonths = (row, monthNames) => (row && row.months)
+      ? monthNames.reduce((s, m) => s + (row.months[m] || 0), 0)
+      : 0;
+    const findRow = (yd2, label) => yd2 && yd2.summaryRows
+      ? yd2.summaryRows.find(r => r.label === label)
+      : null;
+
+    // YTD totals (closed months only)
+    const closedList = MONTHS.filter(m => closedMonths.has(m));
+    const ytdRevA = Math.abs(sumMonths(findRow(actualsYd, 'TOTAL INCOME'), closedList));
+    const ytdRevB = Math.abs(sumMonths(findRow(budgetYd, 'TOTAL INCOME'), closedList));
+    const ytdOpA  = Math.abs(sumMonths(findRow(actualsYd, 'TOTAL OPERATING EXPENSES') || findRow(actualsYd, 'TOTAL BUILDING EXPENSES'), closedList));
+    const ytdOpB  = Math.abs(sumMonths(findRow(budgetYd,  'TOTAL OPERATING EXPENSES') || findRow(budgetYd,  'TOTAL BUILDING EXPENSES'), closedList));
+    const ytdNoiA = sumMonths(findRow(actualsYd, 'NET OPERATING INCOME'), closedList);
+    const ytdNoiB = sumMonths(findRow(budgetYd,  'NET OPERATING INCOME'), closedList);
+
+    // Full-year forecast = YTD actual (closed) + budget (open)
+    const openList = MONTHS.filter(m => !closedMonths.has(m));
+    const fyRev = ytdRevA + Math.abs(sumMonths(findRow(budgetYd, 'TOTAL INCOME'), openList));
+    const fyOp  = ytdOpA  + Math.abs(sumMonths(findRow(budgetYd, 'TOTAL OPERATING EXPENSES') || findRow(budgetYd, 'TOTAL BUILDING EXPENSES'), openList));
+    const fyNoi = ytdNoiA + sumMonths(findRow(budgetYd, 'NET OPERATING INCOME'), openList);
+    const fyRevB = Math.abs(sumMonths(findRow(budgetYd, 'TOTAL INCOME'), MONTHS));
+    const fyOpB  = Math.abs(sumMonths(findRow(budgetYd, 'TOTAL OPERATING EXPENSES') || findRow(budgetYd, 'TOTAL BUILDING EXPENSES'), MONTHS));
+    const fyNoiB = sumMonths(findRow(budgetYd, 'NET OPERATING INCOME'), MONTHS);
+
+    const pct = (a, b) => b !== 0 ? ((a - b) / Math.abs(b)) * 100 : 0;
+
+    // KPI card helper
+    const kpi = (label, actualVal, budgetVal, fyVal, fyBudgetVal, negIsGood) => {
+      if (!closedMonths.size) {
+        return `<div class="fb-kpi-card">
+          <div class="fb-kpi-label">${label}</div>
+          <div class="fb-kpi-value" style="color:var(--text-dim)">—</div>
+          <div class="fb-kpi-sub"><span class="fb-chip fb-chip-neutral">No actuals</span><span class="fb-kpi-meta">Budget ${fmt(fyBudgetVal)} FY</span></div>
+        </div>`;
+      }
+      const ytdPct = pct(actualVal, budgetVal);
+      const signFlip = negIsGood ? -1 : 1;
+      const ytdChipCls = (ytdPct * signFlip >= 0) ? 'fb-chip-pos' : 'fb-chip-neg';
+      const sign = ytdPct >= 0 ? '+' : '';
+      const fyPct = pct(fyVal, fyBudgetVal);
+      const fySign = fyPct >= 0 ? '+' : '';
+      return `<div class="fb-kpi-card">
+        <div class="fb-kpi-label">${label} — YTD thru ${lastClosed || '—'}</div>
+        <div class="fb-kpi-value">${fmt(actualVal)}</div>
+        <div class="fb-kpi-sub">
+          <span class="fb-chip ${ytdChipCls}">${sign}${ytdPct.toFixed(1)}%</span>
+          <span class="fb-kpi-meta">vs budget ${fmt(budgetVal)}</span>
+        </div>
+        <div class="fb-kpi-sub" style="margin-top:4px">
+          <span class="fb-kpi-meta">FY forecast ${fmt(fyVal)} (${fySign}${fyPct.toFixed(1)}% vs bgt ${fmt(fyBudgetVal)})</span>
+        </div>
+      </div>`;
+    };
+
+    // Closed-months indicator (12 tiny letter boxes)
+    const closedIndicator = MONTHS.map(m => {
+      const isClosed = closedMonths.has(m);
+      return `<span class="fb-closed-mo-dot ${isClosed ? 'closed' : 'open'}">${m[0]}</span>`;
+    }).join('');
+
+    let html = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:12px;flex-wrap:wrap">
+        <div style="font-size:12.5px;color:var(--text-dim)">
+          ${closedMonths.size
+            ? `YTD through <strong style="color:var(--text)">${lastClosed}</strong> · ${closedMonths.size} of 12 months closed`
+            : `No actuals loaded for ${yr}. Run <code>python3 scripts/sync_actuals.py --commit</code>.`}
+        </div>
+        <div class="fb-closed-months">${closedIndicator}</div>
+      </div>
+
+      <div class="fb-kpi-grid">
+        ${kpi('Revenue', ytdRevA, ytdRevB, fyRev, fyRevB, false)}
+        ${kpi('Operating Expenses', ytdOpA, ytdOpB, fyOp, fyOpB, true)}
+        ${kpi('Net Operating Income', ytdNoiA, ytdNoiB, fyNoi, fyNoiB, false)}
+        <div class="fb-kpi-card fb-kpi-stub">
+          <div class="fb-kpi-label">Occupancy</div>
+          <div class="fb-kpi-value" style="color:var(--text-dim)">—</div>
+          <div class="fb-kpi-sub"><span class="fb-kpi-meta">Pending rent-roll data source</span></div>
+        </div>
+      </div>
+    `;
+
+    // YTD cumulative NOI chart (actuals solid, forecast dashed)
+    html += fbRenderOverviewChart(actualsYd, budgetYd, closedMonths, fmt);
+
+    // Top 5 favorable + unfavorable variances (YTD)
+    html += fbRenderVarianceLeaderboard(actualsYd, budgetYd, closedList, fmt);
+
+    body.innerHTML = html;
+  }
+
+  // ── SVG trend chart for Overview: cumulative NOI Actual vs Budget ──
+  function fbRenderOverviewChart(actualsYd, budgetYd, closedMonths, fmt) {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const find = (yd, label) => yd && yd.summaryRows ? yd.summaryRows.find(r => r.label === label) : null;
+    const noiRowA = find(actualsYd, 'NET OPERATING INCOME');
+    const noiRowB = find(budgetYd,  'NET OPERATING INCOME');
+    const monthVal = (row, m) => (row && row.months && row.months[m]) || 0;
+
+    // Cumulative series
+    const cumBudget = [];
+    const cumActual = [];    // null for months after last closed
+    const cumForecast = [];  // actual up to last closed, then continues with budget-added
+    let accA = 0, accB = 0, accF = 0;
+    const closedList = MONTHS.filter(m => closedMonths.has(m));
+    const lastClosedIdx = closedList.length ? MONTHS.indexOf(closedList[closedList.length - 1]) : -1;
+    MONTHS.forEach((m, i) => {
+      accB += monthVal(noiRowB, m);
+      cumBudget.push(accB);
+      if (closedMonths.has(m)) {
+        accA += monthVal(noiRowA, m);
+        cumActual.push(accA);
+        accF = accA;
+        cumForecast.push(accF);
+      } else {
+        cumActual.push(null);
+        accF += monthVal(noiRowB, m);
+        cumForecast.push(accF);
+      }
+    });
+
+    const allVals = [...cumBudget, ...cumForecast].filter(v => v !== null);
+    if (!allVals.length) {
+      return `<div class="fb-chart-card"><div class="fb-chart-title" style="color:var(--text-dim);padding:40px 0;text-align:center">No NOI data to chart</div></div>`;
+    }
+    const maxV = Math.max(...allVals, 1);
+    const minV = Math.min(0, ...allVals);
+
+    const W = 800, H = 240, padL = 50, padR = 20, padT = 20, padB = 30;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+    const xOf = i => padL + (i / 11) * chartW;
+    const yOf = v => padT + chartH - ((v - minV) / (maxV - minV)) * chartH;
+
+    // Polyline helpers
+    const ptsBudget = MONTHS.map((_, i) => `${xOf(i)},${yOf(cumBudget[i])}`).join(' ');
+    const ptsActual = MONTHS.map((_, i) => closedMonths.has(MONTHS[i]) ? `${xOf(i)},${yOf(cumActual[i])}` : null)
+      .filter(Boolean).join(' ');
+    const ptsForecast = MONTHS.slice(lastClosedIdx >= 0 ? lastClosedIdx : 0).map((_, idx) => {
+      const i = (lastClosedIdx >= 0 ? lastClosedIdx : 0) + idx;
+      return `${xOf(i)},${yOf(cumForecast[i])}`;
+    }).join(' ');
+
+    // Gridlines: 5 horizontal
+    const gridLines = [0, 0.25, 0.5, 0.75, 1].map(t => {
+      const v = minV + (maxV - minV) * (1 - t);
+      const y = yOf(v);
+      return `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#d4dbe8" stroke-width="1"/>
+              <text x="${padL - 5}" y="${y + 3}" text-anchor="end" font-size="9" fill="#6b7d96">${fmt(v)}</text>`;
+    }).join('');
+
+    // X-axis labels
+    const xLabels = MONTHS.map((m, i) => {
+      const isLast = (i === lastClosedIdx);
+      return `<text x="${xOf(i)}" y="${H - 10}" text-anchor="middle" font-size="9.5" fill="${isLast ? '#00b0d4' : '#6b7d96'}" font-weight="${isLast ? '700' : '400'}">${m}</text>`;
+    }).join('');
+
+    // Closed-months shading + divider
+    let closedShading = '';
+    if (lastClosedIdx >= 0) {
+      const x1 = xOf(0);
+      const x2 = xOf(lastClosedIdx);
+      closedShading = `
+        <rect x="${x1}" y="${padT}" width="${x2 - x1}" height="${chartH}" fill="#00b0d4" opacity="0.04"/>
+        <line x1="${x2}" y1="${padT}" x2="${x2}" y2="${padT + chartH}" stroke="#00b0d4" stroke-dasharray="3 3" stroke-width="1"/>
+      `;
+    }
+
+    // Data points for actuals
+    const actualDots = MONTHS.map((m, i) => closedMonths.has(m)
+      ? `<circle cx="${xOf(i)}" cy="${yOf(cumActual[i])}" r="3.5" fill="#00b0d4"/>`
+      : '').join('');
+
+    const svg = `
+      <svg class="fb-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+        ${gridLines}
+        ${closedShading}
+        <polyline fill="none" stroke="#1a9a6b" stroke-width="2.2" points="${ptsBudget}"/>
+        ${ptsActual ? `<polyline fill="none" stroke="#00b0d4" stroke-width="3" points="${ptsActual}"/>` : ''}
+        ${lastClosedIdx >= 0 && lastClosedIdx < 11 ? `<polyline fill="none" stroke="#6b7d96" stroke-width="1.8" stroke-dasharray="4 3" opacity="0.7" points="${ptsForecast}"/>` : ''}
+        ${actualDots}
+        ${xLabels}
+      </svg>
+    `;
+
+    return `
+      <div class="fb-chart-card">
+        <div class="fb-chart-head">
+          <div class="fb-chart-title">Net Operating Income — Cumulative YTD</div>
+          <div class="fb-chart-legend">
+            <span><span class="fb-legend-dot" style="background:#00b0d4"></span>Actual (closed)</span>
+            <span><span class="fb-legend-dot" style="background:#1a9a6b"></span>Budget</span>
+            <span><span class="fb-legend-dot" style="background:#6b7d96;opacity:.7"></span>Forecast (Act + ROY Bgt)</span>
+          </div>
+        </div>
+        ${svg}
+      </div>
+    `;
+  }
+
+  // ── Variance leaderboard (top N favorable / unfavorable YTD) ──
+  function fbRenderVarianceLeaderboard(actualsYd, budgetYd, closedList, fmt) {
+    if (!actualsYd || !budgetYd || !closedList.length) {
+      return `<div class="fb-section-card" style="color:var(--text-dim);font-size:12px;text-align:center;padding:24px">
+        Variance leaderboard will appear once actuals are loaded.</div>`;
+    }
+    // Compute variance per line item (Act - Bgt) for non-header, non-total leaf rows
+    // Favorable for expenses = under budget (negative variance). Favorable for income = over budget (positive).
+    const byLabelA = {}; const byLabelB = {};
+    (actualsYd.summaryRows || []).forEach(r => { if (!r.isHeader) byLabelA[r.label] = r; });
+    (budgetYd.summaryRows || []).forEach(r => { if (!r.isHeader) byLabelB[r.label] = r; });
+
+    const labels = new Set([...Object.keys(byLabelA), ...Object.keys(byLabelB)]);
+    // Heuristic: treat as income if label is in the "income" section of budget's row list
+    // (rows before the first OPERATING/EXPENSE/BUILDING header). Use a simple text match.
+    const incomePattern = /(INCOME|REVENUE|RENT|RECOVER|FEE|INTEREST|PARKING|MISCELL|OTHER INCOME|WORK ORDER|ANTENNA)/i;
+    const expensePattern = /(EXPENSE|TAX|INSUR|CLEAN|R&M|REPAIR|UTILIT|MANAGEMENT|CONTRACT|MAINT|PAYROLL|DEPREC|AMORTIZ|INTEREST)/i;
+
+    const items = [];
+    labels.forEach(label => {
+      if (/TOTAL|NET OPERATING/i.test(label)) return;
+      const a = byLabelA[label];
+      const b = byLabelB[label];
+      if (!a && !b) return;
+      const aVal = a && a.months ? closedList.reduce((s, m) => s + (a.months[m] || 0), 0) : 0;
+      const bVal = b && b.months ? closedList.reduce((s, m) => s + (b.months[m] || 0), 0) : 0;
+      const variance = aVal - bVal;
+      if (Math.abs(variance) < 1) return;
+      const isIncome = incomePattern.test(label) && !expensePattern.test(label);
+      // Favorable sign: income → positive variance is favorable; expense → negative variance is favorable
+      const favorable = isIncome ? variance > 0 : variance < 0;
+      items.push({ label, variance, favorable, abs: Math.abs(variance) });
+    });
+
+    items.sort((x, y) => y.abs - x.abs);
+    const favItems = items.filter(i => i.favorable).slice(0, 5);
+    const unfavItems = items.filter(i => !i.favorable).slice(0, 5);
+
+    const renderRow = (item) => {
+      const val = item.variance;
+      const sign = val >= 0 ? '+' : '−';
+      const absFmt = fmt(Math.abs(val));
+      const cls = item.favorable ? 'pos' : 'neg';
+      return `<div class="fb-variance-row">
+        <span class="fb-variance-label">${item.label}</span>
+        <span class="fb-variance-val ${cls}">${sign}${absFmt}</span>
+      </div>`;
+    };
+
+    return `
+      <div class="fb-variance-grid">
+        <div class="fb-variance-col pos">
+          <h3><span class="fb-vc-icon"></span>Top Favorable (YTD)</h3>
+          ${favItems.length ? favItems.map(renderRow).join('') : '<div style="color:var(--text-dim);font-size:12px;padding:8px 0">No favorable variances yet.</div>'}
+        </div>
+        <div class="fb-variance-col neg">
+          <h3><span class="fb-vc-icon"></span>Top Unfavorable (YTD)</h3>
+          ${unfavItems.length ? unfavItems.map(renderRow).join('') : '<div style="color:var(--text-dim);font-size:12px;padding:8px 0">No unfavorable variances yet.</div>'}
+        </div>
+      </div>
+    `;
+  }
+
+  // ── Consolidated Drilldown (Revenue / OpEx / Capital segmented) ──
+  let fbDrillSection = 'revenue';
+  function fbSetDrillSection(s) {
+    fbDrillSection = s;
+    fbRenderDetail();
+  }
+  function fbRenderDrilldown(body, p, baseProp) {
+    const segments = [
+      { id: 'revenue', label: 'Revenue' },
+      { id: 'opex',    label: 'Operating Expenses' },
+      { id: 'capital', label: 'Capital & Debt' },
+    ];
+    let html = `<div class="fb-drill-segments">`;
+    segments.forEach(s => {
+      html += `<button class="fb-drill-seg-btn${s.id === fbDrillSection ? ' active' : ''}" onclick="fbSetDrillSection('${s.id}')">${s.label}</button>`;
+    });
+    html += `</div><div id="fbDrillBody"></div>`;
+    body.innerHTML = html;
+    // Reuse the existing monthly-detail renderer targeting the segment
+    const inner = document.getElementById('fbDrillBody');
+    fbRenderMonthlyDetail(inner, p, fbDrillSection);
+  }
+
+  // ── Variance Story (historical year) ──
+  function fbRenderVarianceStory(body, p, baseProp) {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const yr = fbSelectedYear;
+    const sqft = baseProp.sqft;
+    const isPsf = fbMode === 'psf';
+    const fmt = isPsf ? (v) => fbFmtPsf(v, sqft) : fbFmt;
+
+    const yd = baseProp.years && baseProp.years[yr];
+    const actualsYd = yd && yd.actuals;
+    const budgetYd = yd && yd.budget;
+
+    if (!actualsYd) {
+      body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim)">
+        No actuals loaded for ${yr}. Load via <code>sync_actuals.py</code>.</div>`;
+      return;
+    }
+
+    const note = `<div class="panel-sub" style="font-size:12px;color:var(--text-dim);margin-bottom:14px">
+      ${yr} final actuals vs original budget · ranked by $ impact
+    </div>`;
+
+    const lb = fbRenderVarianceLeaderboard(actualsYd, budgetYd, MONTHS, fmt);
+
+    // Year recap card
+    const sumRow = (yd2, label) => {
+      const r = yd2 && yd2.summaryRows ? yd2.summaryRows.find(row => row.label === label) : null;
+      return r && r.months ? MONTHS.reduce((s, m) => s + (r.months[m] || 0), 0) : 0;
+    };
+    const revA = Math.abs(sumRow(actualsYd, 'TOTAL INCOME'));
+    const opA  = Math.abs(sumRow(actualsYd, 'TOTAL OPERATING EXPENSES') || sumRow(actualsYd, 'TOTAL BUILDING EXPENSES'));
+    const noiA = sumRow(actualsYd, 'NET OPERATING INCOME');
+    const revB = Math.abs(sumRow(budgetYd, 'TOTAL INCOME'));
+    const opB  = Math.abs(sumRow(budgetYd, 'TOTAL OPERATING EXPENSES') || sumRow(budgetYd, 'TOTAL BUILDING EXPENSES'));
+    const noiB = sumRow(budgetYd, 'NET OPERATING INCOME');
+    const pct = (a, b) => b !== 0 ? ((a - b) / Math.abs(b)) * 100 : 0;
+    const cell = (label, a, b, negIsGood) => {
+      const dPct = pct(a, b);
+      const sign = dPct >= 0 ? '+' : '';
+      const cls = (negIsGood ? dPct <= 0 : dPct >= 0) ? 'pos' : 'neg';
+      const colorCls = cls === 'pos' ? 'var(--green)' : '#c94646';
+      return `<div>
+        <div style="color:var(--text-dim);font-size:11px">${label}</div>
+        <div style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">${fmt(a)}</div>
+        <div style="font-size:11px;color:${colorCls};font-weight:600">${sign}${dPct.toFixed(1)}% vs budget</div>
+      </div>`;
+    };
+
+    const recap = `
+      <div class="fb-section-card" style="margin-top:18px">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-weight:600;margin-bottom:10px">${yr} Year Recap</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));gap:20px">
+          ${cell('Revenue', revA, revB, false)}
+          ${cell('Operating Expenses', opA, opB, true)}
+          ${cell('NOI', noiA, noiB, false)}
+        </div>
+      </div>
+    `;
+
+    body.innerHTML = note + lb + recap;
+  }
+
+  // ── Monthly Actuals vs Budget — new tab ──
+  // Shows each GL line grouped by Summary sections (Income, Expenses, NOI)
+  // with Actual / Budget / Var for every month (or every quarter, when the
+  // Quarterly toggle is on). Respects $/PSF mode.
+  let fbMonthlyGrouping = 'month'; // 'month' | 'quarter'
+  function fbSetMonthlyGrouping(g) {
+    fbMonthlyGrouping = g;
+    fbRenderDetail();
+  }
+  function fbRenderMonthlyActVsBgt(body, baseProp) {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const QUARTERS = [
+      { label: 'Q1', months: ['Jan','Feb','Mar'] },
+      { label: 'Q2', months: ['Apr','May','Jun'] },
+      { label: 'Q3', months: ['Jul','Aug','Sep'] },
+      { label: 'Q4', months: ['Oct','Nov','Dec'] },
+    ];
+    const yr = fbSelectedYear;
+    const sqft = baseProp.sqft;
+    const isPsf = fbMode === 'psf';
+    const fmt = isPsf ? (v) => fbFmtPsf(v, sqft) : fbFmt;
+    const fmtPct = (v) => (isFinite(v) && v !== 0) ? (v > 0 ? '+' : '') + v.toFixed(1) + '%' : '—';
+
+    const yd = baseProp.years && baseProp.years[yr];
+    if (!yd) {
+      body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim)">No data for ${yr}.</div>`;
+      return;
+    }
+    const actualsYd = yd.actuals;
+    const budgetYd = yd.budget;
+
+    // Build label → row lookup per source
+    const lkA = {}; const lkB = {};
+    (actualsYd && actualsYd.summaryRows || []).forEach(r => { if (!r.isHeader) lkA[r.label] = r; });
+    (budgetYd && budgetYd.summaryRows || []).forEach(r => { if (!r.isHeader) lkB[r.label] = r; });
+
+    // Use budget's summary skeleton (more complete for active year); fall
+    // back to actuals if no budget exists (shouldn't happen in practice).
+    const skeleton = (budgetYd && budgetYd.summaryRows) || (actualsYd && actualsYd.summaryRows) || [];
+
+    // Column groups
+    const useQuarter = fbMonthlyGrouping === 'quarter';
+    const colGroups = useQuarter
+      ? QUARTERS.map(q => ({ label: q.label, months: q.months }))
+      : MONTHS.map(m => ({ label: m, months: [m] }));
+
+    // Toggle bar
+    let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">Grouping</span>
+        <div class="bgt-toggle">
+          <button class="bgt-tog-btn ${!useQuarter ? 'active' : ''}" onclick="fbSetMonthlyGrouping('month')">Monthly</button>
+          <button class="bgt-tog-btn ${useQuarter ? 'active' : ''}" onclick="fbSetMonthlyGrouping('quarter')">Quarterly</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim)">${yr} Actual vs Budget · ${isPsf ? '$/SF' : '$'}</div>
+    </div>`;
+
+    html += `<div class="bgt-table-wrap" style="overflow-x:auto"><table class="bgt-table" style="min-width:${100 + colGroups.length * 240}px">
+      <thead>
+        <tr>
+          <th rowspan="2" class="bgt-th-label" style="min-width:220px;position:sticky;left:0;background:var(--surface2);z-index:5">Line Item</th>`;
+    colGroups.forEach(g => {
+      html += `<th colspan="3" class="bgt-th-group" style="text-align:center">${g.label}</th>`;
+    });
+    html += `<th colspan="3" class="bgt-th-group" style="text-align:center;background:rgba(0,176,212,0.08)">Total</th></tr><tr>`;
+    for (let i = 0; i < colGroups.length + 1; i++) {
+      const isTotal = (i === colGroups.length);
+      const bg = isTotal ? 'background:rgba(0,176,212,0.05);' : '';
+      html += `<th class="bgt-th-sub" style="${bg}">Act</th><th class="bgt-th-sub" style="${bg}">Bgt</th><th class="bgt-th-sub" style="${bg}">Var$</th>`;
+    }
+    html += `</tr></thead><tbody>`;
+
+    const sumMonths = (row, months) => (row && row.months)
+      ? months.reduce((s, m) => s + (row.months[m] || 0), 0)
+      : 0;
+
+    const expenseLabels = new Set(); // rows whose variance sign should flip (expenses: overspend = red)
+    let isExpenseSection = false;
+    const topLevelPattern = /^(INCOME|REVENUE|OPERATING|EXPENSE|NET OPERATING|NOI|BELOW|GENERAL)/i;
+
+    skeleton.forEach(row => {
+      if (row.isHeader) {
+        const label = row.label;
+        const upper = label.toUpperCase();
+        const isTopLevel = topLevelPattern.test(label);
+        if (isTopLevel && (upper.includes('EXPENSE') || upper.includes('OPERATING'))) isExpenseSection = true;
+        if (upper === 'INCOME' || upper.includes('REVENUE')) isExpenseSection = false;
+        let sectionCls = 'bgt-section-other';
+        if (upper === 'INCOME' || upper.includes('REVENUE')) sectionCls = 'bgt-section-income';
+        else if (isTopLevel && (upper.includes('EXPENSE') || upper.includes('OPERATING'))) sectionCls = 'bgt-section-expense';
+        else if (upper.includes('NOI') || upper.includes('NET OPERATING')) sectionCls = 'bgt-section-noi';
+        html += `<tr class="${sectionCls}"><td colspan="${1 + (colGroups.length + 1) * 3}" style="padding:8px 10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:10.5px;position:sticky;left:0;background:inherit">${label}</td></tr>`;
+        return;
+      }
+      if (isExpenseSection) expenseLabels.add(row.label);
+
+      const rowA = lkA[row.label];
+      const rowB = lkB[row.label];
+
+      const fw = row.isTotal ? 700 : 400;
+      const rowBg = row.isTotal ? 'background:var(--surface);font-weight:700' : '';
+      html += `<tr style="${rowBg}"><td style="position:sticky;left:0;background:var(--surface);z-index:2;padding-left:${row.isTotal ? 12 : 20}px;font-weight:${fw}">${row.label}</td>`;
+
+      let totalA = 0, totalB = 0;
+      colGroups.forEach(g => {
+        const a = sumMonths(rowA, g.months);
+        const b = sumMonths(rowB, g.months);
+        totalA += a;
+        totalB += b;
+        const v = a - b;
+        const vCls = fbValClass(v, expenseLabels.has(row.label));
+        html += `<td style="text-align:right;font-weight:${fw}">${a ? fmt(a) : '—'}</td>`;
+        html += `<td style="text-align:right;color:var(--text-dim)">${b ? fmt(b) : '—'}</td>`;
+        html += `<td style="text-align:right" class="${(a || b) ? vCls : ''}">${(a || b) ? fmt(v) : '—'}</td>`;
+      });
+      // Total
+      const vTot = totalA - totalB;
+      const vTotCls = fbValClass(vTot, expenseLabels.has(row.label));
+      const totBg = 'background:rgba(0,176,212,0.05)';
+      html += `<td style="text-align:right;font-weight:700;${totBg}">${totalA ? fmt(totalA) : '—'}</td>`;
+      html += `<td style="text-align:right;color:var(--text-dim);${totBg}">${totalB ? fmt(totalB) : '—'}</td>`;
+      html += `<td style="text-align:right;${totBg}" class="${(totalA || totalB) ? vTotCls : ''}">${(totalA || totalB) ? fmt(vTot) : '—'}</td>`;
+      html += `</tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+
+    if (!actualsYd) {
+      html += `<div style="margin-top:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-dim)">
+        No actuals loaded yet for ${yr}. Run <code>python3 scripts/sync_actuals.py --commit</code> to pull the latest monthly financials from Dropbox.
+      </div>`;
+    }
+
+    body.innerHTML = html;
   }
 
   function fbRenderSummary(body, p, baseProp) {
@@ -4094,23 +4742,50 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
     // Determine column mapping based on year status
     // Historical: A=This Year Actuals, B=This Year Budget, C=Last Year Actuals
-    // Active:     A=This Year Actuals, B=This Year Budget, C=Last Year Actuals
-    // Planning:   A=Next Year Budget,  B=This Year Actuals, C=This Year Budget
-    // Data type for each year: 2025=actuals, 2026=budget. No 2024 data, no 2026 actuals yet, no 2027 budget yet.
+    // Active:     A=Blended (YTD Act + ROY Budget), B=This Year Budget, C=Last Year Actuals
+    // Planning:   A=Next Year Budget, B=This Year Actuals, C=This Year Budget
     const yrs = baseProp && baseProp.years || {};
-    // Infer data type: years before active year have actuals, active year has budget
-    const activeYr = FB_YEARS.find(y => y.status === 'active');
-    const activeYear = activeYr ? activeYr.year : 2026;
+    // Pull the source-specific data when available; otherwise fall back to
+    // legacy-flat shape (which could only ever hold one source at a time).
     const getYearData = (year, type) => {
       const yd = yrs[year];
       if (!yd) return null;
+      if (yd[type]) return yd[type];
+      // Legacy fallback: year's data was stored flat. Assume pre-active years
+      // are actuals, current/future are budget.
+      const activeYr = FB_YEARS.find(y => y.status === 'active');
+      const activeYear = activeYr ? activeYr.year : 2026;
       const inferredType = year < activeYear ? 'actuals' : 'budget';
       return (type === inferredType) ? yd : null;
     };
 
+    // Determine which months of the active year are "closed" (have actual
+    // data). Heuristic: a month is closed if TOTAL INCOME (or any major
+    // totals row) has a non-zero actual value for that month.
+    const fbClosedMonthsSet = (actualsYd) => {
+      const s = new Set();
+      if (!actualsYd || !actualsYd.summaryRows) return s;
+      const sentinels = ['TOTAL INCOME', 'NET OPERATING INCOME', 'TOTAL BUILDING EXPENSES', 'TOTAL OPERATING EXPENSES'];
+      const sentinelRows = actualsYd.summaryRows.filter(r => sentinels.includes(r.label));
+      MONTHS.forEach(m => {
+        const any = sentinelRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005);
+        if (any) s.add(m);
+      });
+      // Fallback: if no sentinels matched, look at every row
+      if (s.size === 0) {
+        MONTHS.forEach(m => {
+          const any = actualsYd.summaryRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005);
+          if (any) s.add(m);
+        });
+      }
+      return s;
+    };
+
     let colA_label, colB_label, colC_label;
     let dataA, dataB, dataC;
+    let colA_closedMonths = null; // when set, colA is blended (YTD act + ROY budget)
     const yy = String(yr).slice(-2);
+    const MONTHS_IDX = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
     if (status === 'planning') {
       const py = yr - 1;
@@ -4120,8 +4795,36 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       dataA = getYearData(yr, 'budget') || (yrs[yr] || null); // planning year zeros
       dataB = getYearData(py, 'actuals');
       dataC = getYearData(py, 'budget');
+    } else if (status === 'active') {
+      // Active year: blend YTD actuals + ROY budget for a true 12-month comparison
+      const py = yr - 1;
+      const actualsYd = getYearData(yr, 'actuals');
+      const budgetYd = getYearData(yr, 'budget');
+      const closedMonths = fbClosedMonthsSet(actualsYd);
+      if (closedMonths.size > 0 && closedMonths.size < 12) {
+        // Blended mode
+        const closedCount = closedMonths.size;
+        const lastClosed = MONTHS_IDX.filter(m => closedMonths.has(m)).slice(-1)[0];
+        colA_label = `'${yy} Act thru ${lastClosed} + Bgt`;
+        colA_closedMonths = closedMonths;
+        // dataA holds the actuals; blending logic uses budgetYd via closure
+        dataA = actualsYd;
+      } else if (closedMonths.size === 12) {
+        // Fully closed year — pure actuals
+        colA_label = `'${yy} Actuals`;
+        dataA = actualsYd;
+      } else {
+        // No actuals yet — leave colA empty (dashes) so the column label still
+        // reads "Actuals" and the user knows no data has been loaded yet.
+        colA_label = `'${yy} Actuals`;
+        dataA = null;
+      }
+      colB_label = `'${yy} Budget`;
+      colC_label = `'${String(py).slice(-2)} Actuals`;
+      dataB = budgetYd;
+      dataC = getYearData(py, 'actuals');
     } else {
-      // Historical or Active: A=actuals, B=budget, C=last year actuals
+      // Historical: A=actuals, B=budget, C=last year actuals
       const py = yr - 1;
       colA_label = `'${yy} Actuals`;
       colB_label = `'${yy} Budget`;
@@ -4172,12 +4875,28 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       }
     });
 
+    // Helper: compute blended annual for colA when YTD-actuals + ROY-budget mode is active
+    const blendedAnnual = (rowA_act, rowB_bgt, closedMonths) => {
+      if (!closedMonths) return annualOf(rowA_act);
+      let total = 0;
+      MONTHS_IDX.forEach(m => {
+        if (closedMonths.has(m)) {
+          total += (rowA_act && rowA_act.months && rowA_act.months[m]) || 0;
+        } else {
+          total += (rowB_bgt && rowB_bgt.months && rowB_bgt.months[m]) || 0;
+        }
+      });
+      return total;
+    };
+
     // Helper: render the 7 value cells (A, B, C, varAB$, varAB%, varAC$, varAC%) for a row
     const renderValueCells = (row, fw) => {
       const rowA = lookupA[row.label];
       const rowB = lookupB[row.label];
       const rowC = lookupC[row.label];
-      const valA = rowA ? annualOf(rowA) : 0;
+      const valA = colA_closedMonths
+        ? blendedAnnual(rowA, rowB, colA_closedMonths)
+        : (rowA ? annualOf(rowA) : 0);
       const valB = rowB ? annualOf(rowB) : 0;
       const valC = rowC ? annualOf(rowC) : 0;
 

@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Property Financials — Redesign Mockup</title>
+<style>
+  :root {
+    --bg: #e2e6ef;
+    --surface: #ffffff;
+    --surface2: #dde2ec;
+    --border: #d4dbe8;
+    --text: #1e2d44;
+    --text-dim: #6b7d96;
+    --accent: #00b0d4;
+    --accent-dim: rgba(0,176,212,0.08);
+    --green: #1a9a6b;
+    --green-dim: rgba(26,154,107,0.08);
+    --red: #dc5a5a;
+    --red-dim: rgba(220,90,90,0.08);
+    --amber: #d97e2b;
+    --navy: #283d55;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background:var(--bg); color:var(--text); padding:24px; }
+  .mockup-wrap { max-width:1400px; margin:0 auto; }
+  .mockup-intro { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px 22px; margin-bottom:20px; }
+  .mockup-intro h1 { font-size:16px; font-weight:700; margin-bottom:4px; }
+  .mockup-intro p { font-size:13px; color:var(--text-dim); line-height:1.5; }
+
+  /* Year status selector */
+  .year-chooser { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 18px; display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+  .year-chooser-label { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); font-weight:600; }
+  .year-btn { padding:8px 18px; border:1px solid var(--border); background:var(--surface); border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; color:var(--text); display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .year-btn:hover { background:var(--surface2); }
+  .year-btn.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .year-btn .year-status-tag { font-size:9px; text-transform:uppercase; letter-spacing:.5px; opacity:.7; }
+
+  /* Main panel */
+  .panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .panel-header { padding:18px 22px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:16px; }
+  .panel-title { font-size:16px; font-weight:700; }
+  .panel-sub { font-size:12px; color:var(--text-dim); }
+
+  /* Tab nav */
+  .tab-nav { display:flex; gap:2px; padding:6px 16px; background:var(--surface2); border-bottom:1px solid var(--border); align-items:center; }
+  .tab-btn { padding:9px 14px; background:transparent; border:none; font-size:12px; font-weight:500; color:var(--text-dim); cursor:pointer; border-radius:6px; }
+  .tab-btn:hover { background:var(--surface); color:var(--text); }
+  .tab-btn.active { background:var(--accent); color:#fff; }
+  .tab-nav-spacer { flex:1; }
+  .mode-toggle { display:flex; background:var(--surface); border:1px solid var(--border); border-radius:6px; overflow:hidden; }
+  .mode-toggle button { padding:5px 12px; background:transparent; border:none; font-size:11px; font-weight:500; color:var(--text-dim); cursor:pointer; }
+  .mode-toggle button.active { background:var(--accent); color:#fff; }
+
+  /* Content area */
+  .content { padding:22px; min-height:600px; }
+
+  /* KPI cards */
+  .kpi-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:22px; }
+  .kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .kpi-label { font-size:10.5px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); font-weight:600; margin-bottom:8px; }
+  .kpi-value { font-size:22px; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; }
+  .kpi-sub { display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11.5px; }
+  .kpi-sub .chip { padding:2px 8px; border-radius:6px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .chip-pos { background:var(--green-dim); color:var(--green); }
+  .chip-neg { background:var(--red-dim); color:var(--red); }
+  .kpi-meta { color:var(--text-dim); }
+
+  /* Chart */
+  .chart-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; margin-bottom:22px; }
+  .chart-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; }
+  .chart-title { font-size:13px; font-weight:700; }
+  .chart-legend { display:flex; gap:14px; font-size:11px; color:var(--text-dim); }
+  .legend-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+  .chart-svg { width:100%; height:220px; display:block; }
+
+  /* Variance list */
+  .variance-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  .variance-col { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
+  .variance-col h3 { font-size:12px; text-transform:uppercase; letter-spacing:.5px; color:var(--text-dim); margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .variance-col h3 .icon { width:14px; height:14px; border-radius:50%; display:inline-block; }
+  .variance-col.pos h3 .icon { background:var(--green); }
+  .variance-col.neg h3 .icon { background:var(--red); }
+  .variance-row { display:flex; justify-content:space-between; padding:8px 0; font-size:12.5px; border-bottom:1px dashed var(--border); }
+  .variance-row:last-child { border-bottom:none; }
+  .variance-label { color:var(--text); }
+  .variance-val { font-weight:600; font-variant-numeric:tabular-nums; }
+  .variance-val.pos { color:var(--green); }
+  .variance-val.neg { color:var(--red); }
+
+  /* Data table (P&L view) */
+  .pl-table-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .pl-table { width:100%; border-collapse:collapse; font-size:12px; }
+  .pl-table th { text-align:right; padding:9px 10px; background:var(--surface2); font-weight:600; font-size:10px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-dim); border-bottom:1px solid var(--border); }
+  .pl-table th:first-child { text-align:left; }
+  .pl-table td { padding:7px 10px; text-align:right; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums; }
+  .pl-table td:first-child { text-align:left; font-weight:500; }
+  .pl-table tr.section td { background:var(--surface2); font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.4px; color:var(--text-dim); }
+  .pl-table tr.total td { background:#f5f7fa; font-weight:700; }
+  .pl-col-a { border-left:2px solid rgba(0,176,212,.25); }
+  .pl-col-b { border-left:2px solid rgba(26,154,107,.2); }
+  .pl-col-c { border-left:2px solid rgba(167,139,250,.2); }
+  .pl-col-v { border-left:2px solid rgba(255,140,90,.2); }
+
+  /* Drilldown segmented */
+  .drill-segments { display:inline-flex; background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:3px; gap:2px; margin-bottom:18px; }
+  .drill-seg-btn { padding:7px 14px; border:none; background:transparent; border-radius:6px; font-size:12px; font-weight:500; color:var(--text-dim); cursor:pointer; }
+  .drill-seg-btn.active { background:var(--accent); color:#fff; }
+
+  /* Trend table */
+  .trend-table-wrap { overflow-x:auto; background:var(--surface); border:1px solid var(--border); border-radius:10px; }
+  .trend-table { border-collapse:collapse; font-size:11px; white-space:nowrap; min-width:100%; }
+  .trend-table th { padding:8px 10px; background:var(--surface2); font-weight:600; font-size:9.5px; text-transform:uppercase; letter-spacing:.4px; color:var(--text-dim); border-bottom:1px solid var(--border); }
+  .trend-table td { padding:6px 10px; border-bottom:1px solid var(--border); font-variant-numeric:tabular-nums; text-align:right; }
+  .trend-table td.label { text-align:left; font-weight:500; position:sticky; left:0; background:var(--surface); }
+  .trend-table tr.section td { background:var(--surface2); font-size:10px; font-weight:700; text-transform:uppercase; color:var(--text-dim); }
+  .trend-table .col-group-sep { border-left:1px solid var(--border); }
+  .v-pos { color:var(--green); font-weight:600; }
+  .v-neg { color:var(--red); font-weight:600; }
+
+  /* Placeholder box */
+  .placeholder { border:2px dashed var(--border); border-radius:10px; padding:60px 24px; text-align:center; color:var(--text-dim); font-size:13px; background:rgba(221,226,236,.3); }
+
+  /* Notes panel */
+  .design-note { margin-top:20px; padding:14px 18px; background:#fff8e8; border:1px solid #e8d899; border-radius:8px; font-size:12px; color:#6b5320; line-height:1.6; }
+  .design-note strong { color:#3d2d0b; }
+
+  .muted-chip { display:inline-block; padding:2px 8px; background:var(--surface2); color:var(--text-dim); font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; border-radius:4px; font-weight:600; }
+  .highlight-chip { display:inline-block; padding:2px 8px; background:var(--accent-dim); color:var(--accent); font-size:10.5px; text-transform:uppercase; letter-spacing:.4px; border-radius:4px; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="mockup-wrap">
+
+  <div class="mockup-intro">
+    <h1>Property Financials — Option 2 Redesign Mockup</h1>
+    <p>Pick a year below to preview how the tabs and content change based on year status. Paramus Plaza used as the example property. This is a static visual mockup, no real data — but layout, colors, and typography match the production app.</p>
+  </div>
+
+  <div class="year-chooser">
+    <span class="year-chooser-label">Year</span>
+    <button class="year-btn" onclick="setYear('historical')">2025<span class="year-status-tag">Historical</span></button>
+    <button class="year-btn active" onclick="setYear('active')">2026<span class="year-status-tag">Active</span></button>
+    <button class="year-btn" onclick="setYear('planning')">2027<span class="year-status-tag">Planning</span></button>
+    <span style="margin-left:auto;font-size:11px;color:var(--text-dim)">Example property: <strong>Paramus Plaza</strong> (153,494 SF)</span>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <div>
+        <div class="panel-title" id="panel-title">Paramus Plaza — 2026 <span class="highlight-chip">Active</span></div>
+        <div class="panel-sub" id="panel-sub">YTD actuals thru Apr · blended full-year forecast</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;font-size:11px;color:var(--text-dim)">
+        <span>Closed months:</span>
+        <div id="closed-months" style="display:flex;gap:3px">
+          <!-- JS fills -->
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-nav" id="tab-nav">
+      <!-- JS fills -->
+      <div class="tab-nav-spacer"></div>
+      <div class="mode-toggle">
+        <button class="active">$</button>
+        <button>PSF</button>
+      </div>
+    </div>
+
+    <div class="content" id="content">
+      <!-- JS fills -->
+    </div>
+  </div>
+
+  <div class="design-note" id="design-note"></div>
+
+</div>
+
+<script>
+const YEAR_CONFIG = {
+  active: {
+    title: 'Paramus Plaza — 2026',
+    tag: 'Active',
+    sub: 'YTD actuals thru Apr · blended full-year forecast',
+    closedMonths: ['Jan','Feb','Mar','Apr'],
+    openMonths: ['May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    tabs: [
+      { id:'overview',  label:'Overview' },
+      { id:'pl',        label:'P&L' },
+      { id:'trend',     label:'Monthly Trend' },
+      { id:'drill',     label:'Drilldown' },
+      { id:'bs',        label:'Balance Sheet' },
+    ],
+    defaultTab: 'overview',
+    note: '<strong>Active year focus: "Am I on track?"</strong> The new Overview tab puts KPI cards + YTD-vs-Budget trend chart + top variances above the fold, giving a 10-second read on performance. P&L stays as the detailed 3-column table. Monthly Trend replaces the Monthly Act vs Bgt tab. Revenue / OpEx / Capital are consolidated into a single Drilldown tab with a segmented switcher.',
+  },
+  planning: {
+    title: 'Paramus Plaza — 2027',
+    tag: 'Planning',
+    sub: 'Budget build · compared against 2026 trajectory',
+    closedMonths: [],
+    openMonths: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    tabs: [
+      { id:'budget',  label:'Budget' },
+      { id:'drill',   label:'Drilldown' },
+      { id:'bs',      label:'Balance Sheet' },
+    ],
+    defaultTab: 'budget',
+    note: '<strong>Planning year focus: "Build a good budget."</strong> No Overview (nothing to compare yet) and no Monthly Trend (no actuals). Budget tab focuses on building, with prior-year trajectory as reference. Drilldown segments by Revenue/OpEx/Capital for building line-by-line.',
+  },
+  historical: {
+    title: 'Paramus Plaza — 2025',
+    tag: 'Historical',
+    sub: 'Closed year · final actuals vs original budget',
+    closedMonths: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+    openMonths: [],
+    tabs: [
+      { id:'actuals', label:'Actuals' },
+      { id:'vstory',  label:'Variance Story' },
+      { id:'bs',      label:'Balance Sheet' },
+    ],
+    defaultTab: 'vstory',
+    note: '<strong>Historical year focus: "What happened?"</strong> Actuals is the primary view. Variance Story ranks lines by $ impact so you can explain over/unders. Monthly trend and drilldown aren\'t essential for a closed year.',
+  },
+};
+
+let currentYear = 'active';
+let currentTab = 'overview';
+
+function setYear(y) {
+  currentYear = y;
+  currentTab = YEAR_CONFIG[y].defaultTab;
+  render();
+}
+function setTab(t) {
+  currentTab = t;
+  render();
+}
+
+function render() {
+  const cfg = YEAR_CONFIG[currentYear];
+
+  // Year chooser active
+  document.querySelectorAll('.year-btn').forEach(b => b.classList.remove('active'));
+  const idx = { historical:0, active:1, planning:2 }[currentYear];
+  document.querySelectorAll('.year-btn')[idx].classList.add('active');
+
+  // Header
+  const tagClass = {active:'highlight-chip', planning:'muted-chip', historical:'muted-chip'}[currentYear];
+  document.getElementById('panel-title').innerHTML = cfg.title + ' <span class="' + tagClass + '">' + cfg.tag + '</span>';
+  document.getElementById('panel-sub').textContent = cfg.sub;
+
+  // Closed months indicator
+  const cmEl = document.getElementById('closed-months');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  cmEl.innerHTML = months.map(m => {
+    const closed = cfg.closedMonths.includes(m);
+    const style = closed
+      ? 'background:var(--green);color:#fff'
+      : 'background:var(--surface2);color:var(--text-dim)';
+    return '<span style="'+style+';padding:2px 5px;border-radius:3px;font-size:9.5px;font-weight:600">' + m[0] + '</span>';
+  }).join('');
+
+  // Tabs
+  const tn = document.getElementById('tab-nav');
+  const spacer = tn.querySelector('.tab-nav-spacer');
+  const toggle = tn.querySelector('.mode-toggle');
+  tn.innerHTML = '';
+  cfg.tabs.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'tab-btn' + (t.id === currentTab ? ' active' : '');
+    btn.textContent = t.label;
+    btn.onclick = () => setTab(t.id);
+    tn.appendChild(btn);
+  });
+  tn.appendChild(spacer);
+  tn.appendChild(toggle);
+
+  // Content
+  document.getElementById('content').innerHTML = renderTabContent(currentYear, currentTab);
+
+  // Note
+  document.getElementById('design-note').innerHTML = cfg.note;
+}
+
+function renderTabContent(year, tab) {
+  if (year === 'active') {
+    if (tab === 'overview')   return activeOverview();
+    if (tab === 'pl')         return activePL();
+    if (tab === 'trend')      return activeTrend();
+    if (tab === 'drill')      return activeDrill();
+    if (tab === 'bs')         return placeholder('Balance Sheet — unchanged from current');
+  }
+  if (year === 'planning') {
+    if (tab === 'budget')     return planningBudget();
+    if (tab === 'drill')      return activeDrill(true);
+    if (tab === 'bs')         return placeholder('Balance Sheet — unchanged from current');
+  }
+  if (year === 'historical') {
+    if (tab === 'actuals')    return historicalActuals();
+    if (tab === 'vstory')     return historicalVariance();
+    if (tab === 'bs')         return placeholder('Balance Sheet — unchanged from current');
+  }
+}
+
+function placeholder(label) {
+  return '<div class="placeholder">' + label + '<br><span style="font-size:11px">(Layout not redesigned — keeping current implementation)</span></div>';
+}
+
+function kpi(label, value, varPct, varLabel, meta, negative=false) {
+  const cls = negative ? (varPct > 0 ? 'chip-neg' : 'chip-pos') : (varPct >= 0 ? 'chip-pos' : 'chip-neg');
+  const sign = varPct >= 0 ? '+' : '';
+  return `<div class="kpi-card">
+    <div class="kpi-label">${label}</div>
+    <div class="kpi-value">${value}</div>
+    <div class="kpi-sub">
+      <span class="chip ${cls}">${sign}${varPct.toFixed(1)}%</span>
+      <span class="kpi-meta">${varLabel}</span>
+    </div>
+    <div class="kpi-sub" style="margin-top:4px"><span class="kpi-meta">${meta}</span></div>
+  </div>`;
+}
+
+function activeOverview() {
+  return `
+    <div class="kpi-grid">
+      ${kpi('YTD Revenue',  '$1.49M',  3.2,  'vs budget $1.44M',  'Full-year forecast $4.58M vs $4.37M budget')}
+      ${kpi('YTD Operating Expenses', '$412K', -2.1, 'vs budget $421K', 'Under plan · forecast $1.24M vs $1.26M', true)}
+      ${kpi('YTD NOI',      '$1.08M',  5.0,  'vs budget $1.02M',  'Forecast $3.34M vs $3.10M budget')}
+      ${kpi('Occupancy',    '92.4%',  1.2,  'vs budget 91.3%',   '142,050 of 153,494 SF leased')}
+    </div>
+
+    <div class="chart-card">
+      <div class="chart-head">
+        <div class="chart-title">YTD Net Operating Income — Actual vs Budget (cumulative)</div>
+        <div class="chart-legend">
+          <span><span class="legend-dot" style="background:var(--accent)"></span>Actual (YTD closed)</span>
+          <span><span class="legend-dot" style="background:var(--green)"></span>Budget</span>
+          <span><span class="legend-dot" style="background:var(--text-dim);opacity:.6"></span>Forecast (Act + ROY Bgt)</span>
+        </div>
+      </div>
+      <svg class="chart-svg" viewBox="0 0 800 220" preserveAspectRatio="none">
+        <!-- gridlines -->
+        <g stroke="#d4dbe8" stroke-width="1">
+          <line x1="40" y1="20" x2="790" y2="20"/>
+          <line x1="40" y1="70" x2="790" y2="70"/>
+          <line x1="40" y1="120" x2="790" y2="120"/>
+          <line x1="40" y1="170" x2="790" y2="170"/>
+          <line x1="40" y1="200" x2="790" y2="200"/>
+        </g>
+        <!-- axis labels -->
+        <g font-size="9" fill="#6b7d96" font-family="-apple-system">
+          <text x="35" y="24" text-anchor="end">$3.5M</text>
+          <text x="35" y="74" text-anchor="end">$2.5M</text>
+          <text x="35" y="124" text-anchor="end">$1.5M</text>
+          <text x="35" y="174" text-anchor="end">$500K</text>
+          <text x="35" y="204" text-anchor="end">$0</text>
+        </g>
+        <!-- x labels -->
+        <g font-size="9" fill="#6b7d96" font-family="-apple-system" text-anchor="middle">
+          <text x="60" y="215">Jan</text>
+          <text x="122" y="215">Feb</text>
+          <text x="184" y="215">Mar</text>
+          <text x="246" y="215" font-weight="700" fill="#00b0d4">Apr</text>
+          <text x="308" y="215">May</text>
+          <text x="370" y="215">Jun</text>
+          <text x="432" y="215">Jul</text>
+          <text x="494" y="215">Aug</text>
+          <text x="556" y="215">Sep</text>
+          <text x="618" y="215">Oct</text>
+          <text x="680" y="215">Nov</text>
+          <text x="742" y="215">Dec</text>
+        </g>
+        <!-- closed-months shading -->
+        <rect x="40" y="20" width="228" height="180" fill="#00b0d4" opacity="0.04"/>
+        <line x1="268" y1="20" x2="268" y2="200" stroke="#00b0d4" stroke-dasharray="4 3" stroke-width="1"/>
+        <text x="272" y="32" font-size="9" fill="#00b0d4" font-weight="700">closed → forecast</text>
+
+        <!-- Budget cumulative (solid green) -->
+        <polyline fill="none" stroke="#1a9a6b" stroke-width="2.5"
+          points="60,175 122,160 184,140 246,122 308,105 370,88 432,72 494,55 556,40 618,32 680,26 742,22"/>
+        <!-- Actual cumulative (cyan) through Apr only -->
+        <polyline fill="none" stroke="#00b0d4" stroke-width="3"
+          points="60,173 122,156 184,133 246,115"/>
+        <!-- Forecast (ghost line continuing from April actuals) -->
+        <polyline fill="none" stroke="#6b7d96" stroke-width="1.8" stroke-dasharray="3 3" opacity="0.7"
+          points="246,115 308,98 370,81 432,65 494,49 556,34 618,26 680,20 742,16"/>
+        <!-- Data points -->
+        <g fill="#00b0d4">
+          <circle cx="60" cy="173" r="3.5"/>
+          <circle cx="122" cy="156" r="3.5"/>
+          <circle cx="184" cy="133" r="3.5"/>
+          <circle cx="246" cy="115" r="4"/>
+        </g>
+      </svg>
+    </div>
+
+    <div class="variance-grid">
+      <div class="variance-col pos">
+        <h3><span class="icon"></span>Top Favorable Variances (YTD)</h3>
+        <div class="variance-row"><span class="variance-label">Base Rent — Contractual</span><span class="variance-val pos">+$42.1K</span></div>
+        <div class="variance-row"><span class="variance-label">Tenant Electricity Recovery</span><span class="variance-val pos">+$18.3K</span></div>
+        <div class="variance-row"><span class="variance-label">Parking Income</span><span class="variance-val pos">+$6.8K</span></div>
+        <div class="variance-row"><span class="variance-label">Snow Removal (under budget)</span><span class="variance-val pos">+$5.4K</span></div>
+        <div class="variance-row"><span class="variance-label">Landscape Contract</span><span class="variance-val pos">+$3.1K</span></div>
+      </div>
+      <div class="variance-col neg">
+        <h3><span class="icon"></span>Top Unfavorable Variances (YTD)</h3>
+        <div class="variance-row"><span class="variance-label">R&amp;M — Building Repairs</span><span class="variance-val neg">−$11.8K</span></div>
+        <div class="variance-row"><span class="variance-label">Insurance — Property</span><span class="variance-val neg">−$8.5K</span></div>
+        <div class="variance-row"><span class="variance-label">Professional Fees</span><span class="variance-val neg">−$5.2K</span></div>
+        <div class="variance-row"><span class="variance-label">Electrical Repairs</span><span class="variance-val neg">−$3.9K</span></div>
+        <div class="variance-row"><span class="variance-label">Real Estate Tax (true-up)</span><span class="variance-val neg">−$2.6K</span></div>
+      </div>
+    </div>
+  `;
+}
+
+function activePL() {
+  return `
+    <div class="pl-table-wrap">
+      <table class="pl-table">
+        <thead>
+          <tr>
+            <th>Line Item</th>
+            <th class="pl-col-a">'26 Act thru Apr + Bgt</th>
+            <th class="pl-col-b">'26 Budget</th>
+            <th class="pl-col-c">'25 Actuals</th>
+            <th class="pl-col-v">Var A vs B $</th>
+            <th class="pl-col-v">Var A vs B %</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="section"><td colspan="6">Income</td></tr>
+          <tr><td>Commercial Rent Income</td><td>$3.38M</td><td>$3.32M</td><td>$3.33M</td><td class="v-pos">+$54.3K</td><td class="v-pos">+1.6%</td></tr>
+          <tr><td>Rental Income / Recoverable</td><td>$1.15M</td><td>$1.13M</td><td>$1.14M</td><td class="v-pos">+$23.4K</td><td class="v-pos">+2.1%</td></tr>
+          <tr><td>Other Income</td><td>$52K</td><td>$27K</td><td>$1.1K</td><td class="v-pos">+$25.0K</td><td class="v-pos">+92.6%</td></tr>
+          <tr class="total"><td>Total Revenue</td><td>$4.58M</td><td>$4.47M</td><td>$4.47M</td><td class="v-pos">+$103K</td><td class="v-pos">+2.3%</td></tr>
+          <tr class="section"><td colspan="6">Operating Expenses</td></tr>
+          <tr><td>Cleaning</td><td>$34.8K</td><td>$33.3K</td><td>$30.5K</td><td class="v-neg">+$1.5K</td><td class="v-neg">+4.5%</td></tr>
+          <tr><td>Repairs &amp; Maintenance</td><td>$6.89M</td><td>$6.76M</td><td>$6.48M</td><td class="v-neg">+$130K</td><td class="v-neg">+1.9%</td></tr>
+          <tr><td>Utilities</td><td>$219K</td><td>$220K</td><td>$945K</td><td class="v-pos">−$1.1K</td><td class="v-pos">−0.5%</td></tr>
+          <tr><td>Management Fee</td><td>$603K</td><td>$605K</td><td>$601K</td><td class="v-pos">−$2.1K</td><td class="v-pos">−0.4%</td></tr>
+          <tr><td>Real Estate Taxes</td><td>$3.81M</td><td>$3.78M</td><td>$3.60M</td><td class="v-neg">+$31K</td><td class="v-neg">+0.8%</td></tr>
+          <tr><td>Insurance</td><td>$720K</td><td>$711K</td><td>$643K</td><td class="v-neg">+$8.5K</td><td class="v-neg">+1.2%</td></tr>
+          <tr class="total"><td>Total Operating Expenses</td><td>$12.16M</td><td>$12.13M</td><td>$12.30M</td><td class="v-neg">+$35K</td><td class="v-neg">+0.3%</td></tr>
+          <tr class="total" style="background:rgba(0,176,212,.08)"><td>Net Operating Income</td><td>$3.34M</td><td>$3.10M</td><td>$3.22M</td><td class="v-pos">+$240K</td><td class="v-pos">+7.8%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:11.5px;color:var(--text-dim)">The '26 Actuals column blends YTD actuals through Apr + Budget for May–Dec to give apples-to-apples full-year comparison.</div>
+  `;
+}
+
+function activeTrend() {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const closed = ['Jan','Feb','Mar','Apr'];
+  return `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <span style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">Grouping</span>
+        <div class="mode-toggle">
+          <button class="active">Monthly</button>
+          <button>Quarterly</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim)">2026 Actual vs Budget · Closed through Apr</div>
+    </div>
+    <div class="trend-table-wrap">
+      <table class="trend-table">
+        <thead>
+          <tr>
+            <th class="label" rowspan="2">Line Item</th>
+            ${months.map(m => `<th colspan="3" class="col-group-sep" style="text-align:center;${closed.includes(m)?'background:rgba(0,176,212,0.1)':''}">${m} ${closed.includes(m)?'✓':''}</th>`).join('')}
+          </tr>
+          <tr>
+            ${months.map(m => `<th class="col-group-sep">Act</th><th>Bgt</th><th>Var</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="section"><td colspan="37">Income</td></tr>
+          <tr>
+            <td class="label">Commercial Rent</td>
+            ${months.map((m,i) => {
+              if (closed.includes(m)) {
+                return `<td class="col-group-sep">$277K</td><td>$277K</td><td class="v-pos">+$0</td>`;
+              } else {
+                return `<td class="col-group-sep" style="color:var(--text-dim);opacity:.6">—</td><td style="color:var(--text-dim);opacity:.6">$279K</td><td style="color:var(--text-dim);opacity:.6">—</td>`;
+              }
+            }).join('')}
+          </tr>
+          <tr>
+            <td class="label">Rental Recoverable</td>
+            ${months.map((m,i) => {
+              if (closed.includes(m)) {
+                return `<td class="col-group-sep">$95K</td><td>$94K</td><td class="v-pos">+$1K</td>`;
+              } else {
+                return `<td class="col-group-sep" style="color:var(--text-dim);opacity:.6">—</td><td style="color:var(--text-dim);opacity:.6">$94K</td><td style="color:var(--text-dim);opacity:.6">—</td>`;
+              }
+            }).join('')}
+          </tr>
+          <tr class="section"><td colspan="37">Operating Expenses</td></tr>
+          <tr>
+            <td class="label">Snow Removal</td>
+            ${months.map((m,i) => {
+              const bgt = ['$4K','$53K','$4K','$0','$0','$0','$0','$0','$0','$0','$2K','$31K'][i];
+              const act = closed.includes(m) ? ['$4.3K','$52.8K','$4.2K','$0'][i] : null;
+              if (closed.includes(m)) {
+                return `<td class="col-group-sep">${act}</td><td>${bgt}</td><td class="v-pos">≈0</td>`;
+              } else {
+                return `<td class="col-group-sep" style="color:var(--text-dim);opacity:.6">—</td><td style="color:var(--text-dim);opacity:.6">${bgt}</td><td style="color:var(--text-dim);opacity:.6">—</td>`;
+              }
+            }).join('')}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:11.5px;color:var(--text-dim)">Highlighted months are closed (actuals loaded). Open months show budget only with —.</div>
+  `;
+}
+
+function activeDrill(planning=false) {
+  return `
+    <div class="drill-segments">
+      <button class="drill-seg-btn active">Revenue</button>
+      <button class="drill-seg-btn">Operating Expenses</button>
+      <button class="drill-seg-btn">Capital &amp; Debt</button>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div class="panel-sub">Revenue drilldown · by GL line · ${planning ? 'budget only' : 'actual vs budget'}</div>
+      <div class="mode-toggle">
+        <button class="active">Table</button>
+        <button>Chart</button>
+      </div>
+    </div>
+    <div class="trend-table-wrap">
+      <table class="trend-table">
+        <thead>
+          <tr>
+            <th class="label">GL</th>
+            <th class="label">Account</th>
+            ${planning ? '<th>Budget Annual</th><th>Avg Monthly</th>' : '<th>YTD Act</th><th>YTD Bgt</th><th>Var $</th><th>Var %</th><th>Full-Year Fcst</th>'}
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td class="label">4010</td><td class="label">Base Rent — Contractual</td>${planning ? '<td>$3.42M</td><td>$285K</td>' : '<td>$1.11M</td><td>$1.11M</td><td>+$2K</td><td class="v-pos">+0.2%</td><td>$3.36M</td>'}</tr>
+          <tr><td class="label">4110</td><td class="label">Estimated CAM Charges</td>${planning ? '<td>$250K</td><td>$21K</td>' : '<td>$72.5K</td><td>$72.5K</td><td>$0</td><td>0.0%</td><td>$245K</td>'}</tr>
+          <tr><td class="label">4114</td><td class="label">Estimated Property Tax</td>${planning ? '<td>$602K</td><td>$50K</td>' : '<td>$163K</td><td>$163K</td><td>$0</td><td>0.0%</td><td>$591K</td>'}</tr>
+          <tr><td class="label">4116</td><td class="label">Tenant Electricity Recovery</td>${planning ? '<td>$235K</td><td>$20K</td>' : '<td>$60.2K</td><td>$61.9K</td><td class="v-neg">−$1.7K</td><td class="v-neg">−2.8%</td><td>$231K</td>'}</tr>
+          <tr><td class="label">4512</td><td class="label">Parking Income</td>${planning ? '<td>$228K</td><td>$19K</td>' : '<td>$57.6K</td><td>$50.7K</td><td class="v-pos">+$6.8K</td><td class="v-pos">+13.4%</td><td>$232K</td>'}</tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function planningBudget() {
+  return `
+    <div class="pl-table-wrap">
+      <table class="pl-table">
+        <thead>
+          <tr>
+            <th>Line Item</th>
+            <th class="pl-col-a">'27 Budget</th>
+            <th class="pl-col-b">'26 Blended Fcst</th>
+            <th class="pl-col-c">'26 Budget</th>
+            <th class="pl-col-v">'27 vs '26 Fcst</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="section"><td colspan="5">Income</td></tr>
+          <tr><td>Commercial Rent Income</td><td>$3.42M</td><td>$3.38M</td><td>$3.32M</td><td class="v-pos">+1.2%</td></tr>
+          <tr><td>Rental Income / Recoverable</td><td>$1.18M</td><td>$1.15M</td><td>$1.13M</td><td class="v-pos">+2.6%</td></tr>
+          <tr class="total"><td>Total Revenue</td><td>$4.60M</td><td>$4.58M</td><td>$4.47M</td><td class="v-pos">+0.5%</td></tr>
+          <tr class="section"><td colspan="5">Operating Expenses</td></tr>
+          <tr><td>Cleaning</td><td>$34K</td><td>$34.8K</td><td>$33.3K</td><td class="v-pos">−2.3%</td></tr>
+          <tr><td>Repairs &amp; Maintenance</td><td>$7.1M</td><td>$6.89M</td><td>$6.76M</td><td class="v-neg">+3.1%</td></tr>
+          <tr><td>Real Estate Taxes</td><td>$3.95M</td><td>$3.81M</td><td>$3.78M</td><td class="v-neg">+3.7%</td></tr>
+          <tr class="total"><td>Total Operating Expenses</td><td>$12.55M</td><td>$12.16M</td><td>$12.13M</td><td class="v-neg">+3.2%</td></tr>
+          <tr class="total" style="background:rgba(0,176,212,.08)"><td>Net Operating Income</td><td>$3.23M</td><td>$3.34M</td><td>$3.10M</td><td class="v-neg">−3.3%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="margin-top:10px;font-size:11.5px;color:var(--text-dim)">Planning year budget compared against '26 blended forecast (YTD Act + ROY Bgt). Positive NOI deltas highlight lines where you're either gaining leverage or planning higher.</div>
+  `;
+}
+
+function historicalActuals() {
+  return `
+    <div class="pl-table-wrap">
+      <table class="pl-table">
+        <thead>
+          <tr>
+            <th>Line Item</th>
+            <th class="pl-col-a">'25 Actuals</th>
+            <th class="pl-col-b">'25 Budget</th>
+            <th class="pl-col-c">'24 Actuals</th>
+            <th class="pl-col-v">Act vs Bgt</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="section"><td colspan="5">Income</td></tr>
+          <tr><td>Commercial Rent Income</td><td>$3.33M</td><td>$3.30M</td><td>$3.28M</td><td class="v-pos">+0.9%</td></tr>
+          <tr><td>Rental Income / Recoverable</td><td>$1.14M</td><td>$1.10M</td><td>$1.08M</td><td class="v-pos">+3.6%</td></tr>
+          <tr class="total"><td>Total Revenue</td><td>$4.47M</td><td>$4.40M</td><td>$4.36M</td><td class="v-pos">+1.6%</td></tr>
+          <tr class="total" style="background:rgba(0,176,212,.08)"><td>Net Operating Income</td><td>$3.22M</td><td>$3.14M</td><td>$3.08M</td><td class="v-pos">+2.5%</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function historicalVariance() {
+  return `
+    <div class="panel-sub" style="margin-bottom:14px">2025 final actuals vs original budget · ranked by $ impact</div>
+    <div class="variance-grid">
+      <div class="variance-col pos">
+        <h3><span class="icon"></span>Drove Results (Favorable)</h3>
+        <div class="variance-row"><span class="variance-label">Base Rent — 2.5% increase mid-year</span><span class="variance-val pos">+$38K</span></div>
+        <div class="variance-row"><span class="variance-label">Tenant Electricity Recovery</span><span class="variance-val pos">+$22K</span></div>
+        <div class="variance-row"><span class="variance-label">R&amp;M — Weather-related under-run</span><span class="variance-val pos">+$15K</span></div>
+        <div class="variance-row"><span class="variance-label">Professional Fees (deferred)</span><span class="variance-val pos">+$11K</span></div>
+        <div class="variance-row"><span class="variance-label">Parking Income</span><span class="variance-val pos">+$8K</span></div>
+      </div>
+      <div class="variance-col neg">
+        <h3><span class="icon"></span>Hurt Results (Unfavorable)</h3>
+        <div class="variance-row"><span class="variance-label">Real Estate Tax — true-up</span><span class="variance-val neg">−$32K</span></div>
+        <div class="variance-row"><span class="variance-label">Insurance — premium reset</span><span class="variance-val neg">−$17K</span></div>
+        <div class="variance-row"><span class="variance-label">Elevator capital repairs</span><span class="variance-val neg">−$12K</span></div>
+        <div class="variance-row"><span class="variance-label">Snow Removal — harsh Feb</span><span class="variance-val neg">−$7K</span></div>
+        <div class="variance-row"><span class="variance-label">Roof Patch (unplanned)</span><span class="variance-val neg">−$5K</span></div>
+      </div>
+    </div>
+    <div style="margin-top:18px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:10px">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);font-weight:600;margin-bottom:10px">2025 Summary</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:20px;font-size:12.5px">
+        <div><div style="color:var(--text-dim);font-size:11px">Revenue</div><div style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">$4.47M</div><div style="font-size:11px" class="v-pos">+1.6% vs budget</div></div>
+        <div><div style="color:var(--text-dim);font-size:11px">OpEx</div><div style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">$1.25M</div><div style="font-size:11px" class="v-neg">+0.6% vs budget</div></div>
+        <div><div style="color:var(--text-dim);font-size:11px">NOI</div><div style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">$3.22M</div><div style="font-size:11px" class="v-pos">+2.5% vs budget</div></div>
+        <div><div style="color:var(--text-dim);font-size:11px">Occupancy</div><div style="font-size:18px;font-weight:700;font-variant-numeric:tabular-nums">91.8%</div><div style="font-size:11px" class="v-pos">+0.4% YoY</div></div>
+      </div>
+    </div>
+  `;
+}
+
+render();
+</script>
+</body>
+</html>
