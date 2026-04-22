@@ -3843,16 +3843,21 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       { id: 'pl',           label: 'P&L' },
       { id: 'trend',        label: 'Monthly Trend' },
       { id: 'drill',        label: 'Drilldown' },
+      { id: 'rentroll',     label: 'Rent Roll' },
+      { id: 'cashforecast', label: 'Cash Forecast' },
       { id: 'balancesheet', label: 'Balance Sheet' },
     ],
     planning: [
       { id: 'budget',       label: 'Budget' },
+      { id: 'rentroll',     label: 'Rent Roll' },
       { id: 'drill',        label: 'Drilldown' },
+      { id: 'cashforecast', label: 'Cash Forecast' },
       { id: 'balancesheet', label: 'Balance Sheet' },
     ],
     historical: [
       { id: 'actuals',      label: 'Actuals' },
       { id: 'vstory',       label: 'Variance Story' },
+      { id: 'rentroll',     label: 'Rent Roll' },
       { id: 'balancesheet', label: 'Balance Sheet' },
     ],
   };
@@ -4198,6 +4203,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         return fbRenderDrilldown(body, p, base);
       case 'vstory':
         return fbRenderVarianceStory(body, p, base);
+      case 'rentroll':
+        return fbRenderRentRoll(body, p, base);
+      case 'cashforecast':
+        return fbRenderCashForecast(body, p, base);
       case 'balancesheet':
         return fbRenderBalanceSheet(body, base);
       case 'revenue':
@@ -4316,10 +4325,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         ${kpi('Revenue', ytdRevA, ytdRevB, fyRev, fyRevB, false)}
         ${kpi('Operating Expenses', ytdOpA, ytdOpB, fyOp, fyOpB, true)}
         ${kpi('Net Operating Income', ytdNoiA, ytdNoiB, fyNoi, fyNoiB, false)}
-        <div class="fb-kpi-card fb-kpi-stub">
+        <div class="fb-kpi-card" id="fbOccupancyCard">
           <div class="fb-kpi-label">Occupancy</div>
-          <div class="fb-kpi-value" style="color:var(--text-dim)">—</div>
-          <div class="fb-kpi-sub"><span class="fb-kpi-meta">Pending rent-roll data source</span></div>
+          <div class="fb-kpi-value" style="color:var(--text-dim)">…</div>
+          <div class="fb-kpi-sub"><span class="fb-kpi-meta">Loading rent roll…</span></div>
         </div>
       </div>
     `;
@@ -4331,6 +4340,41 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     html += fbRenderVarianceLeaderboard(actualsYd, budgetYd, closedList, fmt);
 
     body.innerHTML = html;
+
+    // Populate Occupancy KPI async (doesn't block initial render)
+    fbPopulateOccupancyKPI(baseProp);
+  }
+
+  async function fbPopulateOccupancyKPI(baseProp) {
+    const el = document.getElementById('fbOccupancyCard');
+    if (!el) return;
+    const propId = baseProp.id;
+    const totalSf = baseProp.sqft || 0;
+    let rows = fbRentRollCache[propId];
+    if (!rows) {
+      try {
+        rows = await supaFetch('rent_roll', `?property_id=eq.${encodeURIComponent(propId)}&limit=1000`);
+        fbRentRollCache[propId] = rows;
+      } catch (e) {
+        el.innerHTML = `<div class="fb-kpi-label">Occupancy</div>
+          <div class="fb-kpi-value" style="color:var(--text-dim)">—</div>
+          <div class="fb-kpi-sub"><span class="fb-kpi-meta">Rent roll not available</span></div>`;
+        return;
+      }
+    }
+    if (!rows.length) {
+      el.innerHTML = `<div class="fb-kpi-label">Occupancy</div>
+        <div class="fb-kpi-value" style="color:var(--text-dim)">—</div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">No rent roll loaded</span></div>`;
+      return;
+    }
+    const today = new Date();
+    const active = rows.filter(r => r.status === 'Current' || (r.lease_end && new Date(r.lease_end) >= today));
+    const leasedSf = active.reduce((s, r) => s + (Number(r.sf) || 0), 0);
+    const occPct = totalSf ? (leasedSf / totalSf * 100) : null;
+    el.innerHTML = `<div class="fb-kpi-label">Occupancy</div>
+      <div class="fb-kpi-value">${occPct !== null ? occPct.toFixed(1) + '%' : '—'}</div>
+      <div class="fb-kpi-sub"><span class="fb-kpi-meta">${leasedSf.toLocaleString()} of ${totalSf.toLocaleString()} SF leased</span></div>`;
   }
 
   // ── SVG trend chart for Overview: cumulative NOI Actual vs Budget ──
@@ -4588,6 +4632,821 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     `;
 
     body.innerHTML = note + lb + recap;
+  }
+
+  // ── Rent Roll tab ──
+  // Live snapshot of all leases for a property. Reads from Supabase
+  // `rent_roll` table (upserted by scripts/sync_rent_rolls.py).
+  //
+  // Extras on Planning year: "Generate Revenue Budget" button that projects
+  // base rent + escalations forward into the selected planning year and
+  // writes the month-by-month projection into budget_line_items.
+  let fbRentRollCache = {}; // { propertyId: [rows] }
+  let fbRentRollFilter = 'all'; // 'all' | 'current' | 'expiring' | 'vacant'
+
+  async function fbRenderRentRoll(body, p, baseProp) {
+    const propId = baseProp.id;
+    const yr = fbSelectedYear;
+    const status = fbGetYearStatus();
+
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim)">Loading rent roll…</div>`;
+    let rows = fbRentRollCache[propId];
+    if (!rows) {
+      try {
+        rows = await supaFetch('rent_roll', `?property_id=eq.${encodeURIComponent(propId)}&order=suite.asc,tenant_name.asc&limit=1000`);
+        fbRentRollCache[propId] = rows;
+      } catch (e) {
+        body.innerHTML = `<div style="padding:24px;color:#c94646">
+          Could not load rent_roll table. Has the migration been run?
+          <div style="margin-top:10px;font-size:12px;color:var(--text-dim)">Run <code>migration/create-rent-roll.sql</code> in the SQL Console.</div>
+        </div>`;
+        return;
+      }
+    }
+
+    // Summary stats
+    const today = new Date();
+    const totalSf = baseProp.sqft || 0;
+    const activeRows = rows.filter(r => r.status === 'Current' || (r.lease_end && new Date(r.lease_end) >= today));
+    const leasedSf = activeRows.reduce((s, r) => s + (Number(r.sf) || 0), 0);
+    const occPct = totalSf ? (leasedSf / totalSf * 100) : null;
+    const annualRent = activeRows.reduce((s, r) => s + (Number(r.annual_rent) || (Number(r.monthly_rent) || 0) * 12), 0);
+    const wavgRentPsf = leasedSf ? (annualRent / leasedSf) : 0;
+
+    // Expiring within 12 months
+    const in12mo = new Date(today.getTime() + 365 * 86400 * 1000);
+    const expiring = activeRows.filter(r => r.lease_end && new Date(r.lease_end) <= in12mo).length;
+
+    // Build filter chip list
+    const filterChip = (id, label, count) => {
+      const active = fbRentRollFilter === id;
+      return `<button class="fb-drill-seg-btn ${active ? 'active' : ''}" onclick="fbSetRentRollFilter('${id}')">${label}${count !== undefined ? ` (${count})` : ''}</button>`;
+    };
+
+    // Filtered rows
+    let displayRows;
+    if (fbRentRollFilter === 'current') {
+      displayRows = rows.filter(r => r.status === 'Current');
+    } else if (fbRentRollFilter === 'expiring') {
+      displayRows = activeRows.filter(r => r.lease_end && new Date(r.lease_end) <= in12mo);
+    } else if (fbRentRollFilter === 'vacant') {
+      displayRows = rows.filter(r => r.status === 'Vacant' || !r.tenant_name);
+    } else {
+      displayRows = rows;
+    }
+
+    // Header stats
+    let html = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(180px, 1fr));gap:14px;margin-bottom:18px">
+        <div class="fb-kpi-card">
+          <div class="fb-kpi-label">Occupancy</div>
+          <div class="fb-kpi-value">${occPct !== null ? occPct.toFixed(1) + '%' : '—'}</div>
+          <div class="fb-kpi-sub"><span class="fb-kpi-meta">${leasedSf.toLocaleString()} of ${totalSf.toLocaleString()} SF</span></div>
+        </div>
+        <div class="fb-kpi-card">
+          <div class="fb-kpi-label">Annual Base Rent (in-place)</div>
+          <div class="fb-kpi-value">${fbFmt(annualRent)}</div>
+          <div class="fb-kpi-sub"><span class="fb-kpi-meta">$${wavgRentPsf.toFixed(2)} / SF avg</span></div>
+        </div>
+        <div class="fb-kpi-card">
+          <div class="fb-kpi-label">Active Leases</div>
+          <div class="fb-kpi-value">${activeRows.length}</div>
+          <div class="fb-kpi-sub"><span class="fb-kpi-meta">${rows.length} total rows</span></div>
+        </div>
+        <div class="fb-kpi-card">
+          <div class="fb-kpi-label">Expiring ≤ 12 mo</div>
+          <div class="fb-kpi-value" style="color:${expiring ? '#c94646' : 'var(--text)'}">${expiring}</div>
+          <div class="fb-kpi-sub"><span class="fb-kpi-meta">Leases ending by ${in12mo.toLocaleDateString('en-US', {month:'short', year:'2-digit'})}</span></div>
+        </div>
+      </div>
+    `;
+
+    // Planning year: auto-budget button
+    if (status === 'planning') {
+      html += `
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-bottom:16px;padding:14px 18px;background:var(--accent-dim);border:1px solid var(--accent);border-radius:10px;flex-wrap:wrap">
+          <div style="font-size:12.5px">
+            <strong style="color:var(--accent)">Auto-build ${yr} revenue budget from this rent roll</strong>
+            <div style="color:var(--text-dim);margin-top:3px">Projects base rent + contractual escalations for each tenant month-by-month. Expiring leases drop to $0 (conservative). Writes to <code>budget_line_items</code> (GL 4010).</div>
+          </div>
+          <button onclick="fbAutoBuildRevenueBudget(${yr})" style="padding:10px 18px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-weight:600;font-size:12.5px;cursor:pointer">Generate Revenue Budget</button>
+        </div>
+      `;
+    }
+
+    // Filter bar
+    html += `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:12px;flex-wrap:wrap">
+        <div class="fb-drill-segments">
+          ${filterChip('all', 'All', rows.length)}
+          ${filterChip('current', 'Current', rows.filter(r => r.status === 'Current').length)}
+          ${filterChip('expiring', 'Expiring ≤ 12mo', expiring)}
+          ${filterChip('vacant', 'Vacant', rows.filter(r => r.status === 'Vacant').length)}
+        </div>
+        <div style="font-size:11px;color:var(--text-dim)">
+          Last updated: ${rows.length && rows[0].updated_at ? new Date(rows[0].updated_at).toLocaleDateString() : 'never'}
+        </div>
+      </div>
+    `;
+
+    // Rent roll table
+    if (!rows.length) {
+      html += `<div style="padding:40px;text-align:center;background:var(--surface);border:1px dashed var(--border);border-radius:10px;color:var(--text-dim);font-size:13px">
+        No rent roll loaded for this property yet.
+        <div style="margin-top:10px;font-size:11.5px">Drop Yardi rent roll xlsx in Dropbox → run <code>python3 scripts/sync_rent_rolls.py --commit</code></div>
+      </div>`;
+      body.innerHTML = html;
+      return;
+    }
+
+    html += `<div class="bgt-table-wrap" style="overflow-x:auto"><table class="bgt-table" style="min-width:1400px">
+      <thead><tr>
+        <th style="text-align:left;min-width:180px">Tenant</th>
+        <th style="min-width:60px">Suite</th>
+        <th>Status</th>
+        <th style="text-align:right">SF</th>
+        <th style="text-align:right">Rent/SF</th>
+        <th style="text-align:right">Monthly Rent</th>
+        <th style="text-align:right">Annual Rent</th>
+        <th>Lease Start</th>
+        <th>Lease End</th>
+        <th style="text-align:right">Escalation</th>
+        <th>Next Bump</th>
+      </tr></thead><tbody>`;
+
+    const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month:'short', year:'2-digit' }) : '—';
+    const fmtSf = (n) => n ? Number(n).toLocaleString() : '—';
+    const fmt$ = (n) => n ? '$' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
+    const fmtPsf = (n) => n ? '$' + Number(n).toFixed(2) : '—';
+    const statusColor = {
+      Current: 'var(--green)', Pending: 'var(--accent)',
+      Vacant: '#c94646', Past: 'var(--text-dim)', Future: 'var(--text-dim)'
+    };
+
+    displayRows.forEach(r => {
+      const rentPsf = r.rent_per_sf || (r.sf && r.annual_rent ? r.annual_rent / r.sf : null);
+      const annualRent = r.annual_rent || (r.monthly_rent ? r.monthly_rent * 12 : null);
+      const expiresSoon = r.lease_end && new Date(r.lease_end) <= in12mo;
+      const escDesc = r.escalation_pct
+        ? `${r.escalation_pct}% / ${r.escalation_months || 12}mo`
+        : (r.escalation_type === 'cpi' ? 'CPI' : (r.escalation_type === 'step' ? 'Stepped' : '—'));
+      html += `<tr>
+        <td style="text-align:left">${r.tenant_name || '<em style="color:var(--text-dim)">Vacant</em>'}</td>
+        <td>${r.suite || '—'}</td>
+        <td><span style="font-size:10.5px;font-weight:600;color:${statusColor[r.status] || 'var(--text-dim)'}">${r.status || '—'}</span></td>
+        <td style="text-align:right">${fmtSf(r.sf)}</td>
+        <td style="text-align:right">${fmtPsf(rentPsf)}</td>
+        <td style="text-align:right">${fmt$(r.monthly_rent)}</td>
+        <td style="text-align:right">${fmt$(annualRent)}</td>
+        <td>${fmtDate(r.lease_start)}</td>
+        <td style="${expiresSoon ? 'color:#c94646;font-weight:600' : ''}">${fmtDate(r.lease_end)}</td>
+        <td style="text-align:right">${escDesc}</td>
+        <td>${fmtDate(r.next_escalation_date)}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table></div>`;
+
+    body.innerHTML = html;
+  }
+
+  function fbSetRentRollFilter(f) {
+    fbRentRollFilter = f;
+    fbRenderDetail();
+  }
+
+  // Auto-build revenue budget from rent roll. Projects base rent +
+  // contractual escalations month-by-month for the target year and writes
+  // to budget_line_items (gl_code='4010', 'Base Rent - Contractual').
+  async function fbAutoBuildRevenueBudget(targetYear) {
+    const base = bgtData[fbSelectedIdx];
+    if (!base) return;
+    const propId = base.id;
+
+    if (!confirm(`Replace ${targetYear} Base Rent budget (GL 4010) for ${base.name} with an auto-generated projection from rent roll?\n\nThis DELETES existing GL 4010 budget rows for ${targetYear} and inserts new month-by-month values.`)) {
+      return;
+    }
+
+    // Ensure rent roll is loaded
+    let rows = fbRentRollCache[propId];
+    if (!rows) {
+      rows = await supaFetch('rent_roll', `?property_id=eq.${encodeURIComponent(propId)}&limit=1000`);
+      fbRentRollCache[propId] = rows;
+    }
+    if (!rows.length) {
+      alert('No rent roll loaded for this property.');
+      return;
+    }
+
+    // Compute monthly rent for each of 12 months in target year
+    const monthlyTotals = [0,0,0,0,0,0,0,0,0,0,0,0];
+    rows.forEach(r => {
+      const lsEnd = r.lease_end ? new Date(r.lease_end) : null;
+      const lsStart = r.lease_start ? new Date(r.lease_start) : null;
+      const moveIn = r.move_in_date ? new Date(r.move_in_date) : lsStart;
+      // Start: later of move-in and Jan 1 of target year
+      // End: earlier of lease_end and Dec 31 of target year
+      let base = Number(r.monthly_rent) || 0;
+      if (!base) return;
+
+      // Apply escalations forward from next_escalation_date
+      const escPct = Number(r.escalation_pct) || 0;
+      const escMonths = Number(r.escalation_months) || 12;
+      let nextBump = r.next_escalation_date ? new Date(r.next_escalation_date) : null;
+
+      for (let m = 1; m <= 12; m++) {
+        const monthStart = new Date(targetYear, m - 1, 1);
+        const monthEnd = new Date(targetYear, m, 0);
+        // Skip if lease not active in this month
+        if (moveIn && monthEnd < moveIn) continue;
+        if (lsEnd && monthStart > lsEnd) continue;
+        // Apply any escalations that have kicked in by this month
+        while (escPct && nextBump && nextBump <= monthStart) {
+          base = base * (1 + escPct / 100);
+          nextBump = new Date(nextBump);
+          nextBump.setMonth(nextBump.getMonth() + escMonths);
+        }
+        monthlyTotals[m - 1] += base;
+      }
+    });
+
+    // Delete existing gl_code=4010 budget rows for this property+year
+    try {
+      await supaWrite('budget_line_items', 'DELETE', null,
+        `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${targetYear}&gl_code=eq.4010`);
+    } catch (e) {
+      console.warn('Delete existing 4010 rows:', e);
+    }
+
+    // Insert new month-by-month
+    const payload = monthlyTotals.map((amt, i) => ({
+      property_id: propId,
+      year: targetYear,
+      gl_code: '4010',
+      account_name: 'Base Rent - Contractual',
+      month: i + 1,
+      amount: Math.round(amt * 100) / 100,
+    }));
+    try {
+      await supaWrite('budget_line_items', 'POST', payload, '');
+    } catch (e) {
+      alert('Error writing budget: ' + e.message);
+      return;
+    }
+
+    const total = monthlyTotals.reduce((s, v) => s + v, 0);
+    alert(`✓ ${targetYear} Base Rent budget generated: $${total.toLocaleString(undefined,{maximumFractionDigits:0})} annual.\n\nReload the page to see it on the Budget tab.`);
+  }
+
+  // ── Cash Forecast tab ─────────────────────────────────────────────────
+  // 12-month rolling cash projection for a single property.
+  //
+  // Data sources:
+  //   • rent_roll                 → contractual base rent (with escalations)
+  //   • budget_line_items         → operating expenses + recoveries + other income
+  //   • exec_liabilities          → mortgage P&I (debt service)
+  //   • reserve_draws             → yellow-stacked reserve draws that offset capex
+  //   • cash_forecast_events      → planned TI/LC, capex, distributions (manual)
+  //   • property_cash             → starting cash position + min reserve threshold
+  //
+  // The forecast window is a rolling 12 months from the first day of next
+  // month (Apr → May–Apr). Works the same whether viewing Active or Planning.
+  let fbCashForecastCache = {}; // propertyId → { rows, events, cash, liabilities }
+
+  async function fbRenderCashForecast(body, p, baseProp) {
+    const propId = baseProp.id;
+    const propName = baseProp.name;
+
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim)">Loading cash forecast…</div>`;
+
+    // Load all required inputs in parallel
+    let cache = fbCashForecastCache[propId];
+    if (!cache) {
+      try {
+        const [rentRoll, events, cash, liabilities] = await Promise.all([
+          supaFetch('rent_roll', `?property_id=eq.${encodeURIComponent(propId)}&limit=1000`)
+            .catch(() => []),
+          supaFetch('cash_forecast_events', `?property_id=eq.${encodeURIComponent(propId)}&limit=1000`)
+            .catch(() => []),
+          supaFetch('property_cash', `?property_id=eq.${encodeURIComponent(propId)}&limit=1`)
+            .catch(() => []),
+          supaFetch('exec_liabilities', `?related_deal=ilike.*${encodeURIComponent(propName.split(' ')[0])}*&limit=20`)
+            .catch(() => []),
+        ]);
+        cache = { rentRoll, events, cash: cash[0] || null, liabilities };
+        fbCashForecastCache[propId] = cache;
+      } catch (e) {
+        body.innerHTML = `<div style="padding:24px;color:#c94646">Error loading forecast data: ${e.message}
+          <div style="margin-top:10px;font-size:12px;color:var(--text-dim)">Make sure the <code>cash_forecast_events</code> and <code>property_cash</code> tables exist (run <code>migration/create-cash-forecast.sql</code>).</div>
+        </div>`;
+        return;
+      }
+    }
+
+    const forecast = fbComputeCashForecast(baseProp, cache);
+    body.innerHTML = fbBuildCashForecastHTML(baseProp, cache, forecast);
+  }
+
+  // ── Forecast computation ──────────────────────────────────────────────
+  // Returns { months: [{year, month, label, ...line_items, netDelta, endingCash}], starting: {...}, lowest: {...}, totals: {...} }
+  function fbComputeCashForecast(baseProp, cache) {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const today = new Date();
+    const forecastMonths = [];
+
+    // Start with next month
+    let y = today.getFullYear();
+    let m = today.getMonth() + 2;  // getMonth is 0-based; +1 current, +1 next
+    if (m > 12) { m -= 12; y += 1; }
+
+    for (let i = 0; i < 12; i++) {
+      forecastMonths.push({ year: y, month: m, monthName: MONTHS[m - 1], label: `${MONTHS[m - 1]} ${String(y).slice(-2)}` });
+      m += 1;
+      if (m > 12) { m = 1; y += 1; }
+    }
+
+    const starting = {
+      operating: Number(cache.cash && cache.cash.operating_cash) || 0,
+      reserve:   Number(cache.cash && cache.cash.reserve_cash) || 0,
+      threshold: Number(cache.cash && cache.cash.min_reserve_threshold) || 0,
+    };
+    starting.total = starting.operating + starting.reserve;
+
+    // Revenue from rent roll: for each tenant active in a given month, add their rent
+    // (applying escalations at next_escalation_date at escalation_months cadence)
+    const rentByMonth = new Array(12).fill(0);
+    (cache.rentRoll || []).forEach(r => {
+      let rent = Number(r.monthly_rent) || 0;
+      if (!rent) return;
+      const lsStart = r.lease_start ? new Date(r.lease_start) : null;
+      const moveIn  = r.move_in_date ? new Date(r.move_in_date) : lsStart;
+      const lsEnd   = r.lease_end ? new Date(r.lease_end) : null;
+      const escPct    = Number(r.escalation_pct) || 0;
+      const escMonths = Number(r.escalation_months) || 12;
+      let nextBump = r.next_escalation_date ? new Date(r.next_escalation_date) : null;
+
+      forecastMonths.forEach((fm, idx) => {
+        const monthStart = new Date(fm.year, fm.month - 1, 1);
+        const monthEnd   = new Date(fm.year, fm.month, 0);
+        if (moveIn && monthEnd < moveIn) return;
+        if (lsEnd && monthStart > lsEnd) return;
+        while (escPct && nextBump && nextBump <= monthStart) {
+          rent = rent * (1 + escPct / 100);
+          nextBump = new Date(nextBump);
+          nextBump.setMonth(nextBump.getMonth() + escMonths);
+        }
+        rentByMonth[idx] += rent;
+      });
+    });
+
+    // Recoveries + other income + opex from budget_line_items.
+    // Uses budget sub-object on the year data (already loaded into bgtData).
+    const budgetForYear = (yr) => baseProp.years && baseProp.years[yr] && baseProp.years[yr].budget;
+    const glSum = (yd, glPrefix, monthName) => {
+      if (!yd || !yd.detailRows) return 0;
+      return yd.detailRows
+        .filter(d => String(d.gl || '').startsWith(String(glPrefix)))
+        .reduce((s, d) => s + (d.months && d.months[monthName] ? d.months[monthName] : 0), 0);
+    };
+
+    // Debt service — sum monthly P&I for this property's liabilities.
+    // Interest portion only (principal is balance-sheet). Simple approx:
+    // use `usd_equivalent * rate / 12` if rate column exists, else split annual.
+    // For v1 just use linear monthly interest from principal and an assumed 6% rate
+    // if no rate is on the row. Morris can refine via amortization schedule later.
+    const propNameLower = (baseProp.name || '').toLowerCase();
+    const propLiabilities = (cache.liabilities || []).filter(l =>
+      l.related_deal && propNameLower.split(/\s+/).some(tok => tok.length > 3 && l.related_deal.toLowerCase().includes(tok))
+    );
+    const monthlyDebtService = propLiabilities.reduce((s, l) => {
+      const principal = Number(l.usd_equivalent) || Number(l.principal) || 0;
+      const rate = Number(l.interest_rate) || 6.0; // annual %, default 6% if missing
+      return s + (principal * (rate / 100) / 12);
+    }, 0);
+
+    // Reserve draws (yellow stack, positive) + reserve deposits (negative draws or events)
+    const drawsByYM = {};      // positive = draw from reserve into operating
+    const depositsByYM = {};   // positive = deposit into reserve from operating
+    (fbReserveDraws[baseProp.id] || []).forEach(d => {
+      const k = `${d.year}-${d.month}`;
+      const amt = Number(d.draw_amount) || 0;
+      if (amt >= 0) {
+        drawsByYM[k] = (drawsByYM[k] || 0) + amt;
+      } else {
+        depositsByYM[k] = (depositsByYM[k] || 0) + Math.abs(amt);
+      }
+    });
+    const eventsByYM = {};
+    (cache.events || []).forEach(e => {
+      const k = `${e.year}-${e.month}`;
+      if (!eventsByYM[k]) eventsByYM[k] = { ti_lc: 0, capex: 0, distribution: 0, contribution: 0, other: 0 };
+      // reserve_deposit events treated separately (not an 'other' bucket)
+      if (e.event_type === 'reserve_deposit') {
+        depositsByYM[k] = (depositsByYM[k] || 0) + Math.abs(Number(e.amount) || 0);
+      } else if (e.event_type === 'reserve_draw') {
+        drawsByYM[k] = (drawsByYM[k] || 0) + Math.abs(Number(e.amount) || 0);
+      } else {
+        eventsByYM[k][e.event_type] = (eventsByYM[k][e.event_type] || 0) + (Number(e.amount) || 0);
+      }
+    });
+
+    // Roll up per-month
+    let runningCash = starting.total;
+    let runningReserve = starting.reserve;
+    const rows = forecastMonths.map((fm, idx) => {
+      const yd = budgetForYear(fm.year);
+      const rev_baseRent   = rentByMonth[idx];
+      const rev_recoveries = glSum(yd, '41', fm.monthName);  // 4100–4199 recoveries
+      const rev_other      = glSum(yd, '45', fm.monthName) + glSum(yd, '47', fm.monthName) + glSum(yd, '48', fm.monthName);
+      const exp_opex       = Math.abs(glSum(yd, '5', fm.monthName)) + Math.abs(glSum(yd, '65', fm.monthName)); // 5xxx + 65xx
+      const exp_debt       = monthlyDebtService;
+
+      const totalIn  = rev_baseRent + rev_recoveries + rev_other;
+      const totalOut = exp_opex + exp_debt;
+      const levered  = totalIn - totalOut;
+
+      const key = `${fm.year}-${fm.month}`;
+      const ev  = eventsByYM[key] || { ti_lc:0, capex:0, distribution:0, contribution:0, other:0 };
+      const cap_tilc        = Number(ev.ti_lc) || 0;          // negative for outflow
+      const cap_capex       = Number(ev.capex) || 0;
+      const cap_distrib     = Number(ev.distribution) || 0;
+      const cap_contrib     = Number(ev.contribution) || 0;
+      const cap_other       = Number(ev.other) || 0;
+      const cap_reserveDraw    = Number(drawsByYM[key]) || 0;      // + = cash into operating
+      const cap_reserveDeposit = Number(depositsByYM[key]) || 0;   // + = cash from operating into reserve
+
+      // Operating cash movement: draw adds, deposit removes
+      const netDelta = levered + cap_tilc + cap_capex + cap_distrib + cap_contrib + cap_other
+                     + cap_reserveDraw - cap_reserveDeposit;
+      runningCash += netDelta;
+
+      // Reserve balance movement: deposit adds, draw removes
+      runningReserve += cap_reserveDeposit - cap_reserveDraw;
+
+      return {
+        ...fm,
+        rev_baseRent, rev_recoveries, rev_other,
+        exp_opex, exp_debt,
+        totalIn, totalOut, levered,
+        cap_tilc, cap_capex, cap_distrib, cap_contrib, cap_other,
+        cap_reserveDraw, cap_reserveDeposit,
+        netDelta, endingCash: runningCash,
+        reserveBalance: runningReserve,
+      };
+    });
+
+    const lowest = rows.reduce((lo, r) => (lo === null || r.endingCash < lo.endingCash) ? r : lo, null);
+    const endingCash = rows[rows.length - 1].endingCash;
+    const totalIn  = rows.reduce((s, r) => s + r.totalIn, 0);
+    const totalOut = rows.reduce((s, r) => s + r.totalOut, 0);
+    const avgLevered = rows.reduce((s, r) => s + r.levered, 0) / rows.length;
+
+    return { rows, starting, lowest, endingCash, totalIn, totalOut, avgLevered };
+  }
+
+  // ── HTML renderer for forecast ─────────────────────────────────────────
+  function fbBuildCashForecastHTML(baseProp, cache, fc) {
+    const fmt  = (v) => v === 0 ? '$0' : (v >= 1000 ? '$' + Math.round(v).toLocaleString() : '$' + v.toFixed(0));
+    const fmtK = (v) => v === 0 ? '$0' : (Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : (Math.abs(v) >= 1000 ? '$' + Math.round(v / 1000) + 'K' : fmt(v)));
+    const fmtSigned = (v) => v === 0 ? '—' : (v >= 0 ? fmtK(v) : '(' + fmtK(-v) + ')');
+
+    // KPI strip
+    const projectedGrowth = fc.endingCash > fc.starting.total;
+    const endingReserve = fc.rows[fc.rows.length - 1].reserveBalance;
+    let html = `<div class="cf-kpi-row">
+      <div class="fb-kpi-card" style="border-left:4px solid var(--green)">
+        <div class="fb-kpi-label">Property Cash (Today)</div>
+        <div class="fb-kpi-value">${fmtK(fc.starting.total)}</div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">Operating ${fmtK(fc.starting.operating)} · Reserves ${fmtK(fc.starting.reserve)}</span></div>
+      </div>
+      <div class="fb-kpi-card" style="border-left:4px solid var(--${projectedGrowth ? 'green' : 'amber'})">
+        <div class="fb-kpi-label">12-Mo Projected End Cash</div>
+        <div class="fb-kpi-value">${fmtK(fc.endingCash)}</div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${fc.endingCash >= fc.starting.total ? '+' : ''}${fmtK(fc.endingCash - fc.starting.total)} vs today</span></div>
+      </div>
+      <div class="fb-kpi-card" style="border-left:4px solid var(--amber)">
+        <div class="fb-kpi-label">Lowest Operating Cash</div>
+        <div class="fb-kpi-value">${fc.lowest ? fmtK(fc.lowest.endingCash) : '—'}</div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${fc.lowest ? fc.lowest.label : ''}</span></div>
+      </div>
+      <div class="fb-kpi-card" style="border-left:4px solid #d97e2b">
+        <div class="fb-kpi-label">Reserve Balance (12-Mo)</div>
+        <div class="fb-kpi-value">${fmtK(endingReserve)}</div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${endingReserve >= fc.starting.reserve ? '+' : ''}${fmtK(endingReserve - fc.starting.reserve)} net (deposits − draws)</span></div>
+      </div>
+    </div>`;
+
+    // Chart (SVG combo)
+    html += fbBuildForecastChart(fc, baseProp);
+
+    // Breakdown table + assumptions
+    html += `<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:18px" class="cf-forecast-grid">
+      <div class="fb-chart-card" style="padding:18px">
+        ${fbBuildForecastTable(fc)}
+      </div>
+      ${fbBuildForecastAssumptions(baseProp, cache, fc)}
+    </div>`;
+
+    // Collapse grid on narrow screens
+    html += `<style>@media(max-width:1100px){.cf-forecast-grid{grid-template-columns:1fr !important}}</style>`;
+
+    // Missing-data warnings
+    const hints = [];
+    if (!cache.cash) hints.push('No starting cash set — edit via the assumptions panel (when wired up).');
+    if (!(cache.rentRoll || []).length) hints.push('No rent roll loaded — run <code>sync_rent_rolls.py</code>.');
+    if (!(cache.liabilities || []).length) hints.push('No liabilities matched to this property — check <code>exec_liabilities</code> <code>related_deal</code> field.');
+    if (hints.length) {
+      html += `<div style="margin-top:14px;padding:12px 16px;background:#fff8e8;border:1px solid #e8d899;border-radius:8px;font-size:11.5px;color:#6b5320">
+        <strong>Notes:</strong><ul style="margin:4px 0 0 20px">${hints.map(h => `<li>${h}</li>`).join('')}</ul>
+      </div>`;
+    }
+
+    return html;
+  }
+
+  // ── SVG combo chart (monthly bars + cumulative line + reserve-draw stack) ──
+  function fbBuildForecastChart(fc, baseProp) {
+    const W = 1200, H = 340, padL = 60, padR = 30, padT = 20, padB = 40;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+
+    // Y-axis: cash balance. Scale must fit both the cash line AND the reserve line.
+    const allCash = fc.rows.map(r => r.endingCash)
+      .concat(fc.rows.map(r => r.reserveBalance))
+      .concat([fc.starting.total, fc.starting.reserve]);
+    const maxCash = Math.max(...allCash, 1);
+    const minCash = Math.min(...allCash, 0);
+    const rangeCash = Math.max(maxCash - minCash, 1);
+
+    // Bar baseline at ~55% down (below line chart, above min)
+    // Use a separate scale for bars: ±max(inflow, outflow) mapped to ±40px around baseline y=chartMid.
+    const barMaxAbs = fc.rows.reduce((m, r) => Math.max(m, r.totalIn + r.cap_reserveDraw + (r.cap_contrib > 0 ? r.cap_contrib : 0),
+      r.totalOut + Math.abs(r.cap_tilc) + Math.abs(r.cap_capex) + Math.abs(r.cap_distrib)), 1);
+    const barBaselineY = padT + chartH * 0.62;
+    const barPxPerDollar = (chartH * 0.28) / barMaxAbs;  // up to 28% of chart height
+
+    const xOf = (i) => padL + ((i + 0.5) / 12) * chartW;
+    const yCash = (v) => padT + chartH - ((v - minCash) / rangeCash) * chartH;
+
+    // Gridlines (cash)
+    const ySteps = [0, 0.25, 0.5, 0.75, 1];
+    const fmtAxis = (v) => Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toFixed(1) + 'M' : '$' + Math.round(v / 1000) + 'K';
+    const gridLines = ySteps.map(t => {
+      const v = minCash + rangeCash * (1 - t);
+      const y = yCash(v);
+      return `<line x1="${padL}" y1="${y}" x2="${W - padR}" y2="${y}" stroke="#d4dbe8" stroke-width="1"/>
+              <text x="${padL - 5}" y="${y + 3}" text-anchor="end" font-size="9.5" fill="#6b7d96">${fmtAxis(v)}</text>`;
+    }).join('');
+
+    // X labels
+    const xLabels = fc.rows.map((r, i) =>
+      `<text x="${xOf(i)}" y="${H - 14}" text-anchor="middle" font-size="10" fill="#6b7d96">${r.monthName}</text>`
+    ).join('');
+
+    // Bar baseline
+    const barBase = `<line x1="${padL}" y1="${barBaselineY}" x2="${W - padR}" y2="${barBaselineY}" stroke="#6b7d96" stroke-width="0.8" opacity="0.3"/>`;
+
+    // Monthly bars + cumulative cash line
+    const barW = Math.max(chartW / 12 * 0.55, 14);
+    let bars = '';
+    let annotations = '';
+    const cumPts = [];
+    // Prepend starting-cash point at x=padL (virtual x="now")
+    cumPts.push(`${padL},${yCash(fc.starting.total)}`);
+    fc.rows.forEach((r, i) => {
+      const cx = xOf(i);
+      const x0 = cx - barW / 2;
+
+      // Inflow bar (green) — totalIn above baseline
+      const inH = r.totalIn * barPxPerDollar;
+      bars += `<rect x="${x0}" y="${barBaselineY - inH}" width="${barW}" height="${inH}" fill="#1a9a6b" opacity="0.88"/>`;
+      // Reserve draw (yellow) stacked ABOVE green inflow
+      if (r.cap_reserveDraw > 0) {
+        const drawH = r.cap_reserveDraw * barPxPerDollar;
+        bars += `<rect x="${x0}" y="${barBaselineY - inH - drawH}" width="${barW}" height="${drawH}" fill="#e8b544" opacity="0.92"/>
+                 <line x1="${x0}" y1="${barBaselineY - inH}" x2="${x0 + barW}" y2="${barBaselineY - inH}" stroke="#b8891c" stroke-width="0.6"/>`;
+      }
+      // Outflow bar (red) — totalOut + capex/TI/dist below baseline
+      const outTotal = r.totalOut + Math.abs(r.cap_tilc) + Math.abs(r.cap_capex) + Math.abs(r.cap_distrib) + Math.abs(r.cap_other < 0 ? r.cap_other : 0);
+      const outH = outTotal * barPxPerDollar;
+      bars += `<rect x="${x0}" y="${barBaselineY}" width="${barW}" height="${outH}" fill="#c94646" opacity="0.88"/>`;
+
+      cumPts.push(`${cx},${yCash(r.endingCash)}`);
+    });
+
+    // Low-point annotation
+    if (fc.lowest) {
+      const i = fc.rows.indexOf(fc.lowest);
+      const cx = xOf(i);
+      const cy = yCash(fc.lowest.endingCash);
+      annotations += `<circle cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="#c94646" stroke-width="2"/>
+                       <line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - 22}" stroke="#c94646" stroke-width="1"/>
+                       <rect x="${cx - 70}" y="${cy - 42}" width="140" height="20" fill="#c94646" rx="3"/>
+                       <text x="${cx}" y="${cy - 28}" text-anchor="middle" fill="#fff" font-weight="600" font-size="10">Low: ${fmtAxis(fc.lowest.endingCash)} (${fc.lowest.monthName})</text>`;
+    }
+
+    // Cumulative cash line + dots
+    const linePath = `<polyline fill="none" stroke="#00b0d4" stroke-width="2.8" points="${cumPts.join(' ')}"/>`;
+    const dots = fc.rows.map((r, i) => `<circle cx="${xOf(i)}" cy="${yCash(r.endingCash)}" r="3.5" fill="#00b0d4"/>`).join('');
+    const startDot = `<circle cx="${padL}" cy="${yCash(fc.starting.total)}" r="4" fill="#00b0d4"/>`;
+
+    // Reserve balance line (amber, after draws/deposits)
+    const reservePts = [`${padL},${yCash(fc.starting.reserve)}`]
+      .concat(fc.rows.map((r, i) => `${xOf(i)},${yCash(r.reserveBalance)}`));
+    const reserveLine = `<polyline fill="none" stroke="#d97e2b" stroke-width="2.2" stroke-dasharray="5 3" points="${reservePts.join(' ')}"/>`;
+    const reserveDots = fc.rows.map((r, i) => `<circle cx="${xOf(i)}" cy="${yCash(r.reserveBalance)}" r="3" fill="#d97e2b"/>`).join('');
+    const reserveStartDot = `<circle cx="${padL}" cy="${yCash(fc.starting.reserve)}" r="3.5" fill="#d97e2b"/>`;
+
+    return `<div class="fb-chart-card">
+      <div class="fb-chart-head">
+        <div>
+          <div class="fb-chart-title">Projected Cash Balance — ${baseProp.name} · Next 12 Months</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Starting cash ${fmtAxis(fc.starting.total)} · ${fc.rows[0].label} → ${fc.rows[11].label}</div>
+        </div>
+      </div>
+      <div class="fb-chart-legend" style="margin-bottom:10px">
+        <span><span style="display:inline-block;width:14px;height:3px;background:#00b0d4;margin-right:5px;vertical-align:middle"></span>Operating cash balance</span>
+        <span><span style="display:inline-block;width:14px;height:0;border-top:2px dashed #d97e2b;margin-right:5px;vertical-align:middle"></span>Reserve balance</span>
+        <span><span class="fb-legend-dot" style="background:#1a9a6b"></span>Operating inflow (NOI)</span>
+        <span><span class="fb-legend-dot" style="background:#e8b544"></span>Reserve draw</span>
+        <span><span class="fb-legend-dot" style="background:#c94646"></span>Outflows (debt, opex, capex)</span>
+      </div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:340px;display:block">
+        ${gridLines}
+        ${barBase}
+        ${bars}
+        ${reserveLine}
+        ${reserveStartDot}${reserveDots}
+        ${linePath}
+        ${startDot}${dots}
+        ${xLabels}
+        ${annotations}
+      </svg>
+    </div>`;
+  }
+
+  // ── Breakdown table ────────────────────────────────────────────────────
+  function fbBuildForecastTable(fc) {
+    const fmtK = (v) => !v ? '—' : (Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : '$' + Math.round(v / 1000) + 'K');
+    const fmtSigned = (v) => !v ? '—' : (v >= 0 ? fmtK(v) : '(' + fmtK(-v) + ')');
+    const cls = (v, isExpense) => {
+      if (!v) return 'v-dim';
+      if (isExpense) return v < 0 ? 'v-neg' : 'v-pos';
+      return v > 0 ? 'v-pos' : 'v-neg';
+    };
+
+    let html = `<div style="font-size:13px;font-weight:700;margin-bottom:4px">Monthly Breakdown</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Contractual rent (from rent roll) · debt service (from liabilities) · opex (from budget)</div>
+      <div style="overflow-x:auto"><table class="bgt-table" style="min-width:1200px;font-size:11.5px">
+        <thead><tr>
+          <th style="text-align:left">Line Item</th>
+          ${fc.rows.map(r => `<th style="text-align:right">${r.label}</th>`).join('')}
+          <th style="text-align:right;background:rgba(0,176,212,0.1)">Total</th>
+        </tr></thead>
+        <tbody>`;
+
+    const row = (label, getter, isExpense, totalCls, indent) => {
+      const vals = fc.rows.map(getter);
+      const total = vals.reduce((s, v) => s + v, 0);
+      let rowHtml = `<tr${totalCls ? ' style="' + totalCls + '"' : ''}><td style="text-align:left;${indent ? 'padding-left:24px' : ''}">${label}</td>`;
+      vals.forEach(v => {
+        rowHtml += `<td style="text-align:right" class="${isExpense ? (v < 0 ? 'v-neg' : (v > 0 ? 'v-pos' : 'v-dim')) : (v > 0 ? 'v-pos' : (v < 0 ? 'v-neg' : 'v-dim'))}">${isExpense ? fmtSigned(v) : (v ? fmtK(v) : '—')}</td>`;
+      });
+      rowHtml += `<td style="text-align:right;background:rgba(0,176,212,0.05);font-weight:600">${isExpense ? fmtSigned(total) : fmtK(total)}</td></tr>`;
+      return rowHtml;
+    };
+
+    html += `<tr><td style="text-align:left;font-weight:600">Starting Cash</td><td colspan="13" class="v-dim" style="text-align:left">${fmtK(fc.starting.total)} (Operating ${fmtK(fc.starting.operating)} + Reserves ${fmtK(fc.starting.reserve)})</td></tr>`;
+    html += `<tr style="background:var(--surface2)"><td colspan="14" style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700">Operating Inflows</td></tr>`;
+    html += row('Base Rent (contractual)',      r => r.rev_baseRent, false, '', true);
+    html += row('Expense Recoveries',           r => r.rev_recoveries, false, '', true);
+    html += row('Other Income',                 r => r.rev_other, false, '', true);
+    html += row('Total Operating Inflows',      r => r.totalIn, false, 'background:rgba(0,176,212,0.02);font-weight:600', false);
+
+    html += `<tr style="background:var(--surface2)"><td colspan="14" style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700">Operating Outflows</td></tr>`;
+    html += row('Operating Expenses',           r => -r.exp_opex, true, '', true);
+    html += row('Debt Service (P&I)',           r => -r.exp_debt, true, '', true);
+    html += row('Levered Cash Flow',            r => r.levered, false, 'background:rgba(0,176,212,0.02);font-weight:600', false);
+
+    html += `<tr style="background:var(--surface2)"><td colspan="14" style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700">Capital Events</td></tr>`;
+    html += row('TI / LC',                      r => r.cap_tilc, true, '', true);
+    html += row('Capex',                        r => r.cap_capex, true, '', true);
+    html += row('Partner Distributions',        r => r.cap_distrib, true, '', true);
+    html += row('Contributions',                r => r.cap_contrib, false, '', true);
+    html += row('Other',                        r => r.cap_other, true, '', true);
+    html += row('Reserve Draw (into operating)', r => r.cap_reserveDraw, false, '', true);
+    html += row('Reserve Deposit (from operating)', r => -r.cap_reserveDeposit, true, '', true);
+
+    html += row('Net Monthly Δ',                r => r.netDelta, false, 'background:rgba(0,176,212,0.08);font-weight:700', false);
+    // Ending cash row
+    html += `<tr style="background:rgba(0,176,212,0.08);font-weight:700"><td style="text-align:left">Ending Operating Cash</td>`;
+    fc.rows.forEach(r => {
+      html += `<td style="text-align:right">${fmtK(r.endingCash)}</td>`;
+    });
+    html += `<td></td></tr>`;
+    // Reserve balance row (second line on chart)
+    html += `<tr style="background:rgba(217,126,43,0.06);font-weight:600;color:#d97e2b"><td style="text-align:left">Reserve Balance</td>`;
+    fc.rows.forEach(r => {
+      html += `<td style="text-align:right">${fmtK(r.reserveBalance)}</td>`;
+    });
+    html += `<td></td></tr>`;
+
+    html += `</tbody></table></div>`;
+    return html;
+  }
+
+  // ── Assumptions panel (read-only for v1, editable in v2) ───────────────
+  function fbBuildForecastAssumptions(baseProp, cache, fc) {
+    const fmtK = (v) => !v ? '$0' : (Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : '$' + Math.round(v / 1000) + 'K');
+    const linked = (ok) => ok ? '<span style="font-size:11px;color:var(--green)">✓ linked</span>' : '<span style="font-size:11px;color:#c94646">not loaded</span>';
+    const hasRR = (cache.rentRoll || []).length > 0;
+    const hasLiab = (cache.liabilities || []).length > 0;
+    const hasBudget = baseProp.years && Object.keys(baseProp.years).length > 0;
+    const hasDraws = (fbReserveDraws[baseProp.id] || []).length > 0;
+    const hasEvents = (cache.events || []).length > 0;
+
+    return `<div class="fb-chart-card" style="padding:18px">
+      <h3 style="font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin-bottom:10px;font-weight:700">Forecast Assumptions</h3>
+
+      <div style="margin-top:12px"><h3 style="font-size:10.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Starting Position</h3></div>
+      <div style="padding:6px 0;font-size:12px;display:flex;justify-content:space-between;border-bottom:1px dashed var(--border)">
+        <span>Operating cash</span><span style="font-variant-numeric:tabular-nums">${fmtK(fc.starting.operating)}</span>
+      </div>
+      <div style="padding:6px 0;font-size:12px;display:flex;justify-content:space-between;">
+        <span>Reserve cash</span><span style="font-variant-numeric:tabular-nums">${fmtK(fc.starting.reserve)}</span>
+      </div>
+      <button onclick="fbEditPropertyCash('${baseProp.id}')" style="width:100%;margin-top:8px;padding:6px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:11px;cursor:pointer">Edit cash position</button>
+
+      <div style="margin-top:14px"><h3 style="font-size:10.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:6px">Data Sources</h3></div>
+      <div style="padding:6px 0;font-size:12px;display:flex;justify-content:space-between;border-bottom:1px dashed var(--border)">
+        <span>Rent roll</span>${linked(hasRR)}
+      </div>
+      <div style="padding:6px 0;font-size:12px;display:flex;justify-content:space-between;border-bottom:1px dashed var(--border)">
+        <span>Budget</span>${linked(hasBudget)}
+      </div>
+      <div style="padding:6px 0;font-size:12px;display:flex;justify-content:space-between;border-bottom:1px dashed var(--border)">
+        <span>Liabilities</span>${linked(hasLiab)}
+      </div>
+      <div style="padding:6px 0;font-size:12px;display:flex;justify-content:space-between;border-bottom:1px dashed var(--border)">
+        <span>Reserve draws</span>${linked(hasDraws)}
+      </div>
+      <div style="padding:6px 0;font-size:12px;display:flex;justify-content:space-between;">
+        <span>Capital events</span>${linked(hasEvents)}
+      </div>
+      <button onclick="fbEditCashEvents('${baseProp.id}')" style="width:100%;margin-top:8px;padding:6px;background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:5px;font-size:11px;cursor:pointer">Add capital event</button>
+    </div>`;
+  }
+
+  // Stub editors (v1 — prompt-based). v2: proper modal.
+  async function fbEditPropertyCash(propId) {
+    const oper = prompt('Operating cash balance ($):', '0');
+    if (oper === null) return;
+    const resv = prompt('Reserve cash balance ($):', '0');
+    if (resv === null) return;
+    const body = {
+      property_id: propId,
+      operating_cash: Number(oper.replace(/[^\d.-]/g, '')) || 0,
+      reserve_cash: Number(resv.replace(/[^\d.-]/g, '')) || 0,
+    };
+    try {
+      // Try update first
+      const existing = await supaFetch('property_cash', `?property_id=eq.${encodeURIComponent(propId)}&limit=1`);
+      if (existing && existing.length) {
+        await supaWrite('property_cash', 'PATCH', body, `?property_id=eq.${encodeURIComponent(propId)}`);
+      } else {
+        await supaWrite('property_cash', 'POST', body, '');
+      }
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (e) {
+      alert('Error saving: ' + e.message);
+    }
+  }
+
+  async function fbEditCashEvents(propId) {
+    const year = Number(prompt('Year (e.g. 2026):', new Date().getFullYear())) || 0;
+    if (!year) return;
+    const month = Number(prompt('Month (1-12):', '1')) || 0;
+    if (!month || month < 1 || month > 12) return;
+    const type = prompt('Event type (ti_lc / capex / distribution / contribution / other):', 'capex');
+    if (!type) return;
+    const amountStr = prompt('Amount (negative for outflow, e.g. -250000 for a $250K TI payout):', '-50000');
+    if (amountStr === null) return;
+    const desc = prompt('Description:', '') || '';
+    const body = {
+      property_id: propId,
+      year, month,
+      event_type: type,
+      amount: Number(amountStr.replace(/[^\d.-]/g, '')) || 0,
+      description: desc,
+    };
+    try {
+      await supaWrite('cash_forecast_events', 'POST', body, '');
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (e) {
+      alert('Error saving event: ' + e.message);
+    }
   }
 
   // ── Monthly Actuals vs Budget — new tab ──
