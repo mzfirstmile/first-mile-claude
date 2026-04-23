@@ -98,6 +98,14 @@ FOLDER_TO_PROPERTY: dict[str, str] = {
     "1700 east putnam": "recF3zFKbY4wJ4P40",
 }
 
+# Folder names to skip entirely during discovery (no Yardi data, passive deals, etc.)
+FOLDER_SKIPLIST = [
+    "0. overall property management",
+    "41 flatbush",
+    "red bank - 1 river centre",
+    "red bank",
+]
+
 
 # ─────────────────────────────────────────────────────────────────────────
 # Account-name → GL code overrides (for aliases Yardi uses)
@@ -467,6 +475,72 @@ MONTH_ABBR = {
     "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
     "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
 }
+
+
+def parse_period_from_name(filename: str) -> tuple[int, int] | None:
+    """Best-effort extraction of (year, period_end_month) from a filename.
+
+    Handles variants we've observed:
+      "Income_Statement 03.31.26.xlsx"     → (2026, 3)
+      "Income_Statement 03.31.2026.xlsx"   → (2026, 3)
+      "Income_Statement 01.2026.xlsx"      → (2026, 1)
+      "Income_Statement Mar 2026.xlsx"     → (2026, 3)
+      "Income_Statement Q2 2025.xlsx"      → (2025, 6)
+      "Income_Statement Dec 2025.xlsx"     → (2025, 12)
+      "Income_Statement 2026-03-31.xlsx"   → (2026, 3)
+    """
+    s = filename
+    # Q1/Q2/Q3/Q4 YYYY
+    m = re.search(r"\bQ([1-4])\s+(\d{4})", s, re.I)
+    if m:
+        q = int(m.group(1))
+        return (int(m.group(2)), q * 3)
+    # Month-name YYYY
+    m = re.search(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\w*\s+(\d{4})", s, re.I)
+    if m:
+        return (int(m.group(2)), MONTH_ABBR[m.group(1).lower()[:3]])
+    # MM.DD.YY or MM.DD.YYYY
+    m = re.search(r"\b(\d{1,2})[\.\-/](\d{1,2})[\.\-/](\d{2,4})\b", s)
+    if m:
+        mo = int(m.group(1))
+        yr = int(m.group(3))
+        yr = yr if yr >= 1900 else 2000 + yr
+        if 1 <= mo <= 12 and yr >= 2020:
+            return (yr, mo)
+    # MM.YYYY or M.YYYY
+    m = re.search(r"\b(\d{1,2})\.(\d{4})\b", s)
+    if m:
+        mo = int(m.group(1))
+        yr = int(m.group(2))
+        if 1 <= mo <= 12:
+            return (yr, mo)
+    # YYYY-MM-DD
+    m = re.search(r"(\d{4})-(\d{1,2})-(\d{1,2})", s)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    return None
+
+
+def db_latest_month(url: str, key: str, property_id: str, year: int) -> int:
+    """Return max month already loaded in actuals_line_items for (property, year)."""
+    endpoint = f"{url}/rest/v1/actuals_line_items"
+    headers = {"apikey": key, "Authorization": f"Bearer {key}"}
+    params = {
+        "property_id": f"eq.{property_id}",
+        "year": f"eq.{year}",
+        "select": "month",
+        "order": "month.desc",
+        "limit": "1",
+    }
+    try:
+        resp = requests.get(endpoint, headers=headers, params=params, timeout=30)
+        if resp.status_code == 200:
+            rows = resp.json()
+            if rows:
+                return int(rows[0]["month"])
+    except Exception:
+        pass
+    return 0
 
 
 def _detect_format(all_rows: list[tuple]) -> str:
@@ -970,13 +1044,15 @@ def discover_files_grouped(
     for child in sorted(propmgmt.iterdir()):
         if not child.is_dir():
             continue
+        if any(skip in child.name.lower() for skip in FOLDER_SKIPLIST):
+            print(f"  ⏭  {child.name}: skiplisted")
+            continue
         acct = find_accounting_folder(child)
         if not acct:
             print(f"  ⏭  {child.name}: no 'A - Month Quarter Financials' folder found")
             continue
         stmts = all_income_statements(acct)
         if not stmts:
-            # Debug dump so we can see what's actually in there
             try:
                 contents = [c.name for c in acct.iterdir()][:15]
             except OSError:
@@ -990,8 +1066,13 @@ def discover_files_grouped(
                      or only_property.lower() in child.name.lower()]
             if not stmts:
                 continue
-        print(f"  ✓ {child.name}: {len(stmts)} income-statement file(s) found")
-        grouped[child.name] = stmts
+        # Pick the single most-recently-modified file per property. Older
+        # files (prior months, Q2 2025, etc.) would all try to download
+        # from Dropbox's Files On Demand and waste a lot of time.
+        stmts.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+        latest = stmts[0]
+        print(f"  ✓ {child.name}: using latest → {latest.name}  ({len(stmts)} total found)")
+        grouped[child.name] = [latest]
 
     return grouped
 
@@ -1016,6 +1097,11 @@ def main() -> int:
     ap.add_argument("--property", help="Yardi property code or name substring.")
     ap.add_argument("--file", help="Process a single xlsx file and stop.")
     ap.add_argument("--verbose", "-v", action="store_true")
+    ap.add_argument(
+        "--force-refresh",
+        action="store_true",
+        help="Reload files even if their period is already in Supabase.",
+    )
     args = ap.parse_args()
 
     name_to_gl = load_name_to_gl()
@@ -1039,7 +1125,43 @@ def main() -> int:
 
     for folder_name, file_paths in grouped.items():
         print(f"\n━━━ {folder_name} ({len(file_paths)} file(s)) ━━━")
-        # Materialize every file first (they might all be online-only)
+
+        # ── Freshness check: skip files whose period is already loaded ──
+        # Map folder name → property_id so we can query what's in DB
+        property_id_for_folder = None
+        for key, pid in FOLDER_TO_PROPERTY.items():
+            if key in folder_name.lower() or folder_name.lower() in key:
+                property_id_for_folder = pid
+                break
+
+        if property_id_for_folder and not args.file:
+            # Peek at each file's filename to get a (year, month) hint
+            fresh: list[Path] = []
+            for f in file_paths:
+                period = parse_period_from_name(f.name)
+                if not period:
+                    # Can't tell from filename — let it through, parser will decide
+                    fresh.append(f)
+                    continue
+                yr, mo = period
+                if yr < args.min_year:
+                    print(f"  ⏭  {f.name}: year {yr} < --min-year {args.min_year}")
+                    continue
+                if args.commit or args.force_refresh:
+                    db_max = 0
+                    if args.commit:
+                        db_max = db_latest_month(supabase_url, supabase_key, property_id_for_folder, yr)
+                    if db_max >= mo and not args.force_refresh:
+                        print(f"  ⏭  {f.name}: period {yr}-{mo:02d} already loaded (db has thru month {db_max})")
+                        continue
+                fresh.append(f)
+            if not fresh:
+                print("  ✓ up to date — nothing new to load")
+                continue
+            file_paths = fresh
+
+        # Materialize every file first. Drop any that fail to download.
+        usable: list[Path] = []
         for f in file_paths:
             try:
                 sz = f.stat().st_size
@@ -1048,7 +1170,14 @@ def main() -> int:
             if sz == 0:
                 print(f"  … pulling down {f.name} from Dropbox …")
                 if not materialize_dropbox_file(f):
-                    print(f"  ✗ timed out downloading {f.name}")
+                    print(f"  ✗ timed out downloading {f.name} — skipping")
+                    continue
+                print(f"  ✓ materialized ({f.stat().st_size:,} bytes)")
+            usable.append(f)
+        file_paths = usable
+        if not file_paths:
+            print("  ⏭  no files available to parse")
+            continue
 
         # Parse all files for this property
         parsed_by_year: dict[int, dict[str, list[dict[str, Any]]]] = {}

@@ -83,9 +83,14 @@ FOLDER_TO_PROPERTY: dict[str, str] = {
     "575 broadway": "recxF4R64gbb5Sowj",
     "1700 east putnam greenwich": "recF3zFKbY4wJ4P40",
     "1700 east putnam": "recF3zFKbY4wJ4P40",
-    "41 flatbush": None,  # not in Yardi yet
-    "red bank - 1 river centre": None,
 }
+
+FOLDER_SKIPLIST = [
+    "0. overall property management",
+    "41 flatbush",
+    "red bank - 1 river centre",
+    "red bank",
+]
 
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -406,6 +411,9 @@ def discover_rent_rolls(explicit_file: str | None,
     out: dict[str, Path] = {}
     for child in sorted(propmgmt.iterdir()):
         if not child.is_dir():
+            continue
+        if any(skip in child.name.lower() for skip in FOLDER_SKIPLIST):
+            print(f"  ⏭  {child.name}: skiplisted")
             continue
         if only_property and only_property.lower() not in child.name.lower():
             continue
