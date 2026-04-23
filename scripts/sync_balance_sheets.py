@@ -579,6 +579,38 @@ def parse_balance_sheet(path: Path) -> dict[str, Any]:
 
     period = f"{year:04d}-{month:02d}"
 
+    # Auto-detect format: does col 0 contain GL codes (4-digit numbers)?
+    # If so, col 0 = GL, col 1 = account name, col amount_col = balance.
+    gl_in_col0 = False
+    gl_probe = 0
+    for row in all_rows[header_row_idx + 1 : header_row_idx + 30]:
+        if not row or row[0] is None:
+            continue
+        c0 = str(row[0]).strip()
+        if re.match(r"^\d{4}(-[\d]+)*(-[\d]+)*$", c0) or re.match(r"^\d{4}$", c0):
+            gl_probe += 1
+            if gl_probe >= 3:
+                gl_in_col0 = True
+                break
+    # When GL codes are in col 0, the amount column may shift right — re-detect
+    if gl_in_col0:
+        # Find first row that has a 4-digit GL and a numeric value
+        for row in all_rows[header_row_idx + 1 : header_row_idx + 40]:
+            if not row or row[0] is None:
+                continue
+            c0 = str(row[0]).strip()
+            if not re.match(r"^\d{4}", c0):
+                continue
+            for j in range(len(row) - 1, 1, -1):
+                v = row[j]
+                try:
+                    if v not in (None, "") and abs(float(v)) > 0:
+                        amount_col = j
+                        break
+                except (TypeError, ValueError):
+                    continue
+            break
+
     # ── Walk data rows with section context ─────────────────────────
     rows: list[dict[str, Any]] = []
     sort_order = 0
@@ -592,6 +624,68 @@ def parse_balance_sheet(path: Path) -> dict[str, Any]:
         c0 = row[0]
         if c0 is None:
             continue
+
+        # If GL codes are in col 0, pull bs_code from col 0 and name from col 1
+        if gl_in_col0:
+            c0_str = str(c0).strip()
+            gl_match = re.match(r"^(\d{4})", c0_str)
+            if gl_match:
+                explicit_bs_code = gl_match.group(1)
+                # Name is in col 1
+                name_raw = str(row[1]) if len(row) > 1 and row[1] is not None else ""
+                name_stripped = name_raw.strip()
+                if not name_stripped:
+                    continue
+                upper = name_stripped.upper()
+                amount_val = row[amount_col] if amount_col < len(row) else None
+                # Skip if no amount (header row)
+                if amount_val in (None, ""):
+                    # Still record header-style rows (section titles)
+                    type_hint, section_hint = detect_section(upper)
+                    if type_hint is not None:
+                        cur_type = type_hint
+                    if section_hint is not None:
+                        cur_section = section_hint
+                    sort_order += 10
+                    rows.append({
+                        "bs_code": explicit_bs_code,
+                        "account_name": name_stripped,
+                        "amount": 0.0,
+                        "is_header": True,
+                        "is_total": upper.startswith("TOTAL"),
+                        "account_type": cur_type or bs_section(explicit_bs_code)[0],
+                        "account_section": cur_section or bs_section(explicit_bs_code)[1],
+                        "sort_order": sort_order,
+                    })
+                    continue
+                try:
+                    amount = float(amount_val)
+                except (TypeError, ValueError):
+                    amount = 0.0
+                is_total = upper.startswith("TOTAL")
+                atype_from_code, sect_from_code = bs_section(explicit_bs_code)
+                # Update section context based on GL code prefix
+                type_hint, section_hint = detect_section(upper)
+                if type_hint is not None:
+                    cur_type = type_hint
+                if section_hint is not None:
+                    cur_section = section_hint
+                sort_order += 10
+                rows.append({
+                    "bs_code": explicit_bs_code,
+                    "account_name": name_stripped,
+                    "amount": round(amount, 2),
+                    "is_header": False,
+                    "is_total": is_total,
+                    "account_type": cur_type or atype_from_code,
+                    "account_section": cur_section or sect_from_code,
+                    "sort_order": sort_order,
+                })
+                continue
+            # c0 exists but not a GL code — skip (might be a subtotal header)
+            continue
+
+        # --- Name-based format (legacy) ---
         name_raw = str(c0)
         # Preserve leading spaces to understand indent depth (Yardi uses leading spaces)
         name_stripped = name_raw.strip()
