@@ -3757,10 +3757,31 @@ function renderBalanceSheet() {
         loanPaybackByName[linkedLoan] += Math.abs(amount);
       }
     } else if (category === 'deposit') {
-      depositsTotal += Math.abs(amount);
-      depositItems.push({ desc: categoryNames[r.id] || getDescription(r), amount: Math.abs(amount), date: getDate(r), acct: getAccountName(r) });
+      // Don't accumulate yet — collect raw records, group + net by name below
+      // (Asset value of a deposit = -signed bank amount: outflow -X → asset +X; return +X → asset -X)
+      depositItems.push({ id: r.id, desc: categoryNames[r.id] || getDescription(r), name: categoryNames[r.id] || null, signedAmount: amount, date: getDate(r), acct: getAccountName(r) });
     }
   });
+
+  // Group deposits by friendly name so a deposit + its return net to zero (hidden).
+  // Unnamed deposits stay as individual rows — same convention as Loan Out.
+  const depositGroups = {};
+  depositItems.forEach(item => {
+    const key = item.name || `__unnamed_${item.id}`;
+    if (!depositGroups[key]) depositGroups[key] = { desc: item.name || item.desc, name: item.name, amount: 0, date: item.date, acct: item.acct, count: 0, recordIds: [] };
+    // Asset value = -signed bank amount; sum across all records sharing the name
+    depositGroups[key].amount += -item.signedAmount;
+    depositGroups[key].count++;
+    depositGroups[key].recordIds.push(item.id);
+    if (item.date > depositGroups[key].date) depositGroups[key].date = item.date;
+  });
+  // Keep only groups with positive net asset value; recompute total
+  depositsTotal = 0;
+  const consolidatedDeposits = Object.values(depositGroups).filter(d => d.amount > 0.01);
+  consolidatedDeposits.forEach(d => { depositsTotal += d.amount; });
+  // Replace flat depositItems list with the consolidated groups for downstream rendering
+  depositItems.length = 0;
+  consolidatedDeposits.forEach(d => depositItems.push(d));
   // Group loan outs by name (combine same-named loans) and net paybacks
   const loanGroups = {};
   loanOutItems.forEach(item => {
