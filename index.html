@@ -1941,8 +1941,15 @@
   });
 
   async function runSql() {
-    const sql = document.getElementById('sqlInput').value.trim();
+    let sql = document.getElementById('sqlInput').value.trim();
     if (!sql) return;
+    // Strip any trailing ';' (plus whitespace) — the server-side exec_sql
+    // function wraps SELECTs as `SELECT jsonb_agg(...) FROM (USER_QUERY) t`.
+    // A trailing semicolon turns that into a syntax error; the wrapper
+    // then falls back to a raw EXECUTE which can't return SELECT rows, so
+    // the UI used to silently say "Statement executed successfully" with
+    // no data table. Stripping it client-side avoids the gotcha.
+    sql = sql.replace(/;\s*$/, '');
     const btn = document.getElementById('sqlRunBtn');
     const output = document.getElementById('sqlOutput');
     btn.disabled = true;
@@ -3389,6 +3396,27 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         summaryRows.push({ label: g.name, isHeader: false, isTotal: g.type === 'Tot', budget26: annual, months: data ? data.months : {} });
       }
     });
+
+    // ── NOI fixup ──
+    // The Tot range-sum logic above computes NOI (GL 6999) by summing all
+    // Reg entries between headCode=5000 and 6999 — which is just every
+    // OpEx line. For 2025 actuals (where actuals_line_items has no
+    // explicit NOI row at GL 6999) this produces NOI = TOTAL OPERATING
+    // EXPENSES, an obvious bug. Always recompute NOI from
+    // TOTAL INCOME − TOTAL OPERATING EXPENSES so months + annual line up.
+    const _noiRow = summaryRows.find(r => r.label === 'NET OPERATING INCOME');
+    const _incRow = summaryRows.find(r => r.label === 'TOTAL INCOME' || r.label === 'TOTAL REVENUE');
+    const _opxRow = summaryRows.find(r => r.label === 'TOTAL OPERATING EXPENSES' || r.label === 'TOTAL BUILDING EXPENSES');
+    if (_noiRow && _incRow && _opxRow) {
+      const _months = {};
+      MONTHS.forEach(m => {
+        const inc = (_incRow.months && _incRow.months[m]) || 0;
+        const exp = (_opxRow.months && _opxRow.months[m]) || 0;
+        _months[m] = inc - Math.abs(exp);
+      });
+      _noiRow.months = _months;
+      _noiRow.budget26 = MONTHS.reduce((s, m) => s + _months[m], 0);
+    }
 
     // Reorder below-NOI sections: G&A → Debt → Net Cash After Debt → Capital (Base Bldg, TI, Brokerage) → Depreciation
     const noiIdx = summaryRows.findIndex(r => r.label === 'NET OPERATING INCOME');
