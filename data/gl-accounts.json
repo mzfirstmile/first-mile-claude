@@ -31,7 +31,7 @@
   },
   {
     "code": "4100",
-    "name": "RENTAL INCOME/RECOVERABLE",
+    "name": "RECOVERIES",
     "type": "Head"
   },
   {
@@ -101,7 +101,7 @@
   },
   {
     "code": "4190",
-    "name": "TOTAL RENTAL INCOME/RECOVERABLE",
+    "name": "TOTAL RECOVERIES",
     "type": "Tot"
   },
   {
@@ -546,7 +546,7 @@
   },
   {
     "code": "5650",
-    "name": "ADMINISTRATIVE EXPENSES - RECOVERABLE",
+    "name": "ADMINISTRATIVE EXPENSES",
     "type": "Head"
   },
   {
@@ -581,7 +581,7 @@
   },
   {
     "code": "5660",
-    "name": "TOTAL ADMINISTRATIVE EXPENSES - RECOVERABLE",
+    "name": "TOTAL ADMINISTRATIVE EXPENSES",
     "type": "Tot"
   },
   {

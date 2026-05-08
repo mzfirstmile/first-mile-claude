@@ -3343,11 +3343,15 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
     const summaryRows = [];
     const allGlCodes = new Set(Object.keys(byGl));
-    // Add Head entries that have children with data
+    // Add Head entries that have children with data.
+    // Top-level section heads (4000 INCOME, 5000 EXPENSES) cover a wide GL
+    // range, so use a larger lookahead for those; sub-heads use +200.
+    const _SECTION_HEADS = new Set(['4000', '5000']);
     gl.forEach(g => {
       if (g.type === 'Head') {
         const gCode = parseInt(g.code);
-        const hasChildren = [...allGlCodes].some(c => { const cc = parseInt(c); return cc > gCode && cc < gCode + 200; });
+        const span = _SECTION_HEADS.has(g.code) ? 2000 : 200;
+        const hasChildren = [...allGlCodes].some(c => { const cc = parseInt(c); return cc > gCode && cc < gCode + span; });
         if (hasChildren) allGlCodes.add(g.code);
       }
     });
