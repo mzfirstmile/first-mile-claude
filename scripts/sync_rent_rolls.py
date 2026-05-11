@@ -427,12 +427,67 @@ def parse_yardi_charge_format(path: Path, verbose: bool = False):
 
         if not active:
             continue
-        cc = charge_str.lower()
-        if any(k in cc for k in ("rent-com", "rent com", "base rent")) or (
-            cc.startswith("rent") and not any(k in cc for k in ("free", "abate", "concession"))
-        ):
+        cc = charge_str.lower().strip()
+        # ── Rent-like charge codes ──
+        # Yardi uses different codes for non-traditional tenancies that all
+        # represent the tenant's monthly rent obligation:
+        #   • Office / retail leases → "base rent", "rent-com", "rent-office"
+        #   • Rooftop antenna leases → "antenna", "antena" (Yardi typo),
+        #     "ant-roof", "ant rent"
+        #   • License agreements (UPS dropbox, storage closet) → "license",
+        #     "license fee", "lic fee"
+        #   • Parking licenses (car dealerships using overflow lots) →
+        #     "park" (Yardi's actual code for 61 S Paramus), "parking"
+        #   • Signage / billboard → "signage", "sign rent", "billboard"
+        #   • Subleases (Prada sub-basement, Frame duplex) → "sublet",
+        #     "sub-rent", "subtenant rent"
+        # Any of these should aggregate into monthly_rent so the rent roll
+        # carries a real value for the tenant. Reimbursements (CAM/RET/INS)
+        # are handled below and excluded here via the "reimb" guard.
+        #
+        # NOTE: "misc" is a special case — Yardi uses it for the actual
+        # rent on rooftop/box/parking license rows where the lease doesn't
+        # have a separate Base Rent charge. We stash misc charges and
+        # promote them to monthly_rent at the end of parsing if and only
+        # if the tenant has no other matched rent (so a real office tenant
+        # with a $50/mo "Misc" key-fob fee doesn't get that promoted).
+        RENT_CHARGE_KEYWORDS = (
+            "base rent", "rent-com", "rent com", "rent-comm",
+            "rent-office", "rent office", "rent-ret", "rent retail",
+            "rent-resid", "rent resid", "rent-stor", "rent storage",
+            "antenna", "antena",                          # Yardi typo seen on 61 S Paramus
+            "ant-roof", "ant roof", "antroof", "ant rent",
+            "rooftop rent", "roof rent", "tower rent",
+            "license fee", "license rent", "lic fee", "lic-fee", "licensee",
+            "parking rent", "park rent", "park-rent", "parking license",
+            "signage", "sign rent", "billboard",
+            "sublet", "sub-rent", "sub rent", "subtenant rent", "sublease rent",
+            "box rent", "rent-box", "kiosk rent", "rent-kiosk",
+            "shack rent", "rent-shack",
+        )
+        # Codes whose entire value (post-trim) IS rent. Add here when Yardi
+        # uses a bare four-letter code that's too short for substring match
+        # (would generate false positives if added as a keyword).
+        RENT_CHARGE_EXACT = ("park", "rent")
+        is_rent = (
+            any(k in cc for k in RENT_CHARGE_KEYWORDS) or
+            cc in RENT_CHARGE_EXACT or
+            (
+                cc.startswith("rent")
+                and not any(k in cc for k in ("free", "abate", "concession", "reimb", "credit"))
+            )
+        )
+        if is_rent:
             s["monthly_rent"] += monthly
             s["annual_rent"] += annual
+            if verbose:
+                print(f"      rent+ {current_tenant!s:30.30} {unit_str!s:8.8} {charge_str!s:18.18} ${monthly:,.2f}/mo")
+        elif cc == "misc" or cc.startswith("misc"):
+            # Stash; we'll promote these to rent at end-of-parse iff the
+            # tenant has no other rent charge.
+            s.setdefault("_fallback_rent", []).append((monthly, annual, charge_str))
+            if verbose:
+                print(f"      misc? {current_tenant!s:30.30} {unit_str!s:8.8} {charge_str!s:18.18} ${monthly:,.2f}/mo (stashed)")
         elif "cam" in cc or cc.startswith("oe") or "operating expense" in cc:
             lbl = f"{charge_str}: ${monthly:,.0f}/mo"
             s["cam_reimbursement"] = (s["cam_reimbursement"] + "; " if s["cam_reimbursement"] else "") + lbl
@@ -444,6 +499,25 @@ def parse_yardi_charge_format(path: Path, verbose: bool = False):
             s["insurance_reimbursement"] = (s["insurance_reimbursement"] + "; " if s["insurance_reimbursement"] else "") + lbl
         else:
             s["_other"].append(f"{charge_str}: ${monthly:,.0f}/mo")
+            if verbose:
+                print(f"      other {current_tenant!s:30.30} {unit_str!s:8.8} {charge_str!s:18.18} ${monthly:,.2f}/mo")
+
+    # ── Promote stashed "Misc" charges to rent for license-style tenants ──
+    # If a tenant had no real rent code but did have one or more "Misc"
+    # charges (Yardi's catchall for rooftop / dropbox / parking license
+    # fees), treat the sum of those Misc charges as rent. Tenants that
+    # already have a matched rent charge keep Misc in the notes column.
+    for s in suites.values():
+        fallback = s.pop("_fallback_rent", None)
+        if not fallback:
+            continue
+        if not s["monthly_rent"]:
+            for m, a, _label in fallback:
+                s["monthly_rent"] += m
+                s["annual_rent"] += a
+        else:
+            for m, _a, label in fallback:
+                s["_other"].append(f"{label}: ${m:,.0f}/mo")
 
     rows_out: list[dict[str, Any]] = []
     for (tenant, unit), s in suites.items():
@@ -593,6 +667,20 @@ def infer_property_id_from_folder(folder_name: str) -> str | None:
 # ─────────────────────────────────────────────────────────────────────────
 # Supabase writer
 # ─────────────────────────────────────────────────────────────────────────
+# Columns set/edited by the user in the admin UI that must survive a Yardi
+# re-sync. The sync owns everything else (rent, dates, recoveries…) — these
+# are the underwriting overlays Morris adds on top.
+USER_OVERRIDE_COLUMNS: tuple[str, ...] = (
+    "releasing_profile_id",
+    "rl_base_rent_psf",
+    "rl_new_downtime_months",   "rl_renew_downtime_months",
+    "rl_new_free_rent_months",  "rl_renew_free_rent_months",
+    "rl_new_escalation_pct",    "rl_renew_escalation_pct",
+    "rl_new_ti_psf",            "rl_renew_ti_psf",
+    "rl_new_lc_pct",            "rl_renew_lc_pct",
+)
+
+
 def supabase_upsert(url: str, key: str, property_id: str,
                     rows: list[dict[str, Any]], source_file: str,
                     as_of_date: str | None = None) -> int:
@@ -603,7 +691,74 @@ def supabase_upsert(url: str, key: str, property_id: str,
         "Content-Type": "application/json",
         "Prefer": "return=minimal",
     }
-    # Delete existing
+
+    # ── Snapshot user overlays before we wipe ──
+    # The admin UI lets Morris assign a Re-Leasing Profile to each tenant
+    # and override any of the profile's underwriting levers (downtime, free
+    # rent, escalation, TI, LC, base rent) per tenant. Those values live on
+    # the rent_roll row itself, so the DELETE+INSERT below would otherwise
+    # clobber them every time Yardi data is re-imported.
+    #
+    # We snapshot by (tenant_name, suite) — the natural key from a user's
+    # perspective — and replay via PATCH after the new rows land. If Yardi
+    # renamed a tenant between syncs the replay will miss that one row and
+    # surface a warning; everything else carries forward unchanged.
+    snapshot: dict[tuple[str, str], dict[str, Any]] = {}
+    try:
+        snap_select = "tenant_name,suite," + ",".join(USER_OVERRIDE_COLUMNS)
+        snap_resp = requests.get(
+            endpoint,
+            headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            params={"property_id": f"eq.{property_id}", "select": snap_select},
+            timeout=60,
+        )
+        if snap_resp.status_code == 200:
+            for existing in snap_resp.json():
+                # Only worth snapshotting if at least one override is set —
+                # avoids generating empty PATCH calls for the bulk of rows.
+                overlay = {
+                    col: existing.get(col)
+                    for col in USER_OVERRIDE_COLUMNS
+                    if existing.get(col) is not None
+                }
+                if not overlay:
+                    continue
+                k = (
+                    (existing.get("tenant_name") or "").strip(),
+                    (existing.get("suite") or "").strip(),
+                )
+                snapshot[k] = overlay
+            if snapshot:
+                print(f"  ↻ snapshotted user overlays for {len(snapshot)} tenant(s)")
+        elif snap_resp.status_code == 400 and "rl_" in snap_resp.text:
+            # Migration `add-rent-roll-overrides.sql` hasn't been run yet.
+            # Fall back to snapshotting just the profile assignment.
+            print("  ⚠ rl_* override columns missing — snapshotting profile assignment only")
+            fallback = requests.get(
+                endpoint,
+                headers={"apikey": key, "Authorization": f"Bearer {key}"},
+                params={
+                    "property_id": f"eq.{property_id}",
+                    "select": "tenant_name,suite,releasing_profile_id",
+                },
+                timeout=60,
+            )
+            if fallback.status_code == 200:
+                for existing in fallback.json():
+                    pid = existing.get("releasing_profile_id")
+                    if not pid:
+                        continue
+                    k = (
+                        (existing.get("tenant_name") or "").strip(),
+                        (existing.get("suite") or "").strip(),
+                    )
+                    snapshot[k] = {"releasing_profile_id": pid}
+        else:
+            print(f"  ⚠ snapshot fetch failed ({snap_resp.status_code}); proceeding without preservation")
+    except Exception as e:
+        print(f"  ⚠ snapshot exception (proceeding without preservation): {e}")
+
+    # ── Delete existing ──
     del_resp = requests.delete(
         endpoint, headers=headers,
         params={"property_id": f"eq.{property_id}"}, timeout=60,
@@ -639,6 +794,46 @@ def supabase_upsert(url: str, key: str, property_id: str,
         if resp.status_code not in (200, 201, 204):
             raise RuntimeError(f"POST failed ({resp.status_code}): {resp.text[:400]}")
         inserted += len(part)
+
+    # ── Replay snapshotted overlays ──
+    if snapshot:
+        replayed = 0
+        missed: list[tuple[str, str]] = []
+        for (tn, su), overlay in snapshot.items():
+            params = {"property_id": f"eq.{property_id}"}
+            # Empty strings are treated as exact-match "blank" rows. Use
+            # is.null for actual None values so the filter is well-formed.
+            params["tenant_name"] = f"eq.{tn}" if tn else "is.null"
+            params["suite"] = f"eq.{su}" if su else "is.null"
+            patch_resp = requests.patch(
+                endpoint, headers=headers, params=params, json=overlay, timeout=60,
+            )
+            if patch_resp.status_code in (200, 204):
+                # PostgREST returns 204 even when zero rows matched. Verify
+                # with a follow-up count so we can warn about real misses.
+                check = requests.get(
+                    endpoint,
+                    headers={"apikey": key, "Authorization": f"Bearer {key}", "Prefer": "count=exact"},
+                    params={**params, "select": "id"},
+                    timeout=30,
+                )
+                count_hdr = check.headers.get("Content-Range", "0-0/0")
+                try:
+                    matched = int(count_hdr.rsplit("/", 1)[-1])
+                except ValueError:
+                    matched = 0
+                if matched:
+                    replayed += 1
+                else:
+                    missed.append((tn, su))
+            else:
+                missed.append((tn, su))
+                print(f"    ⚠ replay PATCH failed for ({tn!r}, {su!r}): "
+                      f"{patch_resp.status_code} {patch_resp.text[:160]}")
+        print(f"  ↻ replayed overlays on {replayed}/{len(snapshot)} tenant(s)")
+        for tn, su in missed:
+            print(f"    · skipped: tenant={tn!r} suite={su!r} — likely renamed in Yardi; re-assign in UI")
+
     return inserted
 
 

@@ -3878,12 +3878,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       { id: 'trend',        label: 'Monthly Trend' },
       { id: 'drill',        label: 'Drilldown' },
       { id: 'rentroll',     label: 'Rent Roll' },
+      { id: 'stacking',     label: 'Stacking Plan' },
       { id: 'cashforecast', label: 'Cash Forecast' },
       { id: 'balancesheet', label: 'Balance Sheet' },
     ],
     planning: [
       { id: 'budget',       label: 'Budget' },
       { id: 'rentroll',     label: 'Rent Roll' },
+      { id: 'stacking',     label: 'Stacking Plan' },
       { id: 'drill',        label: 'Drilldown' },
       { id: 'cashforecast', label: 'Cash Forecast' },
       { id: 'balancesheet', label: 'Balance Sheet' },
@@ -3892,6 +3894,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       { id: 'actuals',      label: 'Actuals' },
       { id: 'vstory',       label: 'Variance Story' },
       { id: 'rentroll',     label: 'Rent Roll' },
+      { id: 'stacking',     label: 'Stacking Plan' },
       { id: 'balancesheet', label: 'Balance Sheet' },
     ],
   };
@@ -4258,6 +4261,8 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         return fbRenderVarianceStory(body, p, base);
       case 'rentroll':
         return fbRenderRentRoll(body, p, base);
+      case 'stacking':
+        return fbRenderStackingPlan(body, p, base);
       case 'cashforecast':
         return fbRenderCashForecast(body, p, base);
       case 'balancesheet':
@@ -4730,6 +4735,40 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       }
     }
 
+    // Auto-seed the "Straight Renewal" profile if this property doesn't
+    // have one yet. This is the antenna / rooftop / storage / parking
+    // pattern — tenant just keeps going at LXD at the same rent, no
+    // downtime, no free rent, no TI, no LC, no escalation. Created
+    // silently so every property has it available without needing the
+    // SQL backfill to be re-run when new properties come online.
+    if (Array.isArray(profiles)
+        && !profiles.some(p => (p.name || '').trim().toLowerCase() === 'straight renewal')) {
+      try {
+        const seed = {
+          property_id: propId,
+          name: 'Straight Renewal',
+          is_default: false,
+          renewal_probability_pct: 100,
+          base_rent_psf: null,           // carry tenant's current rate forward
+          new_downtime_months: 0,    renew_downtime_months: 0,
+          new_free_rent_months: 0,   renew_free_rent_months: 0,
+          new_escalation_pct: 0,     renew_escalation_pct: 0,
+          new_ti_psf: 0,             renew_ti_psf: 0,
+          new_lc_pct: 0,             renew_lc_pct: 0,
+          notes: "Auto-seeded. Use for antenna / rooftop / storage / parking leases where the tenant straight-renews at LXD at the same rent with no downtime, no free rent, and no transaction costs. Base rent left empty so the projection carries the tenant's current rate forward.",
+        };
+        const created = await supaWrite('releasing_profiles', 'POST', seed, '');
+        const row = Array.isArray(created) ? created[0] : created;
+        if (row && row.id) {
+          profiles.push(row);
+          fbReleasingProfilesCache[propId] = profiles;
+        }
+      } catch (e) {
+        // Non-critical — the SQL backfill or a manual create can fill the gap
+        console.warn('Auto-seed Straight Renewal profile failed:', e);
+      }
+    }
+
     // Summary stats
     const today = new Date();
     const totalSf = baseProp.sqft || 0;
@@ -4885,21 +4924,43 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     ).join('');
     const showProfileCol = profiles !== null;  // null = table missing
 
-    html += `<div class="bgt-table-wrap" style="overflow-x:auto"><table class="bgt-table" style="min-width:${showProfileCol ? 1560 : 1400}px">
-      <thead><tr>
-        <th style="text-align:left;min-width:180px">Tenant</th>
-        <th style="min-width:60px">Suite</th>
-        <th>Status</th>
-        <th style="text-align:right">SF</th>
-        <th style="text-align:right">Rent/SF</th>
-        <th style="text-align:right">Monthly Rent</th>
-        <th style="text-align:right">Annual Rent</th>
-        <th>Lease Start</th>
-        <th>Lease End</th>
-        <th style="text-align:right">Escalation</th>
-        <th>Next Bump</th>
-        ${showProfileCol ? '<th style="min-width:160px">Re-Leasing Profile</th>' : ''}
-      </tr></thead><tbody>`;
+    // Build a profile-by-id lookup for resolving per-row override placeholders
+    // and for the projection callers that need the assigned profile cheaply.
+    const profById = {};
+    (profiles || []).forEach(pr => { profById[pr.id] = pr; });
+
+    const tableMinWidth = showProfileCol ? 2380 : 1400;
+    html += `<div class="bgt-table-wrap" style="overflow-x:auto"><table class="bgt-table" style="min-width:${tableMinWidth}px">
+      <thead>
+        <tr>
+          <th ${showProfileCol ? 'rowspan="2"' : ''} style="text-align:left;min-width:180px">Tenant</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''} style="min-width:60px">Suite</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''}>Status</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''} style="text-align:right">SF</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''} style="text-align:right">Rent/SF</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''} style="text-align:right">Monthly Rent</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''} style="text-align:right">Annual Rent</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''}>Lease Start</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''}>Lease End</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''} style="text-align:right">Escalation</th>
+          <th ${showProfileCol ? 'rowspan="2"' : ''}>Next Bump</th>
+          ${showProfileCol ? `<th rowspan="2" style="min-width:160px">Re-Leasing Profile</th>
+          <th colspan="11" style="text-align:center;border-left:2px solid var(--accent-dim);background:var(--surface2);font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.45px;font-weight:700;padding:6px 10px 4px 10px">Re-Leasing Override Values <span style="text-transform:none;letter-spacing:0;font-weight:400">— blank cells inherit from profile</span></th>` : ''}
+        </tr>
+        ${showProfileCol ? `<tr>
+          <th style="text-align:right;border-left:2px solid var(--accent-dim)">Base $/SF</th>
+          <th style="text-align:right">DT&nbsp;(N)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">mo</span></th>
+          <th style="text-align:right">DT&nbsp;(R)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">mo</span></th>
+          <th style="text-align:right">FR&nbsp;(N)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">mo</span></th>
+          <th style="text-align:right">FR&nbsp;(R)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">mo</span></th>
+          <th style="text-align:right">Esc&nbsp;(N)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">%/yr</span></th>
+          <th style="text-align:right">Esc&nbsp;(R)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">%/yr</span></th>
+          <th style="text-align:right">TI&nbsp;(N)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">$/SF</span></th>
+          <th style="text-align:right">TI&nbsp;(R)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">$/SF</span></th>
+          <th style="text-align:right">LC&nbsp;(N)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">%</span></th>
+          <th style="text-align:right">LC&nbsp;(R)<br><span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--text-dim);font-size:9px">%</span></th>
+        </tr>` : ''}
+      </thead><tbody>`;
 
     const fmtDate = (d) => d ? new Date(d).toLocaleDateString('en-US', { month:'short', year:'2-digit' }) : '—';
     const fmtSf = (n) => n ? Number(n).toLocaleString() : '—';
@@ -4919,9 +4980,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         : (r.escalation_type === 'cpi' ? 'CPI' : (r.escalation_type === 'step' ? 'Stepped' : '—'));
 
       let profileCellHtml = '';
+      let overrideCellsHtml = '';
       if (showProfileCol) {
         if (!profiles.length) {
           profileCellHtml = `<td style="font-size:11px;color:var(--text-dim);font-style:italic">— add a profile below —</td>`;
+          // Span 11 empty cells so the colspan from the super-header lines up.
+          overrideCellsHtml = `<td colspan="11" style="font-size:11px;color:var(--text-dim);font-style:italic;text-align:center;border-left:2px solid var(--accent-dim)">— add a profile to set override values —</td>`;
         } else {
           const sel = r.releasing_profile_id || '';
           // Mark the matching <option> as selected by injecting `selected`
@@ -4936,6 +5000,44 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
               ${opts}
             </select>
           </td>`;
+
+          // Build the 11 override input cells. Each shows the tenant's
+          // override (if set) or the assigned profile's value as a
+          // placeholder. Empty input clears the override (revert to
+          // profile). Number-typed for native validation; step="any" so
+          // fractional months and basis-point escalations are allowed.
+          const assigned = sel ? profById[sel] : null;
+          const fmtPh = (v) => (v === null || v === undefined || v === '' || !isFinite(Number(v))) ? '' : String(Number(v));
+          const ovInput = (rlCol, profileKey, firstCol) => {
+            const tVal = r[rlCol];
+            const hasOv = tVal !== null && tVal !== undefined && tVal !== '';
+            const profileVal = assigned ? assigned[profileKey] : null;
+            const ph = fmtPh(profileVal);
+            const titleParts = [];
+            if (hasOv) titleParts.push('Tenant override');
+            if (assigned) titleParts.push(`Profile (${assigned.name || 'Untitled'}): ${ph || 'not set'}`);
+            else titleParts.push('No profile assigned — value stands alone');
+            return `<td style="text-align:right;padding:4px 6px;${firstCol ? 'border-left:2px solid var(--accent-dim);' : ''}">
+              <input type="number" step="any"
+                     value="${hasOv ? Number(tVal) : ''}"
+                     placeholder="${ph}"
+                     onchange="fbSetTenantOverride('${r.id}', '${rlCol}', this.value)"
+                     title="${titleParts.join(' • ').replace(/"/g,'&quot;')}"
+                     style="width:64px;padding:3px 5px;background:${hasOv ? 'var(--surface2)' : 'transparent'};border:1px solid var(--border);border-radius:4px;color:${hasOv ? 'var(--text)' : 'var(--text-dim)'};font-size:11px;text-align:right;font-variant-numeric:tabular-nums" />
+            </td>`;
+          };
+          overrideCellsHtml =
+            ovInput('rl_base_rent_psf',          'base_rent_psf',          true)  +
+            ovInput('rl_new_downtime_months',    'new_downtime_months',    false) +
+            ovInput('rl_renew_downtime_months',  'renew_downtime_months',  false) +
+            ovInput('rl_new_free_rent_months',   'new_free_rent_months',   false) +
+            ovInput('rl_renew_free_rent_months', 'renew_free_rent_months', false) +
+            ovInput('rl_new_escalation_pct',     'new_escalation_pct',     false) +
+            ovInput('rl_renew_escalation_pct',   'renew_escalation_pct',   false) +
+            ovInput('rl_new_ti_psf',             'new_ti_psf',             false) +
+            ovInput('rl_renew_ti_psf',           'renew_ti_psf',           false) +
+            ovInput('rl_new_lc_pct',             'new_lc_pct',             false) +
+            ovInput('rl_renew_lc_pct',           'renew_lc_pct',           false);
         }
       }
 
@@ -4952,6 +5054,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         <td style="text-align:right">${escDesc}</td>
         <td>${fmtDate(r.next_escalation_date)}</td>
         ${profileCellHtml}
+        ${overrideCellsHtml}
       </tr>`;
     });
 
@@ -4993,6 +5096,191 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const newPart   = isFinite(a) ? a : 0;
     const renewPart = isFinite(b) ? b : 0;
     return (p / 100) * renewPart + (1 - p / 100) * newPart;
+  }
+
+  // ── Stacking Plan tab ──
+  // Floor-by-floor visualization of the rent roll. Each floor is one row
+  // with tenant blocks sized proportionally to their leased SF. Floors
+  // are inferred from suite numbers: the first digit of a numeric suite
+  // (e.g. 460A → floor 4); ROOF/ROOFx → roof row; PARKING/BOX/SHACK/SIGN
+  // → ground row. Tenant blocks are colored by category (office /
+  // telecom / parking-license) and given a 2px border when the lease is
+  // expiring within 12 (red) or 24 (amber) months.
+  //
+  // Pulls live from rent_roll via the existing fbRentRollCache so it
+  // matches whatever the user sees on the Rent Roll tab.
+  function fbInferFloor(suite) {
+    const s = String(suite || '').trim().toUpperCase();
+    if (!s) return { key: 9999, label: 'Other', kind: 'other' };
+    if (s.startsWith('ROOF') || s === 'ROOF') return { key: -1, label: 'Roof', kind: 'telecom' };
+    if (s.startsWith('PARK') || s.startsWith('BOX')
+        || s.startsWith('SHACK') || s.startsWith('SIGN')
+        || s.startsWith('KIOSK')) return { key: 9000, label: 'Ground', kind: 'license' };
+    // Numeric / alphanumeric: first digit is the floor
+    const m = s.match(/^(\d)/);
+    if (m) {
+      const n = Number(m[1]);
+      return { key: n, label: 'F' + n, kind: 'office' };
+    }
+    return { key: 9999, label: 'Other', kind: 'other' };
+  }
+
+  async function fbRenderStackingPlan(body, p, baseProp) {
+    const propId = baseProp.id;
+    body.innerHTML = `<div style="text-align:center;padding:40px;color:var(--text-dim)">Loading stacking plan…</div>`;
+
+    let rows = fbRentRollCache[propId];
+    if (!rows) {
+      try {
+        rows = await supaFetch('rent_roll',
+          `?property_id=eq.${encodeURIComponent(propId)}&order=suite.asc&limit=1000`);
+        fbRentRollCache[propId] = rows;
+      } catch (e) {
+        body.innerHTML = `<div style="padding:24px;color:#c94646">Could not load rent_roll. ${e.message}</div>`;
+        return;
+      }
+    }
+    if (!rows.length) {
+      body.innerHTML = `<div style="padding:24px;color:var(--text-dim);text-align:center">No rent roll loaded for this property yet.</div>`;
+      return;
+    }
+
+    // Group by inferred floor
+    const floors = new Map();
+    rows.forEach(r => {
+      const floor = fbInferFloor(r.suite);
+      if (!floors.has(floor.key)) {
+        floors.set(floor.key, { ...floor, tenants: [] });
+      }
+      floors.get(floor.key).tenants.push(r);
+    });
+    // Sort: Roof (key=-1) at top, then numeric floors high→low, then Ground, then Other
+    const ordered = Array.from(floors.values()).sort((a, b) => {
+      // Roof first (smallest key, but we want at top → key -1 should come first)
+      // Numeric floors descending so F5 above F1
+      if (a.key === -1) return -1;
+      if (b.key === -1) return 1;
+      if (a.key === 9000) return b.key === 9999 ? -1 : 1; // Ground after numbered
+      if (b.key === 9000) return a.key === 9999 ?  1 : -1;
+      if (a.key === 9999) return 1;
+      if (b.key === 9999) return -1;
+      return b.key - a.key; // F5, F4, F3, F2, F1
+    });
+
+    // Date helpers (no anchor on today — uses current date so the plan
+    // stays correct over time without needing a redeploy)
+    const today = new Date();
+    const in12  = new Date(today.getTime() + 365 * 86400 * 1000);
+    const in24  = new Date(today.getTime() + 730 * 86400 * 1000);
+    const urgencyColor = (endStr) => {
+      if (!endStr) return null;
+      const d = new Date(endStr);
+      if (isNaN(d.getTime())) return null;
+      if (d < in12) return '#d04040';
+      if (d < in24) return '#cc8a2a';
+      return null;
+    };
+    const fmtSf   = (n) => !n ? '—' : n >= 10000 ? Math.round(n/1000) + 'K' : n >= 1000 ? (n/1000).toFixed(1) + 'K' : n;
+    const fmtDate = (d) => !d ? '' : new Date(d).toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+
+    // Category colors that match the admin's dim/dark palette
+    const palette = {
+      office:  { bg: 'rgba(0,176,212,0.10)',  border: 'rgba(0,176,212,0.55)',  text: 'var(--text)',     sub: 'var(--text-dim)' },
+      telecom: { bg: 'rgba(167,139,250,0.13)', border: 'rgba(167,139,250,0.60)', text: 'var(--text)',     sub: 'var(--text-dim)' },
+      license: { bg: 'rgba(245,158,11,0.13)',  border: 'rgba(245,158,11,0.60)',  text: 'var(--text)',     sub: 'var(--text-dim)' },
+      other:   { bg: 'var(--surface2)',         border: 'var(--border)',          text: 'var(--text-dim)', sub: 'var(--text-dim)' },
+    };
+
+    // Building totals
+    const totalSf       = baseProp.sqft || 0;
+    const leasedSf      = rows.reduce((s, r) => s + (Number(r.sf) || 0), 0);
+    const totalTenants  = rows.length;
+    const expiringIn12  = rows.filter(r => r.lease_end && new Date(r.lease_end) <= in12).length;
+
+    let html = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        <div>
+          <div style="font-size:18px;font-weight:700;color:var(--text)">Stacking Plan</div>
+          <div style="font-size:11.5px;color:var(--text-dim);margin-top:2px">Floors inferred from suite numbers (first digit = floor). Block width = SF as a share of its floor.</div>
+        </div>
+        <div style="display:flex;gap:18px;font-size:11px;color:var(--text-dim)">
+          <div><strong style="color:var(--text);font-size:13px">${leasedSf.toLocaleString()}</strong>${totalSf ? ' / ' + totalSf.toLocaleString() : ''} SF leased</div>
+          <div><strong style="color:var(--text);font-size:13px">${totalTenants}</strong> active leases</div>
+          <div><strong style="color:#d04040;font-size:13px">${expiringIn12}</strong> expiring ≤ 12 mo</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--text-dim);margin-bottom:14px">
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:${palette.office.bg};border:1px solid ${palette.office.border};border-radius:3px"></span>Office</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:${palette.telecom.bg};border:1px solid ${palette.telecom.border};border-radius:3px"></span>Telecom / antenna</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:${palette.license.bg};border:1px solid ${palette.license.border};border-radius:3px"></span>Parking / license</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:transparent;border:2px solid #d04040;border-radius:3px"></span>Expires &lt; 12 mo</span>
+        <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:11px;height:11px;background:transparent;border:2px solid #cc8a2a;border-radius:3px"></span>Expires 12–24 mo</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+    `;
+
+    ordered.forEach(floor => {
+      const floorSf = floor.tenants.reduce((s, t) => s + (Number(t.sf) || 0), 0);
+      const equalShare = floor.tenants.every(t => !Number(t.sf));
+
+      html += `<div style="display:flex;gap:4px;align-items:stretch;min-height:68px">
+        <div style="width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:6px">${floor.label}</div>
+        <div style="flex:1;display:flex;gap:3px;min-width:0">`;
+
+      floor.tenants.forEach(t => {
+        // Per-tenant category override (UPS BOX, PARKING) when floor is mixed
+        let kind = floor.kind;
+        const su = String(t.suite || '').toUpperCase();
+        if (floor.key === 9000) {
+          kind = (su.startsWith('PARK')) ? 'license'
+               : (su.startsWith('BOX') || su.startsWith('SHACK') || su.startsWith('SIGN')) ? 'license'
+               : 'telecom';
+        }
+        const c = palette[kind] || palette.office;
+        const u = urgencyColor(t.lease_end);
+        const flexVal = equalShare ? '1 1 0' : `${Number(t.sf) || 1} 1 0`;
+        const tenantName = t.tenant_name || '(vacant)';
+        const sfText = Number(t.sf) ? fmtSf(t.sf) + ' SF' : (Number(t.monthly_rent) ? '$' + Math.round(Number(t.monthly_rent)).toLocaleString() + '/mo' : 'license');
+        const titleParts = [
+          `${tenantName} · Suite ${t.suite || '—'}`,
+          (Number(t.sf) ? `${Number(t.sf).toLocaleString()} SF` : 'License (no SF)'),
+          (t.lease_end ? `exp ${new Date(t.lease_end).toLocaleDateString('en-US', { month:'short', day:'numeric', year:'numeric' })}` : 'no expiration on file'),
+          (t.monthly_rent ? `$${Math.round(Number(t.monthly_rent)).toLocaleString()}/mo` : ''),
+        ].filter(Boolean).join(' · ');
+
+        html += `<div title="${titleParts.replace(/"/g, '&quot;')}"
+          style="flex:${flexVal};min-width:0;padding:6px 8px;background:${c.bg};border:${u ? 2 : 1}px solid ${u || c.border};border-radius:6px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;cursor:default">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:4px;min-width:0">
+            <span style="font-size:10px;font-weight:600;color:${c.sub};flex-shrink:0">${t.suite || ''}</span>
+            <span style="font-size:9.5px;color:${u || c.sub};flex-shrink:0">${fmtDate(t.lease_end)}</span>
+          </div>
+          <div style="font-size:11px;font-weight:500;color:${c.text};line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${tenantName}</div>
+          <div style="font-size:10px;color:${c.sub};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sfText}</div>
+        </div>`;
+      });
+
+      html += `</div>
+        <div style="width:84px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;font-size:11px;color:var(--text-dim);padding-left:6px">`;
+      if (floorSf > 0) {
+        html += `<div style="font-weight:600;color:var(--text);font-size:13px">${floorSf.toLocaleString()} SF</div>
+                 <div>${floor.tenants.length} tenant${floor.tenants.length === 1 ? '' : 's'}</div>`;
+      } else {
+        html += `<div style="font-weight:600;color:var(--text);font-size:13px">${floor.tenants.length} license${floor.tenants.length === 1 ? '' : 's'}</div>`;
+      }
+      html += `</div></div>`;
+    });
+
+    html += `</div>`;
+
+    // Footnote: if leased SF < total SF, show the gap
+    if (totalSf && leasedSf < totalSf) {
+      const vacantSf = totalSf - leasedSf;
+      html += `<div style="margin-top:14px;padding:10px 14px;background:var(--surface);border:1px dashed var(--border);border-radius:6px;font-size:11.5px;color:var(--text-dim)">
+        <strong style="color:var(--text)">${vacantSf.toLocaleString()} SF</strong> of the building's ${totalSf.toLocaleString()} SF total isn't accounted for in the rent roll (vacant or non-rentable). Add vacant suites via the Rent Roll tab's <em>+ Add Space</em> button to surface them here.
+      </div>`;
+    }
+
+    body.innerHTML = html;
   }
 
   function fbBuildReleasingProfilesHTML(propId, profiles) {
@@ -5037,10 +5325,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         ? `$${Number(pr.base_rent_psf).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})} / SF`
         : '<span style="font-style:italic;color:var(--text-dim)">tenant’s current rate</span>';
 
+      const isStraightRenewal = (pr.name || '').trim().toLowerCase() === 'straight renewal';
+      const straightChip = isStraightRenewal
+        ? ' <span title="Tenant continues at LXD at the same rent — no downtime, no TI, no LC. Best for antenna / storage / parking." style="font-size:9.5px;font-weight:600;color:#fff;background:#3a7d4e;padding:2px 6px;border-radius:4px;margin-left:4px;vertical-align:middle">STRAIGHT RENEWAL</span>'
+        : '';
       html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
           <div>
-            <div style="font-size:13px;font-weight:700;color:var(--text)">${pr.name || 'Untitled'}${pr.is_default ? ' <span style="font-size:9.5px;font-weight:600;color:var(--accent);background:var(--accent-dim);padding:2px 6px;border-radius:4px;margin-left:4px;vertical-align:middle">DEFAULT</span>' : ''}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--text)">${pr.name || 'Untitled'}${pr.is_default ? ' <span style="font-size:9.5px;font-weight:600;color:var(--accent);background:var(--accent-dim);padding:2px 6px;border-radius:4px;margin-left:4px;vertical-align:middle">DEFAULT</span>' : ''}${straightChip}</div>
             <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Renewal probability: <strong style="color:var(--text)">${prob}%</strong> · Base rent: <strong style="color:var(--text)">${baseRent}</strong></div>
           </div>
           <div style="display:flex;gap:6px">
@@ -5305,6 +5597,55 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     }
   }
 
+  // Persist a per-tenant Re-Leasing override value. `col` is one of the
+  // rl_* column names on rent_roll (e.g. 'rl_new_downtime_months'). An
+  // empty string or non-numeric input clears the override → the assigned
+  // profile's value will be used at projection time. The local cache row
+  // is patched in place so subsequent renders pick up the change without
+  // a refetch.
+  // The list of allowed columns is enforced here so a malformed onchange
+  // handler can't write to arbitrary table columns.
+  const FB_RL_OVERRIDE_COLS = new Set([
+    'rl_base_rent_psf',
+    'rl_new_downtime_months',    'rl_renew_downtime_months',
+    'rl_new_free_rent_months',   'rl_renew_free_rent_months',
+    'rl_new_escalation_pct',     'rl_renew_escalation_pct',
+    'rl_new_ti_psf',             'rl_renew_ti_psf',
+    'rl_new_lc_pct',             'rl_renew_lc_pct',
+  ]);
+  async function fbSetTenantOverride(rentRollId, col, rawValue) {
+    if (!FB_RL_OVERRIDE_COLS.has(col)) {
+      console.warn('fbSetTenantOverride: rejected column', col);
+      return;
+    }
+    let val;
+    if (rawValue === '' || rawValue === null || rawValue === undefined) {
+      val = null;
+    } else {
+      const n = Number(rawValue);
+      val = isFinite(n) ? n : null;
+    }
+    const body = { [col]: val };
+    try {
+      await supaWrite('rent_roll', 'PATCH', body, `?id=eq.${rentRollId}`);
+      Object.keys(fbRentRollCache).forEach(pid => {
+        const cached = fbRentRollCache[pid] || [];
+        cached.forEach(row => {
+          if (row.id === rentRollId) row[col] = val;
+        });
+      });
+    } catch (e) {
+      // Table-missing diagnostic — the column wasn't added by the
+      // migration. Surface it once so Morris knows what to run.
+      const msg = (e && e.message || '').toString();
+      if (msg.includes('column') && msg.includes(col)) {
+        alert('Re-Leasing override columns are missing. Run migration/add-rent-roll-overrides.sql in the SQL Console.');
+      } else {
+        alert('Error saving override: ' + msg);
+      }
+    }
+  }
+
   // ── Add Space modal ──
   // Manually insert a rent_roll row — used to add vacant suites that the
   // Yardi sync didn't pick up (e.g. recently-vacated space, or a suite
@@ -5451,37 +5792,70 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     //     tenant's contractual escalation_pct
     // This lets a single profile be a catchall "just continue the lease"
     // without baking one tenant's rate into another tenant's projection.
+    //
+    // Per-tenant overrides (rl_* columns on rent_roll) take precedence
+    // over the profile values when set. Edited inline on the Rent Roll
+    // table; NULL falls back to the assigned profile.
     const isNum = (v) => v !== null && v !== undefined && v !== '' && !isNaN(Number(v));
     const profileToProjection = (pr, r) => {
       if (!pr) return null;
       const sf = Number(r.sf) || 0;
       const prob = Number(pr.renewal_probability_pct) || 0;
 
-      // Blend two values; return null when BOTH inputs are null so the
-      // caller can decide whether to carry forward from the tenant.
-      const blendOrNull = (n, rv) => {
-        const a = isNum(n)  ? Number(n)  : null;
-        const b = isNum(rv) ? Number(rv) : null;
+      // Per-tenant override resolver: tenant rl_* wins; otherwise profile.
+      const ov = (rlKey, prKey) => {
+        if (r && isNum(r[rlKey])) return Number(r[rlKey]);
+        if (pr && isNum(pr[prKey])) return Number(pr[prKey]);
+        return null;
+      };
+
+      // Blend two resolved values (already null-or-number). Returns null
+      // when both sides are null so the caller can decide what to do.
+      const blend = (a, b) => {
         if (a === null && b === null) return null;
         return (prob / 100) * (b ?? 0) + (1 - prob / 100) * (a ?? 0);
       };
-      const downtime = blendOrNull(pr.new_downtime_months,  pr.renew_downtime_months) ?? 0;
-      const freeRent = blendOrNull(pr.new_free_rent_months, pr.renew_free_rent_months) ?? 0;
 
-      // Escalation: blend if specified; otherwise use tenant's own contractual rate
-      let escPct = blendOrNull(pr.new_escalation_pct, pr.renew_escalation_pct);
+      const downtime = blend(
+        ov('rl_new_downtime_months',   'new_downtime_months'),
+        ov('rl_renew_downtime_months', 'renew_downtime_months')
+      ) ?? 0;
+      const freeRent = blend(
+        ov('rl_new_free_rent_months',   'new_free_rent_months'),
+        ov('rl_renew_free_rent_months', 'renew_free_rent_months')
+      ) ?? 0;
+
+      // Escalation: blend tenant-override-or-profile; otherwise fall back to
+      // the tenant's in-place contractual rate.
+      let escPct = blend(
+        ov('rl_new_escalation_pct',   'new_escalation_pct'),
+        ov('rl_renew_escalation_pct', 'renew_escalation_pct')
+      );
       if (escPct === null) escPct = Number(r.escalation_pct) || 0;
 
-      // Base rent: use profile's value if set, otherwise carry forward
-      // tenant's current rent_per_sf (or derive from annual_rent / sf)
+      // Base rent: tenant override wins; then profile; otherwise carry
+      // forward tenant's current rent_per_sf (or derive from annual_rent
+      // / sf). For flat-rate leases without SF (antenna / rooftop /
+      // parking), the monthly_rent fallback below handles it.
       let baseRentPsf;
-      if (isNum(pr.base_rent_psf)) {
-        baseRentPsf = Number(pr.base_rent_psf);
+      const baseOv = ov('rl_base_rent_psf', 'base_rent_psf');
+      if (baseOv !== null) {
+        baseRentPsf = baseOv;
       } else {
         baseRentPsf = Number(r.rent_per_sf)
           || (r.sf && r.annual_rent ? Number(r.annual_rent) / Number(r.sf) : 0);
       }
-      const newMonthly = baseRentPsf && sf ? (baseRentPsf * sf) / 12 : 0;
+      let newMonthly;
+      if (baseRentPsf && sf) {
+        newMonthly = (baseRentPsf * sf) / 12;
+      } else if (baseOv === null) {
+        // No PSF math possible AND neither override nor profile pinned a
+        // rate → carry the tenant's existing monthly_rent forward
+        // (handles antenna leases priced as a flat monthly figure).
+        newMonthly = Number(r.monthly_rent) || 0;
+      } else {
+        newMonthly = 0;
+      }
       return { newMonthly, freeRent, downtime, escPct };
     };
 
