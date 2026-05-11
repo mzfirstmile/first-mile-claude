@@ -74,6 +74,7 @@ PROPERTY_MAP: dict[str, dict[str, str]] = {
     "p0000005": {"id": "recqfxJfdqCXCLOuD", "name": "61 S Paramus"},
     "p0000006": {"id": "recxF4R64gbb5Sowj", "name": "575 Broadway"},
     "p0000007": {"id": "recF3zFKbY4wJ4P40", "name": "1700 East Putnam"},
+    "p0000008": {"id": "recRBRiverCentr01", "name": "Red Bank - River Center"},
 }
 FOLDER_TO_PROPERTY: dict[str, str] = {
     "paramus plaza": "recQX1kpeJKqIzvkU",
@@ -83,13 +84,14 @@ FOLDER_TO_PROPERTY: dict[str, str] = {
     "575 broadway": "recxF4R64gbb5Sowj",
     "1700 east putnam greenwich": "recF3zFKbY4wJ4P40",
     "1700 east putnam": "recF3zFKbY4wJ4P40",
+    "red bank - 1 river centre": "recRBRiverCentr01",
+    "red bank": "recRBRiverCentr01",
+    "river center": "recRBRiverCentr01",
 }
 
 FOLDER_SKIPLIST = [
     "0. overall property management",
     "41 flatbush",
-    "red bank - 1 river centre",
-    "red bank",
 ]
 
 
