@@ -231,6 +231,17 @@ The embedded Claude chat has access to these tools:
   - **Below NOI:** 7152 1st Mortgage Interest / CMBS ($4.453M, $371K/mo flat) · 7101 Owner Capital Reserve / CMBS Reserves ($885K, $73.7K/mo) · 7153 2nd Mortgage Interest / NVA ($2.443M; $184K/mo Jan-Apr interest-only, then $213K/mo May-Dec amortizing per loan kicks in May 2026)
 - **Reconciles to budget exactly:** Total Revenue $16.429M − Total OpEx $6.386M = NOI $10.043M, after-debt CF $2.263M. NOI margin 61.1%.
 - **Actuals (Jan-Apr 2026) still bucketed under Paramount totals from the Apr-2026 report:** 28 rows in actuals_line_items. The bucketing is coarser than the budget (everything under 4010/4110/4700/5497/7064/7105/7152), so the per-line variance in the dashboard will look noisy until FM gets line-item Paramount monthly actuals. Import script for budget: `outputs/import_rb_budget_full.py`. Earlier flat-monthly import script `outputs/import_rb_pl.py` is superseded.
+- **3 years of historical actuals imported (2026-05-11):** Pulled section totals from Investor Reports Q4 budget-comparison xlsx for 2023, 2024, 2025. Same Paramount → FM mapping as 2026 (4010/4110/4700/5497/7064/7105/7152). 84 rows per year × 3 years = 252 actuals_line_items. Annual ÷ 12 flat split. Year-over-year:
+
+  | Year | Revenue | OpEx | NOI | NOI Margin | Capex/TI | Debt Service | Net Ops |
+  |------|---------|------|-----|------------|----------|--------------|---------|
+  | 2023 | $12.79M | $8.05M | $4.75M | 37.1% | $12.88M | $3.74M | -$12.38M |
+  | 2024 | $15.46M | $6.07M | $9.40M | 60.8% | $16.27M | $7.26M | -$14.19M |
+  | 2025 | $19.75M | $7.13M | $12.62M | 63.9% | $5.16M | $6.67M | $0.34M |
+  | 2026 Bgt | $16.43M | $6.39M | $10.04M | 61.1% | — | $7.78M | $2.26M |
+
+  All NOI figures reconcile to Paramount's reported NOI exactly. Heavy capex 2023-2024 was the NVA buildout + initial lease-up. 2025 termination income ($3.1M from McGraw Hill + Wells Fargo) inflates revenue; underlying recurring rent is closer to 2024 levels. **FB_YEARS extended to include 2023+2024** so the year selector + line chart now plot a 5-year trajectory (2023→2027).
+- **Import script:** `outputs/import_rb_history.py` (Apr-Q4 EOY actuals from `~/First Mile Prop Dropbox/2.1 FMC Property Management/Red Bank - 1 River Centre/Investor Reports/{YYYY} Q4/`).
 - **Detailed GL-level historical data NOT imported.** When First Mile wants Paramount actuals at FM-COA-line granularity, build a `paramount_gl_mapping` table.
 
 ## Pending / Known Issues
