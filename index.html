@@ -655,7 +655,6 @@
     border-radius:10px; margin-bottom:14px; flex-wrap:wrap;
   }
   .fb-pl-ctrl { display:flex; align-items:center; gap:10px; }
-  .fb-pl-ctrl-spacer { flex:1; }
   .fb-pl-ctrl-label {
     font-size:10px; text-transform:uppercase; letter-spacing:.6px;
     color:var(--text-dim); font-weight:600;
@@ -674,16 +673,19 @@
     background:var(--surface); color:var(--accent);
     box-shadow:0 1px 2px rgba(0,0,0,0.06);
   }
-  .fb-pl-compare-chip {
-    font-size:12px; color:var(--text); background:var(--surface2);
-    padding:5px 10px; border-radius:6px; font-weight:500;
+
+  /* Drill icon injected into each P&L section header */
+  .fb-pl-section-drill {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:22px; height:22px; margin-left:10px; padding:0;
+    background:rgba(0,176,212,0.12); color:var(--accent);
+    border:1px solid rgba(0,176,212,0.3); border-radius:5px;
+    font-size:13px; line-height:1; cursor:pointer; vertical-align:middle;
+    transition:all .15s;
   }
-  .fb-pl-drill-btn {
-    padding:7px 14px; background:var(--accent); color:#fff;
-    border:none; border-radius:7px; font-size:12px; font-weight:600;
-    cursor:pointer; display:flex; align-items:center; gap:6px;
+  .fb-pl-section-drill:hover {
+    background:var(--accent); color:#fff; border-color:var(--accent);
   }
-  .fb-pl-drill-btn:hover { filter:brightness(1.05); }
 
   /* Drilldown drawer */
   .fb-drawer-overlay {
@@ -7196,10 +7198,8 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
   }
 
   function fbRenderPLTab(body, p, baseProp) {
-    const status = fbGetYearStatus();
-    const yr = fbSelectedYear;
-
-    // View-controls bar
+    // View-controls bar (Period toggle only — drilldown is reached via the
+    // section-header icons rendered after the table)
     const periodOpts = [
       { id: 'annual',    label: 'Annual' },
       { id: 'quarterly', label: 'Quarterly' },
@@ -7209,27 +7209,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       `<button class="fb-pl-seg-btn${fbPLPeriod === o.id ? ' active' : ''}" onclick="fbSetPLPeriod('${o.id}')">${o.label}</button>`
     ).join('');
 
-    // Compare default chip for the current status (read-only display for v1).
-    const compareLabel = status === 'planning'
-      ? `${yr} Budget vs ${yr - 1} Actuals`
-      : status === 'historical'
-        ? `${yr} Actuals vs ${yr} Budget vs ${yr - 1}`
-        : `${yr} Blended vs Budget vs ${yr - 1}`;
-
     body.innerHTML = `
       <div class="fb-pl-controls">
         <div class="fb-pl-ctrl">
           <span class="fb-pl-ctrl-label">Period</span>
           <div class="fb-pl-seg">${periodHtml}</div>
         </div>
-        <div class="fb-pl-ctrl">
-          <span class="fb-pl-ctrl-label">Compare</span>
-          <span class="fb-pl-compare-chip">${compareLabel}</span>
-        </div>
-        <div class="fb-pl-ctrl-spacer"></div>
-        <button class="fb-pl-drill-btn" onclick="fbOpenDrillDrawer('revenue')">
-          <span style="font-size:13px">↗</span> Open drilldown
-        </button>
       </div>
       <div id="fbPLBody"></div>
     `;
@@ -7243,8 +7228,41 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       // inside fbRenderMonthlyActVsBgt should still be free to flip.
       fbRenderMonthlyActVsBgt(inner, baseProp);
     }
-    // Attach row-click handlers AFTER the table renders.
+    // Inject section-header drill icons + attach row-click handlers AFTER
+    // the table renders.
+    fbAttachPLSectionDrillIcons(inner);
     fbAttachPLRowDrill(inner);
+  }
+
+  // Inject a small drill icon into each section header row (Revenue,
+  // Operating Expenses, Capital). Click opens the drilldown drawer
+  // pre-pointed at that section. Uses stopPropagation so the existing
+  // section expand/collapse (fbToggleSection) keeps working in fbRenderSummary.
+  function fbAttachPLSectionDrillIcons(container) {
+    if (!container) return;
+    const rows = container.querySelectorAll('tr.bgt-section-income, tr.bgt-section-expense, tr.bgt-section-other');
+    rows.forEach(tr => {
+      const firstCell = tr.querySelector('td');
+      if (!firstCell) return;
+      // Skip if already injected (in case of re-render)
+      if (firstCell.querySelector('.fb-pl-section-drill')) return;
+      const label = (firstCell.textContent || '').trim();
+      let section = 'opex';
+      if (tr.classList.contains('bgt-section-income')) section = 'revenue';
+      else if (tr.classList.contains('bgt-section-expense')) section = 'opex';
+      else if (/capital/i.test(label) || /depreciation|debt/i.test(label)) section = 'capital';
+      const icon = document.createElement('button');
+      icon.className = 'fb-pl-section-drill';
+      icon.type = 'button';
+      icon.title = 'Drill into ' + label;
+      icon.setAttribute('aria-label', 'Drill into ' + label);
+      icon.innerHTML = '<span aria-hidden="true">↗</span>';
+      icon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fbOpenDrillDrawer(section, label);
+      });
+      firstCell.appendChild(icon);
+    });
   }
 
   // Make every account row in the P&L table clickable to open the drilldown
