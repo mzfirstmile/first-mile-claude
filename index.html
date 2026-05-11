@@ -7414,9 +7414,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       // inside fbRenderMonthlyActVsBgt should still be free to flip.
       fbRenderMonthlyActVsBgt(inner, baseProp);
     }
-    // Attach row-click drilldown handlers AFTER the table renders. Any
-    // account row → opens the drilldown drawer at the right section.
-    fbAttachPLRowDrill(inner);
+    // Row-click drilldown is intentionally disabled — it was conflicting
+    // with the editable cells on the Planning year Monthly view, and
+    // wasn't pulling enough weight to justify the friction. Drawer
+    // functions still exist (fbOpenDrillDrawer) in case we wire them back.
   }
 
   // Make every account row in the P&L table clickable to open the drilldown
