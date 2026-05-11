@@ -493,6 +493,11 @@
   .bgt-table th, .bgt-table td { padding:7px 10px; text-align:right; border-bottom:1px solid var(--border); }
   .bgt-table th { background:var(--surface2); font-weight:600; color:var(--text-dim); font-size:10px; text-transform:uppercase; letter-spacing:.3px; position:sticky; top:0; z-index:4; }
   .bgt-table thead tr:nth-child(2) th { top:30px; z-index:3; }
+  /* Monthly view: keep the label column visible when scrolling horizontally */
+  .bgt-table-monthly tbody td:first-child { position:sticky; left:0; background:var(--surface); z-index:2; text-align:left; }
+  .bgt-table-monthly thead th:first-child { left:0; z-index:6; }
+  .bgt-table-monthly .bgt-row-header td:first-child { z-index:3; background:inherit; }
+  .bgt-table-monthly .bgt-row-total td:first-child { z-index:3; background:inherit; }
   .bgt-th-label { text-align:left !important; min-width:220px; background:var(--surface2) !important; border-bottom:2px solid var(--border); }
   .bgt-th-group { border-bottom:none; font-size:10px; letter-spacing:.4px; text-align:center !important; }
   .bgt-th-group.a { color:var(--accent); background:#e6f6fa; border-bottom:2px solid #cde9f0; }
@@ -7109,7 +7114,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       <div style="font-size:11px;color:var(--text-dim)">${yr} Actual vs Budget · ${isPsf ? '$/SF' : '$'}</div>
     </div>`;
 
-    html += `<div class="bgt-table-wrap" style="overflow-x:auto"><table class="bgt-table" style="min-width:${100 + colGroups.length * 240}px">
+    html += `<div class="bgt-table-wrap" style="overflow-x:auto;overflow-y:visible"><table class="bgt-table bgt-table-monthly" style="min-width:${100 + colGroups.length * 240}px">
       <thead>
         <tr>
           <th rowspan="2" class="bgt-th-label" style="min-width:220px;position:sticky;left:0;background:var(--surface2);z-index:5">Line Item</th>`;
@@ -7137,9 +7142,68 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // budget_line_items on blur.
     const status = fbGetYearStatus();
     const editable = (status === 'planning' && !useQuarter);
+    // Default sections to EXPANDED in editable mode (team needs to see line
+    // items to enter them). Otherwise default to collapsed like Annual view.
+    const defaultExpanded = editable;
 
+    // Map each top-level header label → its matching TOTAL row, so section
+    // totals can be merged into the header's right-hand cells (matches the
+    // Annual view's pattern).
+    const totalByHeader = {};
+    skeleton.forEach(r => {
+      if (r.isTotal) {
+        const stripped = r.label.replace(/^TOTAL\s+/i, '').toUpperCase();
+        totalByHeader[stripped] = r;
+      }
+    });
+    const headerLabels = new Set();
+    skeleton.forEach(r => { if (r.isHeader) headerLabels.add(r.label.toUpperCase()); });
+
+    // Helper: render the value cells (Act / Bgt / Var per period + Total)
+    // for a single row reference. `rowLbl` is used to look up rowA/rowB.
+    // `bold` = font-weight 700. `editForRow` = render Bgt cells as inputs
+    // for the row identified by `editRowIdx` + `editGl`.
+    function renderMonthlyCells(rowLbl, bold, expense, editForRow, editRowIdx, editGl) {
+      const rA = lkA[rowLbl];
+      const rB = lkB[rowLbl];
+      let totA = 0, totB = 0;
+      let out = '';
+      colGroups.forEach(g => {
+        const a = sumMonths(rA, g.months);
+        const b = sumMonths(rB, g.months);
+        totA += a; totB += b;
+        const v = a - b;
+        const vCls = fbValClass(v, expense);
+        const fw = bold ? 700 : 400;
+        out += `<td style="text-align:right;font-weight:${fw}">${a ? fmt(a) : '—'}</td>`;
+        if (editForRow) {
+          const month = g.months[0];
+          const cellVal = b ? fbFmtFull(b) : '';
+          out += `<td class="fb-bgt-edit-cell" data-month="${month}" data-row-idx="${editRowIdx}" data-gl="${editGl}">
+            <input type="text" class="fb-bgt-edit-input" value="${cellVal === '—' ? '' : cellVal}"
+              onfocus="this.select()"
+              onblur="fbSaveBudgetCell(this)"
+              onkeydown="fbBudgetCellKey(event)" />
+          </td>`;
+        } else {
+          out += `<td style="text-align:right;color:var(--text-dim);font-weight:${bold ? 700 : 400}">${b ? fmt(b) : '—'}</td>`;
+        }
+        out += `<td style="text-align:right;font-weight:${bold ? 700 : 400}" class="${(a || b) ? vCls : ''}">${(a || b) ? fmt(v) : '—'}</td>`;
+      });
+      // Year total column
+      const vTot = totA - totB;
+      const vTotCls = fbValClass(vTot, expense);
+      const totBg = 'background:rgba(0,176,212,0.05)';
+      out += `<td style="text-align:right;font-weight:700;${totBg}">${totA ? fmt(totA) : '—'}</td>`;
+      out += `<td class="fb-bgt-row-total" data-row-idx="${editRowIdx != null ? editRowIdx : -1}" style="text-align:right;color:var(--text-dim);font-weight:700;${totBg}">${totB ? fmt(totB) : '—'}</td>`;
+      out += `<td style="text-align:right;font-weight:700;${totBg}" class="${(totA || totB) ? vTotCls : ''}">${(totA || totB) ? fmt(vTot) : '—'}</td>`;
+      return out;
+    }
+
+    let sectionIdx = 0;
     skeleton.forEach((row, rowIdx) => {
       if (row.isHeader) {
+        sectionIdx++;
         const label = row.label;
         const upper = label.toUpperCase();
         const isTopLevel = topLevelPattern.test(label);
@@ -7148,54 +7212,49 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         let sectionCls = 'bgt-section-other';
         if (upper === 'INCOME' || upper.includes('REVENUE')) sectionCls = 'bgt-section-income';
         else if (isTopLevel && (upper.includes('EXPENSE') || upper.includes('OPERATING'))) sectionCls = 'bgt-section-expense';
+        else if (upper.includes('CAPITAL')) sectionCls = 'bgt-section-expense';
         else if (upper.includes('NOI') || upper.includes('NET OPERATING')) sectionCls = 'bgt-section-noi';
-        html += `<tr class="${sectionCls}"><td colspan="${1 + (colGroups.length + 1) * 3}" style="padding:8px 10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:10.5px;position:sticky;left:0;background:inherit">${label}</td></tr>`;
+
+        const collapsedCls = defaultExpanded ? '' : ' collapsed';
+        const matchTotal = totalByHeader[upper];
+        if (matchTotal) {
+          const mergedRowIdx = skeleton.indexOf(matchTotal);
+          html += `<tr class="bgt-row-header${collapsedCls} ${sectionCls}" data-section="${sectionIdx}" data-merged-row-idx="${mergedRowIdx}" onclick="fbToggleSection(this)">`;
+          html += `<td style="padding:8px 10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:11px"><span class="bgt-chevron">&#9654;</span>${label}</td>`;
+          html += renderMonthlyCells(matchTotal.label, true, isExpenseSection);
+          html += `</tr>`;
+        } else {
+          html += `<tr class="bgt-row-header${collapsedCls} ${sectionCls}" data-section="${sectionIdx}" onclick="fbToggleSection(this)"><td colspan="${1 + (colGroups.length + 1) * 3}" style="padding:8px 10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:11px"><span class="bgt-chevron">&#9654;</span>${label}</td></tr>`;
+        }
         return;
       }
       if (isExpenseSection) expenseLabels.add(row.label);
 
-      const rowA = lkA[row.label];
-      const rowB = lkB[row.label];
+      // Skip total rows already merged into a header
+      if (row.isTotal) {
+        const stripped = row.label.replace(/^TOTAL\s+/i, '').toUpperCase();
+        if (totalByHeader[stripped] === row && headerLabels.has(stripped)) return;
+      }
 
-      const fw = row.isTotal ? 700 : 400;
-      const rowBg = row.isTotal ? 'background:var(--surface);font-weight:700' : '';
+      // Orphan total rows (like NOI, or sub-totals without a header) stay
+      // always-visible with the colored total styling. Regular detail rows
+      // are hidden by default and revealed by expanding their section.
       const rowIsEditable = editable && row.gl_type === 'Reg' && row.gl_code;
-      html += `<tr style="${rowBg}" data-row-idx="${rowIdx}"${rowIsEditable ? ` data-gl="${row.gl_code}"` : ''}><td style="position:sticky;left:0;background:var(--surface);z-index:2;padding-left:${row.isTotal ? 12 : 20}px;font-weight:${fw}">${row.label}</td>`;
-
-      let totalA = 0, totalB = 0;
-      colGroups.forEach(g => {
-        const a = sumMonths(rowA, g.months);
-        const b = sumMonths(rowB, g.months);
-        totalA += a;
-        totalB += b;
-        const v = a - b;
-        const vCls = fbValClass(v, expenseLabels.has(row.label));
-        html += `<td style="text-align:right;font-weight:${fw}">${a ? fmt(a) : '—'}</td>`;
-        if (rowIsEditable) {
-          // Single-month editable cell. Render as <input>. For quarterly
-          // view this branch is skipped (editable=false when useQuarter).
-          // Use the full-number formatter ($12,345) — not the abbreviated
-          // ($12.3K) one — so what you see is what gets saved.
-          const month = g.months[0];
-          const cellVal = b ? fbFmtFull(b) : '';
-          html += `<td class="fb-bgt-edit-cell" data-month="${month}" data-row-idx="${rowIdx}" data-gl="${row.gl_code}">
-            <input type="text" class="fb-bgt-edit-input" value="${cellVal === '—' ? '' : cellVal}"
-              onfocus="this.select()"
-              onblur="fbSaveBudgetCell(this)"
-              onkeydown="fbBudgetCellKey(event)" />
-          </td>`;
-        } else {
-          html += `<td style="text-align:right;color:var(--text-dim)">${b ? fmt(b) : '—'}</td>`;
-        }
-        html += `<td style="text-align:right" class="${(a || b) ? vCls : ''}">${(a || b) ? fmt(v) : '—'}</td>`;
-      });
-      // Total
-      const vTot = totalA - totalB;
-      const vTotCls = fbValClass(vTot, expenseLabels.has(row.label));
-      const totBg = 'background:rgba(0,176,212,0.05)';
-      html += `<td style="text-align:right;font-weight:700;${totBg}">${totalA ? fmt(totalA) : '—'}</td>`;
-      html += `<td class="fb-bgt-row-total" data-row-idx="${rowIdx}" style="text-align:right;color:var(--text-dim);${totBg}">${totalB ? fmt(totalB) : '—'}</td>`;
-      html += `<td style="text-align:right;${totBg}" class="${(totalA || totalB) ? vTotCls : ''}">${(totalA || totalB) ? fmt(vTot) : '—'}</td>`;
+      let trCls;
+      if (row.isTotal) {
+        const lbl = row.label.toLowerCase();
+        if (lbl.includes('net operating income') || lbl.includes('net income') || lbl.includes('net cash')) trCls = 'bgt-row-total bgt-total-noi';
+        else if (lbl === 'total income' || lbl === 'total revenue') trCls = 'bgt-row-total bgt-total-income';
+        else if (lbl.includes('total operating') || lbl.includes('total capital') || lbl.includes('total expenses')) trCls = 'bgt-row-total bgt-total-expense';
+        else trCls = 'bgt-row-total';
+      } else {
+        const hiddenCls = defaultExpanded ? '' : ' bgt-hidden';
+        trCls = 'bgt-detail-row' + hiddenCls;
+      }
+      html += `<tr class="${trCls}" data-section="${sectionIdx}" data-row-idx="${rowIdx}"${rowIsEditable ? ` data-gl="${row.gl_code}"` : ''}>`;
+      const indent = row.isTotal ? 12 : 20;
+      html += `<td style="padding-left:${indent}px;font-weight:${row.isTotal ? 700 : 500}">${row.label}</td>`;
+      html += renderMonthlyCells(row.label, row.isTotal, expenseLabels.has(row.label), rowIsEditable, rowIdx, row.gl_code || '');
       html += `</tr>`;
     });
 
@@ -7356,6 +7415,24 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         const v = (r.months && r.months[m]) || 0;
         bgtCell.textContent = v ? fbFmt(v) : '—';
       });
+    });
+    // Also update section header rows that have merged Tot values
+    // (e.g. INCOME header shows TOTAL INCOME's monthly Bgt values)
+    document.querySelectorAll('tr.bgt-row-header[data-merged-row-idx]').forEach(tr => {
+      const mIdx = +tr.dataset.mergedRowIdx;
+      const tot = rows[mIdx];
+      if (!tot || !tot.months) return;
+      const cells = tr.querySelectorAll('td');
+      let yearB = 0;
+      MONTHS.forEach((m, i) => {
+        const b = (tot.months[m]) || 0;
+        yearB += b;
+        const bgtCell = cells[1 + i * 3 + 1];
+        if (bgtCell) bgtCell.textContent = b ? fbFmt(b) : '—';
+      });
+      // Year-total Bgt cell sits at cells[1 + 12*3 + 1] = cells[38]
+      const yearBgtCell = cells[1 + MONTHS.length * 3 + 1];
+      if (yearBgtCell) yearBgtCell.textContent = yearB ? fbFmt(yearB) : '—';
     });
   }
 
