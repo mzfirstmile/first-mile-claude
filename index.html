@@ -648,6 +648,77 @@
   .fb-nav-btn:hover { color:var(--text); background:var(--surface2); }
   .fb-nav-btn.active { background:var(--accent); color:#fff; }
 
+  /* Unified P&L tab — view controls bar */
+  .fb-pl-controls {
+    display:flex; align-items:center; gap:24px; padding:10px 14px;
+    background:var(--surface); border:1px solid var(--border);
+    border-radius:10px; margin-bottom:14px; flex-wrap:wrap;
+  }
+  .fb-pl-ctrl { display:flex; align-items:center; gap:10px; }
+  .fb-pl-ctrl-spacer { flex:1; }
+  .fb-pl-ctrl-label {
+    font-size:10px; text-transform:uppercase; letter-spacing:.6px;
+    color:var(--text-dim); font-weight:600;
+  }
+  .fb-pl-seg {
+    display:inline-flex; background:var(--surface2); border-radius:7px;
+    padding:2px; gap:0;
+  }
+  .fb-pl-seg-btn {
+    padding:6px 12px; font-size:12px; font-weight:600;
+    color:var(--text-dim); background:none; border:none; border-radius:5px;
+    cursor:pointer; transition:all .15s;
+  }
+  .fb-pl-seg-btn:hover { color:var(--text); }
+  .fb-pl-seg-btn.active {
+    background:var(--surface); color:var(--accent);
+    box-shadow:0 1px 2px rgba(0,0,0,0.06);
+  }
+  .fb-pl-compare-chip {
+    font-size:12px; color:var(--text); background:var(--surface2);
+    padding:5px 10px; border-radius:6px; font-weight:500;
+  }
+  .fb-pl-drill-btn {
+    padding:7px 14px; background:var(--accent); color:#fff;
+    border:none; border-radius:7px; font-size:12px; font-weight:600;
+    cursor:pointer; display:flex; align-items:center; gap:6px;
+  }
+  .fb-pl-drill-btn:hover { filter:brightness(1.05); }
+
+  /* Drilldown drawer */
+  .fb-drawer-overlay {
+    position:fixed; inset:0; background:rgba(15,23,42,0.32);
+    opacity:0; pointer-events:none; transition:opacity .25s; z-index:40;
+  }
+  .fb-drawer-overlay.open { opacity:1; pointer-events:auto; }
+  .fb-drawer {
+    position:fixed; top:0; right:0; bottom:0;
+    width:min(720px, 78vw); background:var(--surface);
+    border-left:1px solid var(--border);
+    box-shadow:-12px 0 32px rgba(15,23,42,0.12);
+    transform:translateX(101%);
+    transition:transform .28s cubic-bezier(.4,0,.2,1);
+    z-index:50; display:flex; flex-direction:column; overflow:hidden;
+  }
+  .fb-drawer.open { transform:translateX(0); }
+  .fb-drawer-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:16px 20px; border-bottom:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .fb-drawer-title { font-size:16px; font-weight:700; color:var(--text); }
+  .fb-drawer-close {
+    width:32px; height:32px; border-radius:8px; background:none;
+    border:1px solid var(--border); cursor:pointer; font-size:18px;
+    color:var(--text-dim); display:flex; align-items:center; justify-content:center;
+  }
+  .fb-drawer-close:hover { background:var(--surface2); color:var(--text); }
+  .fb-drawer-body { flex:1; overflow-y:auto; padding:18px 20px; }
+  .fb-drawer-subtitle {
+    font-size:12px; color:var(--text-dim); margin-bottom:14px;
+  }
+  .fb-drawer-subtitle b { color:var(--text); font-weight:600; }
+
   /* Overview tab: KPI cards, trend chart, variance list */
   .fb-kpi-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:14px; margin-bottom:22px; }
   .fb-kpi-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
@@ -1048,6 +1119,16 @@
         </div>
       </div>
       <div class="fb-detail-body" id="fbDetailBody"></div>
+
+      <!-- Drilldown drawer (slides in from the right when an account row is clicked) -->
+      <div id="fbDrillOverlay" class="fb-drawer-overlay" onclick="fbCloseDrillDrawer()"></div>
+      <aside id="fbDrillDrawer" class="fb-drawer" role="dialog" aria-label="Drilldown" aria-hidden="true">
+        <div class="fb-drawer-header">
+          <div class="fb-drawer-title">Drilldown</div>
+          <button class="fb-drawer-close" aria-label="Close drawer" onclick="fbCloseDrillDrawer()">&times;</button>
+        </div>
+        <div class="fb-drawer-body" id="fbDrillDrawerBody"></div>
+      </aside>
     </div>
   </div>
 
@@ -3871,34 +3952,41 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
   // Tabs are status-aware: different year statuses expose different tabs,
   // and each status has its own default landing tab.
+  // The unified `pnl` tab consolidates what used to be three separate tabs
+  // (P&L / Monthly Trend / Drilldown) into one statement view with period
+  // toggles (Annual / Quarterly / Monthly) and a row-click drilldown drawer.
   const FB_TABS_BY_STATUS = {
     active: [
       { id: 'overview',     label: 'Overview' },
-      { id: 'pl',           label: 'P&L' },
-      { id: 'trend',        label: 'Monthly Trend' },
-      { id: 'drill',        label: 'Drilldown' },
+      { id: 'pnl',          label: 'P&L' },
       { id: 'rentroll',     label: 'Rent Roll' },
       { id: 'stacking',     label: 'Stacking Plan' },
       { id: 'cashforecast', label: 'Cash Forecast' },
       { id: 'balancesheet', label: 'Balance Sheet' },
     ],
     planning: [
-      { id: 'budget',       label: 'Budget' },
+      { id: 'pnl',          label: 'P&L' },
       { id: 'rentroll',     label: 'Rent Roll' },
       { id: 'stacking',     label: 'Stacking Plan' },
-      { id: 'drill',        label: 'Drilldown' },
       { id: 'cashforecast', label: 'Cash Forecast' },
       { id: 'balancesheet', label: 'Balance Sheet' },
     ],
     historical: [
-      { id: 'actuals',      label: 'Actuals' },
+      { id: 'pnl',          label: 'P&L' },
       { id: 'vstory',       label: 'Variance Story' },
       { id: 'rentroll',     label: 'Rent Roll' },
       { id: 'stacking',     label: 'Stacking Plan' },
       { id: 'balancesheet', label: 'Balance Sheet' },
     ],
   };
-  const FB_DEFAULT_TAB = { active: 'overview', planning: 'budget', historical: 'vstory' };
+  const FB_DEFAULT_TAB = { active: 'overview', planning: 'pnl', historical: 'vstory' };
+  // Legacy tab IDs map to the new unified `pnl` tab so old hash deep-links
+  // (e.g. #financials&prop=...&tab=pl) keep working.
+  const FB_LEGACY_TAB_MAP = {
+    pl: 'pnl', summary: 'pnl', budget: 'pnl', actuals: 'pnl',
+    trend: 'pnl', monthly: 'pnl',
+    drill: 'pnl', revenue: 'pnl', opex: 'pnl', capital: 'pnl',
+  };
 
   function fbUpdateNavForYear() {
     const status = fbGetYearStatus();
@@ -3906,10 +3994,17 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     if (!nav) return;
     const tabs = FB_TABS_BY_STATUS[status] || FB_TABS_BY_STATUS.active;
 
-    // Keep existing tab if it still makes sense; otherwise snap to the status default
+    // Keep existing tab if it still makes sense; map legacy ids forward
+    // (pl/trend/drill/budget/actuals/etc all collapse into 'pnl'); otherwise
+    // snap to the status default.
     const validIds = new Set(tabs.map(t => t.id));
     if (!validIds.has(fbActiveTab)) {
-      fbActiveTab = FB_DEFAULT_TAB[status] || tabs[0].id;
+      const mapped = FB_LEGACY_TAB_MAP[fbActiveTab];
+      if (mapped && validIds.has(mapped)) {
+        fbActiveTab = mapped;
+      } else {
+        fbActiveTab = FB_DEFAULT_TAB[status] || tabs[0].id;
+      }
     }
 
     // Rebuild the nav buttons, preserving the spacer + mode toggle at the end
@@ -4066,6 +4161,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
   function fbShowTab(tab) {
     fbActiveTab = tab;
+    if (typeof fbCloseDrillDrawer === 'function') fbCloseDrillDrawer();
     document.querySelectorAll('#fbDetailNav .fb-nav-btn').forEach(b => b.classList.remove('active'));
     const tabs = FB_TABS_BY_STATUS[fbGetYearStatus()] || FB_TABS_BY_STATUS.active;
     const match = tabs.find(t => t.id === tab);
@@ -4247,16 +4343,17 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     switch (fbActiveTab) {
       case 'overview':
         return fbRenderOverview(body, p, base);
+      case 'pnl':
+      // Legacy ids fall through to the unified P&L tab. They no longer have
+      // their own tab button, but old URL hashes keep working.
       case 'pl':
       case 'budget':
       case 'actuals':
-      case 'summary':      // legacy id from URL hash
-        return fbRenderSummary(body, p, base);
+      case 'summary':
       case 'trend':
-      case 'monthly':      // legacy id
-        return fbRenderMonthlyActVsBgt(body, base);
+      case 'monthly':
       case 'drill':
-        return fbRenderDrilldown(body, p, base);
+        return fbRenderPLTab(body, p, base);
       case 'vstory':
         return fbRenderVarianceStory(body, p, base);
       case 'rentroll':
@@ -4270,7 +4367,11 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       case 'revenue':
       case 'opex':
       case 'capital':
-        return fbRenderMonthlyDetail(body, p, fbActiveTab);
+        // Old deep-links to a specific drilldown section: route to P&L and
+        // open the drawer pre-pointed at that section.
+        fbRenderPLTab(body, p, base);
+        setTimeout(() => fbOpenDrillDrawer(fbActiveTab), 0);
+        return;
       default:
         return fbRenderOverview(body, p, base);
     }
@@ -6935,6 +7036,11 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
   let fbMonthlyGrouping = 'month'; // 'month' | 'quarter'
   function fbSetMonthlyGrouping(g) {
     fbMonthlyGrouping = g;
+    // Keep the unified P&L tab's Period toggle in sync when the user flips
+    // the inner Grouping toggle inside fbRenderMonthlyActVsBgt.
+    if (typeof fbPLPeriod !== 'undefined') {
+      fbPLPeriod = (g === 'quarter') ? 'quarterly' : 'monthly';
+    }
     fbRenderDetail();
   }
   function fbRenderMonthlyActVsBgt(body, baseProp) {
@@ -7063,6 +7169,175 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     }
 
     body.innerHTML = html;
+  }
+
+  // ── Unified P&L Tab ──────────────────────────────────────────────────
+  // Collapses the old P&L / Monthly Trend / Drilldown trio into a single
+  // statement view with view controls (Period, Compare) and a row-click
+  // drilldown drawer.
+  //
+  // Period:
+  //   - Annual    → fbRenderSummary (existing P&L statement)
+  //   - Quarterly → fbRenderMonthlyActVsBgt with quarterly grouping
+  //   - Monthly   → fbRenderMonthlyActVsBgt with monthly grouping
+  //
+  // Compare control is informational only for v1 (the column logic is
+  // already status-aware inside each renderer). Hook up later if Morris
+  // wants to override defaults.
+  let fbPLPeriod = 'annual'; // 'annual' | 'quarterly' | 'monthly'
+
+  function fbSetPLPeriod(v) {
+    fbPLPeriod = v;
+    // Quarterly/Monthly delegate to fbRenderMonthlyActVsBgt which keys off
+    // fbMonthlyGrouping — keep them in sync.
+    if (v === 'quarterly') fbMonthlyGrouping = 'quarter';
+    else if (v === 'monthly') fbMonthlyGrouping = 'month';
+    fbRenderDetail();
+  }
+
+  function fbRenderPLTab(body, p, baseProp) {
+    const status = fbGetYearStatus();
+    const yr = fbSelectedYear;
+
+    // View-controls bar
+    const periodOpts = [
+      { id: 'annual',    label: 'Annual' },
+      { id: 'quarterly', label: 'Quarterly' },
+      { id: 'monthly',   label: 'Monthly' },
+    ];
+    const periodHtml = periodOpts.map(o =>
+      `<button class="fb-pl-seg-btn${fbPLPeriod === o.id ? ' active' : ''}" onclick="fbSetPLPeriod('${o.id}')">${o.label}</button>`
+    ).join('');
+
+    // Compare default chip for the current status (read-only display for v1).
+    const compareLabel = status === 'planning'
+      ? `${yr} Budget vs ${yr - 1} Actuals`
+      : status === 'historical'
+        ? `${yr} Actuals vs ${yr} Budget vs ${yr - 1}`
+        : `${yr} Blended vs Budget vs ${yr - 1}`;
+
+    body.innerHTML = `
+      <div class="fb-pl-controls">
+        <div class="fb-pl-ctrl">
+          <span class="fb-pl-ctrl-label">Period</span>
+          <div class="fb-pl-seg">${periodHtml}</div>
+        </div>
+        <div class="fb-pl-ctrl">
+          <span class="fb-pl-ctrl-label">Compare</span>
+          <span class="fb-pl-compare-chip">${compareLabel}</span>
+        </div>
+        <div class="fb-pl-ctrl-spacer"></div>
+        <button class="fb-pl-drill-btn" onclick="fbOpenDrillDrawer('revenue')">
+          <span style="font-size:13px">↗</span> Open drilldown
+        </button>
+      </div>
+      <div id="fbPLBody"></div>
+    `;
+
+    const inner = document.getElementById('fbPLBody');
+    if (fbPLPeriod === 'annual') {
+      fbRenderSummary(inner, p, baseProp);
+    } else {
+      // fbMonthlyGrouping was synced by fbSetPLPeriod when the user picked
+      // Monthly/Quarterly. Don't override here — the inner Grouping toggle
+      // inside fbRenderMonthlyActVsBgt should still be free to flip.
+      fbRenderMonthlyActVsBgt(inner, baseProp);
+    }
+    // Attach row-click handlers AFTER the table renders.
+    fbAttachPLRowDrill(inner);
+  }
+
+  // Make every account row in the P&L table clickable to open the drilldown
+  // drawer pre-pointed at the appropriate section (revenue / opex / capital).
+  function fbAttachPLRowDrill(container) {
+    if (!container) return;
+    // Find table rows that have a row-label cell. We piggyback on data
+    // attributes already present, but also use the row's first-cell text
+    // as a heuristic match against the section keyword.
+    const rows = container.querySelectorAll('tr');
+    rows.forEach(tr => {
+      // Skip total / header / section rows where the first cell looks like a header
+      const firstCell = tr.querySelector('td, th');
+      if (!firstCell) return;
+      const label = (firstCell.textContent || '').trim();
+      if (!label) return;
+      // Skip pure section headers / totals
+      if (/^total /i.test(label)) return;
+      if (/^NET OPERATING INCOME$/i.test(label)) return;
+      if (firstCell.tagName === 'TH') return;
+      // Heuristic: rows with class fb-row-header are section headers
+      if (tr.classList.contains('fb-row-header')) return;
+      const section = fbInferDrillSection(label);
+      if (!section) return;
+      tr.style.cursor = 'pointer';
+      tr.addEventListener('click', () => fbOpenDrillDrawer(section, label));
+    });
+  }
+
+  function fbInferDrillSection(label) {
+    const l = (label || '').toLowerCase();
+    // Revenue keywords
+    if (/income|rent|recover|reimburs|escalation|cam|parking|miscellaneous|other inc/.test(l)) return 'revenue';
+    // Capital / debt keywords
+    if (/depreciation|amortization|capital|tenant improvement|leasing comm|debt service|interest expense|principal/.test(l)) return 'capital';
+    // Everything else = opex
+    return 'opex';
+  }
+
+  // ── Drilldown Drawer ────────────────────────────────────────────────
+  let fbDrawerOpen = false;
+  function fbOpenDrillDrawer(section, hintLabel) {
+    section = section || 'revenue';
+    fbDrillSection = section;
+    const drawer = document.getElementById('fbDrillDrawer');
+    const overlay = document.getElementById('fbDrillOverlay');
+    if (!drawer || !overlay) return;
+    fbDrawerOpen = true;
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+    fbRenderDrillDrawerBody(hintLabel);
+    document.addEventListener('keydown', fbDrawerEscHandler);
+  }
+  function fbCloseDrillDrawer() {
+    const drawer = document.getElementById('fbDrillDrawer');
+    const overlay = document.getElementById('fbDrillOverlay');
+    if (!drawer || !overlay) return;
+    fbDrawerOpen = false;
+    drawer.classList.remove('open');
+    overlay.classList.remove('open');
+    document.removeEventListener('keydown', fbDrawerEscHandler);
+  }
+  function fbDrawerEscHandler(e) {
+    if (e.key === 'Escape') fbCloseDrillDrawer();
+  }
+  function fbSetDrillDrawerSection(s) {
+    fbDrillSection = s;
+    fbRenderDrillDrawerBody();
+  }
+  function fbRenderDrillDrawerBody(hintLabel) {
+    const inner = document.getElementById('fbDrillDrawerBody');
+    if (!inner) return;
+    const base = bgtData[fbSelectedIdx];
+    if (!base) { inner.innerHTML = ''; return; }
+    const p = fbGetPropForYear(base);
+    const segments = [
+      { id: 'revenue', label: 'Revenue' },
+      { id: 'opex',    label: 'Operating Expenses' },
+      { id: 'capital', label: 'Capital & Debt' },
+    ];
+    const subtitle = hintLabel
+      ? `${p.name} · ${fbSelectedYear} · scroll to find <b>${hintLabel}</b>`
+      : `${p.name} · ${fbSelectedYear}`;
+    let html = `
+      <div class="fb-drawer-subtitle">${subtitle}</div>
+      <div class="fb-drill-segments" style="margin-bottom:14px">
+    `;
+    segments.forEach(s => {
+      html += `<button class="fb-drill-seg-btn${s.id === fbDrillSection ? ' active' : ''}" onclick="fbSetDrillDrawerSection('${s.id}')">${s.label}</button>`;
+    });
+    html += `</div><div id="fbDrillDrawerInner"></div>`;
+    inner.innerHTML = html;
+    fbRenderMonthlyDetail(document.getElementById('fbDrillDrawerInner'), p, fbDrillSection);
   }
 
   function fbRenderSummary(body, p, baseProp) {
