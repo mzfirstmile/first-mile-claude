@@ -3737,7 +3737,15 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         });
 
         bgtData = [];
-        for (const [propId, yearMap] of Object.entries(byPropYear)) {
+        // Include every property in FB_PROP_META, even if it has no budget
+        // or actuals rows yet (e.g. a freshly imported rent-roll-only
+        // property like Red Bank — River Center).
+        const _allPropIds = new Set([
+          ...Object.keys(byPropYear),
+          ...Object.keys(FB_PROP_META),
+        ]);
+        for (const propId of _allPropIds) {
+          const yearMap = byPropYear[propId] || {};
           const meta = FB_PROP_META[propId];
           if (!meta) continue;
 
