@@ -648,6 +648,33 @@
   .fb-nav-btn:hover { color:var(--text); background:var(--surface2); }
   .fb-nav-btn.active { background:var(--accent); color:#fff; }
 
+  /* Editable budget cell (Planning year + Monthly view) */
+  td.fb-bgt-edit-cell {
+    padding:0; background:rgba(0,176,212,0.04); position:relative;
+  }
+  td.fb-bgt-edit-cell input.fb-bgt-edit-input {
+    width:100%; box-sizing:border-box; border:none; background:transparent;
+    padding:6px 8px; text-align:right; font:inherit; color:var(--text);
+    outline:none; border-radius:3px;
+  }
+  td.fb-bgt-edit-cell input.fb-bgt-edit-input:hover { background:rgba(0,176,212,0.08); }
+  td.fb-bgt-edit-cell input.fb-bgt-edit-input:focus {
+    background:#fff; box-shadow:inset 0 0 0 2px var(--accent);
+  }
+  td.fb-bgt-edit-cell.fb-bgt-saving::after {
+    content:''; position:absolute; top:2px; right:2px; width:6px; height:6px;
+    background:var(--accent); border-radius:50%;
+    animation:fbPulse 0.8s ease-in-out infinite;
+  }
+  td.fb-bgt-edit-cell.fb-bgt-saved::after {
+    content:'✓'; position:absolute; top:0; right:3px;
+    color:var(--green); font-size:11px; font-weight:700;
+  }
+  td.fb-bgt-edit-cell.fb-bgt-save-error {
+    background:rgba(220,90,90,0.12);
+  }
+  @keyframes fbPulse { 0%,100% { opacity:0.3 } 50% { opacity:1 } }
+
   /* Unified P&L tab — view controls bar */
   .fb-pl-controls {
     display:flex; align-items:center; gap:24px; padding:10px 14px;
@@ -3439,7 +3466,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       if (!allGlCodes.has(g.code)) return;
       const data = byGl[g.code];
       if (g.type === 'Head') {
-        summaryRows.push({ label: g.name, isHeader: true, isTotal: false, budget26: 0 });
+        summaryRows.push({ label: g.name, isHeader: true, isTotal: false, budget26: 0, gl_code: g.code, gl_type: 'Head' });
       } else if (g.type === 'Tot' && !data) {
         // Compute Tot from child Reg entries: find range [nearestHead, totCode)
         const gCode = parseInt(g.code);
@@ -3465,10 +3492,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           }
         }
         const annual = MONTHS.reduce((s, m) => s + months[m], 0);
-        summaryRows.push({ label: g.name, isHeader: false, isTotal: true, budget26: annual, months });
+        summaryRows.push({ label: g.name, isHeader: false, isTotal: true, budget26: annual, months, gl_code: g.code, gl_type: 'Tot', _totRange: [headCode, gCode] });
       } else {
         const annual = data ? MONTHS.reduce((s, m) => s + (data.months[m] || 0), 0) : 0;
-        summaryRows.push({ label: g.name, isHeader: false, isTotal: g.type === 'Tot', budget26: annual, months: data ? data.months : {} });
+        summaryRows.push({ label: g.name, isHeader: false, isTotal: g.type === 'Tot', budget26: annual, months: data ? data.months : {}, gl_code: g.code, gl_type: g.type });
       }
     });
 
@@ -7105,7 +7132,13 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     let isExpenseSection = false;
     const topLevelPattern = /^(INCOME|REVENUE|OPERATING|EXPENSE|NET OPERATING|NOI|BELOW|GENERAL)/i;
 
-    skeleton.forEach(row => {
+    // Planning year + Monthly grouping = budget data-entry mode. Reg-type
+    // budget cells render as editable inputs and save back to
+    // budget_line_items on blur.
+    const status = fbGetYearStatus();
+    const editable = (status === 'planning' && !useQuarter);
+
+    skeleton.forEach((row, rowIdx) => {
       if (row.isHeader) {
         const label = row.label;
         const upper = label.toUpperCase();
@@ -7126,7 +7159,8 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
       const fw = row.isTotal ? 700 : 400;
       const rowBg = row.isTotal ? 'background:var(--surface);font-weight:700' : '';
-      html += `<tr style="${rowBg}"><td style="position:sticky;left:0;background:var(--surface);z-index:2;padding-left:${row.isTotal ? 12 : 20}px;font-weight:${fw}">${row.label}</td>`;
+      const rowIsEditable = editable && row.gl_type === 'Reg' && row.gl_code;
+      html += `<tr style="${rowBg}" data-row-idx="${rowIdx}"${rowIsEditable ? ` data-gl="${row.gl_code}"` : ''}><td style="position:sticky;left:0;background:var(--surface);z-index:2;padding-left:${row.isTotal ? 12 : 20}px;font-weight:${fw}">${row.label}</td>`;
 
       let totalA = 0, totalB = 0;
       colGroups.forEach(g => {
@@ -7137,7 +7171,22 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         const v = a - b;
         const vCls = fbValClass(v, expenseLabels.has(row.label));
         html += `<td style="text-align:right;font-weight:${fw}">${a ? fmt(a) : '—'}</td>`;
-        html += `<td style="text-align:right;color:var(--text-dim)">${b ? fmt(b) : '—'}</td>`;
+        if (rowIsEditable) {
+          // Single-month editable cell. Render as <input>. For quarterly
+          // view this branch is skipped (editable=false when useQuarter).
+          // Use the full-number formatter ($12,345) — not the abbreviated
+          // ($12.3K) one — so what you see is what gets saved.
+          const month = g.months[0];
+          const cellVal = b ? fbFmtFull(b) : '';
+          html += `<td class="fb-bgt-edit-cell" data-month="${month}" data-row-idx="${rowIdx}" data-gl="${row.gl_code}">
+            <input type="text" class="fb-bgt-edit-input" value="${cellVal === '—' ? '' : cellVal}"
+              onfocus="this.select()"
+              onblur="fbSaveBudgetCell(this)"
+              onkeydown="fbBudgetCellKey(event)" />
+          </td>`;
+        } else {
+          html += `<td style="text-align:right;color:var(--text-dim)">${b ? fmt(b) : '—'}</td>`;
+        }
         html += `<td style="text-align:right" class="${(a || b) ? vCls : ''}">${(a || b) ? fmt(v) : '—'}</td>`;
       });
       // Total
@@ -7145,20 +7194,169 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       const vTotCls = fbValClass(vTot, expenseLabels.has(row.label));
       const totBg = 'background:rgba(0,176,212,0.05)';
       html += `<td style="text-align:right;font-weight:700;${totBg}">${totalA ? fmt(totalA) : '—'}</td>`;
-      html += `<td style="text-align:right;color:var(--text-dim);${totBg}">${totalB ? fmt(totalB) : '—'}</td>`;
+      html += `<td class="fb-bgt-row-total" data-row-idx="${rowIdx}" style="text-align:right;color:var(--text-dim);${totBg}">${totalB ? fmt(totalB) : '—'}</td>`;
       html += `<td style="text-align:right;${totBg}" class="${(totalA || totalB) ? vTotCls : ''}">${(totalA || totalB) ? fmt(vTot) : '—'}</td>`;
       html += `</tr>`;
     });
 
     html += `</tbody></table></div>`;
 
-    if (!actualsYd) {
+    if (editable) {
+      html += `<div style="margin-top:12px;padding:10px 14px;background:rgba(0,176,212,0.06);border:1px solid rgba(0,176,212,0.3);border-radius:8px;font-size:12px;color:var(--text)">
+        <b>Budget entry mode.</b> Click any monthly budget cell to edit. Tab to move across, Enter to confirm. Changes save automatically to <code>budget_line_items</code>.
+      </div>`;
+    } else if (!actualsYd) {
       html += `<div style="margin-top:12px;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--text-dim)">
         No actuals loaded yet for ${yr}. Run <code>python3 scripts/sync_actuals.py --commit</code> to pull the latest monthly financials from Dropbox.
       </div>`;
     }
 
     body.innerHTML = html;
+  }
+
+  // ── Budget cell edit handlers (Planning year + Monthly view) ──
+  // Cells store: data-row-idx (skeleton index), data-gl (gl_code), data-month (Jan/Feb/...)
+  function fbBudgetCellKey(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.target.blur();
+      // Move focus to the next editable cell in the same column (below)
+      const cell = e.target.closest('td');
+      const month = cell.dataset.month;
+      const next = fbFindNextBudgetCell(cell, 'down', month);
+      if (next) next.focus();
+    } else if (e.key === 'Escape') {
+      // Revert to current stored value, blur without saving
+      const cell = e.target.closest('td');
+      const rowIdx = +cell.dataset.rowIdx;
+      const month = cell.dataset.month;
+      const base = bgtData[fbSelectedIdx];
+      const row = base.years[fbSelectedYear].budget.summaryRows[rowIdx];
+      const cur = (row.months && row.months[month]) || 0;
+      e.target.value = cur ? fbFmtFull(cur) : '';
+      e.target.setAttribute('data-skip-save', '1');
+      e.target.blur();
+    }
+  }
+  function fbFindNextBudgetCell(cell, dir, month) {
+    const all = Array.from(document.querySelectorAll(`td.fb-bgt-edit-cell[data-month="${month}"] input`));
+    const curEl = cell.querySelector('input');
+    const idx = all.indexOf(curEl);
+    if (idx < 0) return null;
+    return all[idx + (dir === 'down' ? 1 : -1)] || null;
+  }
+  async function fbSaveBudgetCell(inputEl) {
+    if (inputEl.getAttribute('data-skip-save') === '1') {
+      inputEl.removeAttribute('data-skip-save');
+      return;
+    }
+    const cell = inputEl.closest('td');
+    const rowIdx = +cell.dataset.rowIdx;
+    const gl_code = cell.dataset.gl;
+    const month = cell.dataset.month;
+    const monthIdx = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].indexOf(month) + 1;
+
+    const base = bgtData[fbSelectedIdx];
+    const yr = fbSelectedYear;
+    const yd = base.years && base.years[yr] && base.years[yr].budget;
+    if (!yd) return;
+    const row = yd.summaryRows[rowIdx];
+    if (!row) return;
+
+    // Parse "$1,234" or "1234.5" — strip $ , whitespace
+    const raw = String(inputEl.value || '').replace(/[\$,\s]/g, '');
+    const parsed = parseFloat(raw);
+    const newVal = isFinite(parsed) ? parsed : 0;
+    const oldVal = (row.months && row.months[month]) || 0;
+    if (Math.abs(newVal - oldVal) < 0.005) {
+      inputEl.value = newVal ? fbFmtFull(newVal) : '';
+      return;
+    }
+
+    // Optimistic local update
+    if (!row.months) row.months = {};
+    row.months[month] = newVal;
+    inputEl.value = newVal ? fbFmtFull(newVal) : '';
+    cell.classList.add('fb-bgt-saving');
+
+    try {
+      const propId = base.id;
+      const qs = `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${yr}&gl_code=eq.${encodeURIComponent(gl_code)}&month=eq.${monthIdx}`;
+      // Delete any existing row for this cell, then insert a fresh one
+      // (avoids needing an ON CONFLICT constraint).
+      await supaWrite('budget_line_items', 'DELETE', null, qs);
+      if (Math.abs(newVal) > 0.005) {
+        await supaWrite('budget_line_items', 'POST', [{
+          property_id: propId,
+          year: yr,
+          gl_code: gl_code,
+          account_name: row.label,
+          month: monthIdx,
+          amount: Math.round(newVal * 100) / 100,
+        }], '');
+      }
+      cell.classList.remove('fb-bgt-saving');
+      cell.classList.add('fb-bgt-saved');
+      setTimeout(() => cell.classList.remove('fb-bgt-saved'), 700);
+    } catch (err) {
+      // Revert
+      row.months[month] = oldVal;
+      inputEl.value = oldVal ? fbFmtFull(oldVal) : '';
+      cell.classList.remove('fb-bgt-saving');
+      cell.classList.add('fb-bgt-save-error');
+      alert('Failed to save budget cell: ' + (err && err.message ? err.message : err));
+      setTimeout(() => cell.classList.remove('fb-bgt-save-error'), 2000);
+    }
+
+    // Recompute Tot rows in place + this row's annual total
+    fbRecomputeBudgetTotsInPlace(yd);
+  }
+
+  function fbRecomputeBudgetTotsInPlace(budgetYd) {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    // Recompute every Tot row's months from its child Reg rows that fall in its _totRange
+    const rows = budgetYd.summaryRows || [];
+    rows.forEach((row, i) => {
+      if (row.gl_type === 'Tot' && row._totRange) {
+        const [lo, hi] = row._totRange;
+        const months = {};
+        MONTHS.forEach(m => { months[m] = 0; });
+        rows.forEach(r2 => {
+          if (r2.gl_type !== 'Reg' || !r2.gl_code) return;
+          const cc = parseInt(r2.gl_code);
+          if (cc > lo && cc < hi) {
+            MONTHS.forEach(m => { months[m] += (r2.months && r2.months[m]) || 0; });
+          }
+        });
+        row.months = months;
+        row.budget26 = MONTHS.reduce((s, m) => s + months[m], 0);
+      }
+    });
+    // Update the visible row-total cells for every row currently in the table
+    document.querySelectorAll('.fb-bgt-row-total').forEach(td => {
+      const rIdx = +td.dataset.rowIdx;
+      const r = rows[rIdx];
+      if (!r) return;
+      const tot = MONTHS.reduce((s, m) => s + ((r.months && r.months[m]) || 0), 0);
+      td.textContent = tot ? fbFmt(tot) : '—';
+    });
+    // Also update Tot rows' visible monthly Bgt cells (the 2nd column of each month group)
+    rows.forEach((r, rIdx) => {
+      if (r.gl_type !== 'Tot') return;
+      MONTHS.forEach(m => {
+        // Find the visible td: it's the 2nd cell (Bgt) of this row's month group
+        const tr = document.querySelector(`tr[data-row-idx="${rIdx}"]`);
+        if (!tr) return;
+        // Walk td's: first is label, then for each month: Act, Bgt, Var
+        const cells = tr.querySelectorAll('td');
+        const mIdx = MONTHS.indexOf(m);
+        if (mIdx < 0) return;
+        const bgtCell = cells[1 + mIdx * 3 + 1]; // label + (monthIdx * 3) + 1 for Bgt
+        if (!bgtCell) return;
+        const v = (r.months && r.months[m]) || 0;
+        bgtCell.textContent = v ? fbFmt(v) : '—';
+      });
+    });
   }
 
   // ── Unified P&L Tab ──────────────────────────────────────────────────
