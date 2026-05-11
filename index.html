@@ -5316,6 +5316,8 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     if (s.startsWith('PARK') || s.startsWith('BOX')
         || s.startsWith('SHACK') || s.startsWith('SIGN')
         || s.startsWith('KIOSK')) return { key: 9000, label: 'Ground', kind: 'license' };
+    if (s.startsWith('CABLE') || s.startsWith('TELE')) return { key: -1, label: 'Roof', kind: 'telecom' };
+    if (s.startsWith('BSMT') || s.startsWith('BASEMENT') || s.startsWith('B-')) return { key: 0, label: 'B', kind: 'other' };
     // Numeric / alphanumeric: first digit is the floor
     const m = s.match(/^(\d)/);
     if (m) {
@@ -5323,6 +5325,30 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       return { key: n, label: 'F' + n, kind: 'office' };
     }
     return { key: 9999, label: 'Other', kind: 'other' };
+  }
+
+  // Multi-building support: parse out the building prefix from a suite like
+  // "rivrctr1-103" → { building: "rivrctr1", suite: "103" }. Suites without
+  // a known building prefix (e.g. "101", "ROOF1") return { building: null }.
+  // Used by the Stacking Plan to render one stack per building when a
+  // property has tenants across multiple buildings.
+  const FB_BUILDING_LABELS = {
+    'rivrctr1': 'River Center 1',
+    'rivrctr2': 'River Center 2',
+    'rivrctr3': 'River Center 3',
+    '100schlz': '100 Schultz Drive',
+    '200schlz': '200 Schultz Drive',
+  };
+  // Display order for known buildings. Anything not in this list slots in
+  // alphabetically after the known ones.
+  const FB_BUILDING_ORDER = ['100schlz', '200schlz', 'rivrctr1', 'rivrctr2', 'rivrctr3'];
+  function fbParseBuilding(suite) {
+    const s = String(suite || '').trim();
+    const dash = s.indexOf('-');
+    if (dash <= 0) return { building: null, suite: s };
+    const prefix = s.slice(0, dash).toLowerCase();
+    if (!FB_BUILDING_LABELS[prefix]) return { building: null, suite: s };
+    return { building: prefix, suite: s.slice(dash + 1) };
   }
 
   // Cross-render payload so the hover tooltip handlers (declared at module
@@ -5357,27 +5383,47 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const profById = {};
     (fbReleasingProfilesCache[propId] || []).forEach(pr => { profById[pr.id] = pr; });
 
-    // Group by inferred floor
-    const floors = new Map();
+    // Group rows by building (if multi-building). Single-building
+    // properties get a single null-keyed bucket and render as before.
+    const byBuilding = new Map();
     rows.forEach(r => {
-      const floor = fbInferFloor(r.suite);
-      if (!floors.has(floor.key)) {
-        floors.set(floor.key, { ...floor, tenants: [] });
-      }
-      floors.get(floor.key).tenants.push(r);
+      const parsed = fbParseBuilding(r.suite);
+      const key = parsed.building || '__single';
+      if (!byBuilding.has(key)) byBuilding.set(key, []);
+      byBuilding.get(key).push({ ...r, _parsedSuite: parsed.suite });
     });
-    // Sort: Roof (key=-1) at top, then numeric floors high→low, then Ground, then Other
-    const ordered = Array.from(floors.values()).sort((a, b) => {
-      // Roof first (smallest key, but we want at top → key -1 should come first)
-      // Numeric floors descending so F5 above F1
-      if (a.key === -1) return -1;
-      if (b.key === -1) return 1;
-      if (a.key === 9000) return b.key === 9999 ? -1 : 1; // Ground after numbered
-      if (b.key === 9000) return a.key === 9999 ?  1 : -1;
-      if (a.key === 9999) return 1;
-      if (b.key === 9999) return -1;
-      return b.key - a.key; // F5, F4, F3, F2, F1
+    const isMulti = byBuilding.size > 1 || !byBuilding.has('__single');
+
+    // Sort buildings by FB_BUILDING_ORDER (knowns first), then alphabetical
+    const buildingKeys = Array.from(byBuilding.keys()).sort((a, b) => {
+      const ai = FB_BUILDING_ORDER.indexOf(a);
+      const bi = FB_BUILDING_ORDER.indexOf(b);
+      if (ai !== -1 && bi !== -1) return ai - bi;
+      if (ai !== -1) return -1;
+      if (bi !== -1) return 1;
+      return a.localeCompare(b);
     });
+
+    // Helper: turn a group of rows into floor-ordered list
+    function floorsFromRows(brows) {
+      const floors = new Map();
+      brows.forEach(r => {
+        // Floor inference uses the suite portion AFTER the building prefix
+        const inferredFrom = r._parsedSuite || r.suite;
+        const floor = fbInferFloor(inferredFrom);
+        if (!floors.has(floor.key)) floors.set(floor.key, { ...floor, tenants: [] });
+        floors.get(floor.key).tenants.push(r);
+      });
+      return Array.from(floors.values()).sort((a, b) => {
+        if (a.key === -1) return -1;
+        if (b.key === -1) return 1;
+        if (a.key === 9000) return b.key === 9999 ? -1 : 1;
+        if (b.key === 9000) return a.key === 9999 ?  1 : -1;
+        if (a.key === 9999) return 1;
+        if (b.key === 9999) return -1;
+        return b.key - a.key;
+      });
+    }
 
     // Date helpers
     const today = new Date();
@@ -5430,7 +5476,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:14px">
         <div>
           <div style="font-size:18px;font-weight:700;color:var(--text)">Stacking Plan</div>
-          <div style="font-size:11.5px;color:var(--text-dim);margin-top:2px">Floors inferred from suite numbers (first digit = floor). Block width = SF as a share of its floor.</div>
+          <div style="font-size:11.5px;color:var(--text-dim);margin-top:2px">${isMulti ? 'One stack per building. Floors inferred from the suite portion after the building prefix.' : 'Floors inferred from suite numbers (first digit = floor). Block width = SF as a share of its floor.'}</div>
         </div>
         <div style="display:flex;gap:18px;font-size:11px;color:var(--text-dim)">
           <div><strong style="color:var(--text);font-size:13px">${leasedSf.toLocaleString()}</strong>${totalSf ? ' / ' + totalSf.toLocaleString() : ''} SF leased</div>
@@ -5442,10 +5488,33 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         <span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:14px;background:${VACANT_BUCKET.bg};border:1px solid ${VACANT_BUCKET.border};border-radius:3px"></span>Vacant</span>
         ${[...YEAR_BUCKETS, FAR_BUCKET].map(b => `<span style="display:inline-flex;align-items:center;gap:5px"><span style="width:14px;height:14px;background:${b.bg};border:1px solid ${b.border};border-radius:3px"></span>${b.label}</span>`).join('')}
       </div>
-      <div style="display:flex;flex-direction:column;gap:4px">
     `;
 
-    ordered.forEach(floor => {
+    // Per-building stack loop
+    buildingKeys.forEach(bKey => {
+      const brows = byBuilding.get(bKey);
+      const bLabel = (bKey === '__single') ? null : (FB_BUILDING_LABELS[bKey] || bKey);
+      const ordered = floorsFromRows(brows);
+
+      // Per-building stats
+      const bTotalSf  = brows.reduce((s, r) => s + (Number(r.sf) || 0), 0);
+      const bOccupied = brows.filter(r => !!(r.tenant_name && String(r.status || '').toLowerCase() !== 'vacant')).reduce((s, r) => s + (Number(r.sf) || 0), 0);
+      const bOccPct   = bTotalSf > 0 ? Math.round((bOccupied / bTotalSf) * 100) : 0;
+
+      if (bLabel) {
+        html += `<div style="display:flex;justify-content:space-between;align-items:baseline;margin:18px 0 8px;padding-bottom:6px;border-bottom:2px solid var(--border)">
+          <div style="font-size:14px;font-weight:700;color:var(--text)">${bLabel}</div>
+          <div style="font-size:11px;color:var(--text-dim)">
+            <strong style="color:${bOccPct >= 80 ? '#0e7c6b' : (bOccPct >= 50 ? '#854F0B' : '#c0392b')};font-size:13px">${bOccPct}%</strong> occupied
+            &middot; ${bOccupied.toLocaleString()} / ${bTotalSf.toLocaleString()} SF
+            &middot; ${brows.length} suite${brows.length === 1 ? '' : 's'}
+          </div>
+        </div>`;
+      }
+
+      html += `<div style="display:flex;flex-direction:column;gap:4px">`;
+
+      ordered.forEach(floor => {
       const floorSf = floor.tenants.reduce((s, t) => s + (Number(t.sf) || 0), 0);
       const floorAnnualRent = floor.tenants.reduce((s, t) => {
         const ann = Number(t.annual_rent);
@@ -5503,12 +5572,15 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         // border color.
         const borderStyle = isVacant ? `2px dashed ${b.border}` : `1px solid ${b.border}`;
 
+        // In multi-building mode, show just the suffix (e.g. "103") because
+        // the building is already labelled in the section header.
+        const suiteDisplay = (bKey !== '__single' && t._parsedSuite) ? t._parsedSuite : (t.suite || '');
         html += `<div data-stack-key="${t.id}"
           onmouseenter="fbStackTooltipShow(event, this)"
           onmouseleave="fbStackTooltipHide()"
           style="flex:${flexVal};min-width:0;padding:6px 8px;background:${b.bg};border:${borderStyle};border-radius:6px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;cursor:default">
           <div style="display:flex;justify-content:space-between;align-items:baseline;gap:4px;min-width:0">
-            <span style="font-size:10px;font-weight:600;color:${b.text};flex-shrink:0">${t.suite || ''}</span>
+            <span style="font-size:10px;font-weight:600;color:${b.text};flex-shrink:0">${suiteDisplay}</span>
             <span style="font-size:9.5px;color:${subColor};flex-shrink:0">${fmtDate(t.lease_end)}</span>
           </div>
           <div style="font-size:11px;font-weight:500;color:${b.text};line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${tenantName}</div>
@@ -5528,9 +5600,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
                  ${totalMo ? `<div style="font-weight:500;color:var(--accent);font-size:11.5px">$${Math.round(totalMo).toLocaleString()} / mo</div>` : ''}`;
       }
       html += `</div></div>`;
-    });
+      });  // floor loop close
 
-    html += `</div>`;
+      html += `</div>`;  // close per-building stack column
+    });    // close per-building loop
 
     // Footnote: if leased SF < total SF, show the gap
     if (totalSf && leasedSf < totalSf) {
