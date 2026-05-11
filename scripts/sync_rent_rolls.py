@@ -672,6 +672,7 @@ def infer_property_id_from_folder(folder_name: str) -> str | None:
 # are the underwriting overlays Morris adds on top.
 USER_OVERRIDE_COLUMNS: tuple[str, ...] = (
     "releasing_profile_id",
+    "rl_lease_start_date",
     "rl_base_rent_psf",
     "rl_new_downtime_months",   "rl_renew_downtime_months",
     "rl_new_free_rent_months",  "rl_renew_free_rent_months",
