@@ -6864,21 +6864,53 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
   }
 
   // ── Forecast computation ──────────────────────────────────────────────
-  // Returns { months: [{year, month, label, ...line_items, netDelta, endingCash}], starting: {...}, lowest: {...}, totals: {...} }
+  // Window: Jan→Dec of the selected year. Closed months (those with
+  // non-zero actuals) use actuals data; open months use budget projections
+  // + rent-roll-based contractual rent. Jan-1 starting balance is back-solved
+  // from the latest balance-sheet cash so the chart reconciles to today.
+  // Returns { rows, starting, lowest, endingCash, totalIn, totalOut, avgLevered }
   function fbComputeCashForecast(baseProp, cache) {
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const today = new Date();
+
+    // Pick year: prefer the currently selected year on the Property Financials
+    // page (so Cash Forecast aligns with the rest of the tabs). Fall back to
+    // the FB_YEARS active year, then current year.
+    const activeYr = (FB_YEARS.find(y => y.status === 'active') || {}).year;
+    const yr = (typeof fbSelectedYear !== 'undefined' && fbSelectedYear) || activeYr || new Date().getFullYear();
+    const yMeta = FB_YEARS.find(y => y.year === yr);
+    const yStatus = yMeta ? yMeta.status : 'planning';
+
+    // Build Jan-Dec window for the year
     const forecastMonths = [];
+    for (let mi = 1; mi <= 12; mi++) {
+      forecastMonths.push({
+        year: yr, month: mi, monthName: MONTHS[mi - 1],
+        label: `${MONTHS[mi - 1]} ${String(yr).slice(-2)}`,
+      });
+    }
 
-    // Start with next month
-    let y = today.getFullYear();
-    let m = today.getMonth() + 2;  // getMonth is 0-based; +1 current, +1 next
-    if (m > 12) { m -= 12; y += 1; }
-
-    for (let i = 0; i < 12; i++) {
-      forecastMonths.push({ year: y, month: m, monthName: MONTHS[m - 1], label: `${MONTHS[m - 1]} ${String(y).slice(-2)}` });
-      m += 1;
-      if (m > 12) { m = 1; y += 1; }
+    // Detect closed months (months where actuals have non-zero values).
+    // Active year only — historical years are "all closed" but render
+    // from actuals exclusively; planning years have none closed.
+    const yd        = (baseProp.years && baseProp.years[yr]) || null;
+    const actualsYd = yd && yd.actuals;
+    const budgetYd  = yd && yd.budget;
+    const closedMonths = new Set();
+    if (yStatus === 'active' && actualsYd && actualsYd.summaryRows) {
+      const sentinels = ['TOTAL INCOME', 'TOTAL REVENUE', 'NET OPERATING INCOME',
+                         'TOTAL OPERATING EXPENSES', 'TOTAL BUILDING EXPENSES'];
+      const sRows = actualsYd.summaryRows.filter(r => sentinels.includes(r.label));
+      MONTHS.forEach(m => {
+        if (sRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005)) closedMonths.add(m);
+      });
+      // Fallback if no sentinels matched
+      if (closedMonths.size === 0) {
+        MONTHS.forEach(m => {
+          if (actualsYd.summaryRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005)) closedMonths.add(m);
+        });
+      }
+    } else if (yStatus === 'historical' && actualsYd) {
+      MONTHS.forEach(m => closedMonths.add(m));
     }
 
     // Derive starting cash from the latest balance sheet period.
@@ -6983,16 +7015,33 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       }
     });
 
-    // Roll up per-month
-    let runningCash = starting.total;
-    let runningReserve = starting.reserve;
-    const rows = forecastMonths.map((fm, idx) => {
-      const yd = budgetForYear(fm.year);
-      const rev_baseRent   = rentByMonth[idx];
-      const rev_recoveries = glSum(yd, '41', fm.monthName);  // 4100–4199 recoveries
-      const rev_other      = glSum(yd, '45', fm.monthName) + glSum(yd, '47', fm.monthName) + glSum(yd, '48', fm.monthName);
-      const exp_opex       = Math.abs(glSum(yd, '5', fm.monthName)) + Math.abs(glSum(yd, '65', fm.monthName)); // 5xxx + 65xx
-      const exp_debt       = monthlyDebtService;
+    // Pass 1: compute line items + netDelta for every month using the
+    // appropriate data source (actuals for closed months, budget+rent-roll
+    // for open months). No running balances yet — we need the full deltas
+    // before we can back-solve Jan-1.
+    const monthlyData = forecastMonths.map((fm, idx) => {
+      const isClosed = closedMonths.has(fm.monthName);
+      const srcYd = isClosed ? actualsYd : budgetYd;
+
+      // Base Rent: rent_roll projection for open months; actuals GL 40xx for closed.
+      const rev_baseRent = isClosed
+        ? glSum(srcYd, '40', fm.monthName)
+        : (rentByMonth[idx] || 0);
+
+      const rev_recoveries = glSum(srcYd, '41', fm.monthName);
+      const rev_other      = glSum(srcYd, '45', fm.monthName)
+                           + glSum(srcYd, '47', fm.monthName)
+                           + glSum(srcYd, '48', fm.monthName);
+      const exp_opex       = Math.abs(glSum(srcYd, '5', fm.monthName))
+                           + Math.abs(glSum(srcYd, '65', fm.monthName));
+      // Debt service: actuals 715x GL for closed months; computed P&I for open.
+      const exp_debt = isClosed
+        ? (Math.abs(glSum(srcYd, '7150', fm.monthName))
+         + Math.abs(glSum(srcYd, '7151', fm.monthName))
+         + Math.abs(glSum(srcYd, '7152', fm.monthName))
+         + Math.abs(glSum(srcYd, '7153', fm.monthName))
+         + Math.abs(glSum(srcYd, '7154', fm.monthName)))
+        : monthlyDebtService;
 
       const totalIn  = rev_baseRent + rev_recoveries + rev_other;
       const totalOut = exp_opex + exp_debt;
@@ -7000,33 +7049,58 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
       const key = `${fm.year}-${fm.month}`;
       const ev  = eventsByYM[key] || { ti_lc:0, capex:0, distribution:0, contribution:0, other:0 };
-      const cap_tilc        = Number(ev.ti_lc) || 0;          // negative for outflow
+      const cap_tilc        = Number(ev.ti_lc) || 0;
       const cap_capex       = Number(ev.capex) || 0;
       const cap_distrib     = Number(ev.distribution) || 0;
       const cap_contrib     = Number(ev.contribution) || 0;
       const cap_other       = Number(ev.other) || 0;
-      const cap_reserveDraw    = Number(drawsByYM[key]) || 0;      // + = cash into operating
-      const cap_reserveDeposit = Number(depositsByYM[key]) || 0;   // + = cash from operating into reserve
+      const cap_reserveDraw    = Number(drawsByYM[key]) || 0;
+      const cap_reserveDeposit = Number(depositsByYM[key]) || 0;
 
-      // Operating cash movement: draw adds, deposit removes
       const netDelta = levered + cap_tilc + cap_capex + cap_distrib + cap_contrib + cap_other
                      + cap_reserveDraw - cap_reserveDeposit;
-      runningCash += netDelta;
-
-      // Reserve balance movement: deposit adds, draw removes
-      runningReserve += cap_reserveDeposit - cap_reserveDraw;
 
       return {
-        ...fm,
+        ...fm, isClosed,
         rev_baseRent, rev_recoveries, rev_other,
         exp_opex, exp_debt,
         totalIn, totalOut, levered,
         cap_tilc, cap_capex, cap_distrib, cap_contrib, cap_other,
         cap_reserveDraw, cap_reserveDeposit,
-        netDelta, endingCash: runningCash,
-        reserveBalance: runningReserve,
+        netDelta,
       };
     });
+
+    // Pass 2: back-solve Jan-1 balance so the running cash line reconciles
+    // to the latest balance-sheet cash. starting.total (from cache.bsLatest)
+    // represents the balance at end of the LAST closed month. So:
+    //   Jan1 = starting.total - sum(closedMonths.netDelta)
+    // For planning years (no closed months), Jan1 = starting.total.
+    // For historical years (all 12 closed), Jan1 = starting.total - full year.
+    const closedDeltaSum = monthlyData
+      .filter(r => r.isClosed)
+      .reduce((s, r) => s + r.netDelta, 0);
+    const closedReserveDelta = monthlyData
+      .filter(r => r.isClosed)
+      .reduce((s, r) => s + (r.cap_reserveDeposit - r.cap_reserveDraw), 0);
+
+    const startCash    = starting.total   - closedDeltaSum;
+    const startReserve = starting.reserve - closedReserveDelta;
+
+    let runningCash = startCash;
+    let runningReserve = startReserve;
+    const rows = monthlyData.map(r => {
+      runningCash += r.netDelta;
+      runningReserve += (r.cap_reserveDeposit - r.cap_reserveDraw);
+      return { ...r, endingCash: runningCash, reserveBalance: runningReserve };
+    });
+
+    // Reflect the back-solved Jan-1 balance on `starting` so the chart's
+    // virtual "start" dot lands at the right Y position (it's used by
+    // fbBuildForecastChart for the cumPts prepend).
+    starting.total = startCash;
+    starting.operating = startCash - startReserve;
+    starting.reserve = startReserve;
 
     const lowest = rows.reduce((lo, r) => (lo === null || r.endingCash < lo.endingCash) ? r : lo, null);
     const endingCash = rows[rows.length - 1].endingCash;
@@ -7034,7 +7108,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const totalOut = rows.reduce((s, r) => s + r.totalOut, 0);
     const avgLevered = rows.reduce((s, r) => s + r.levered, 0) / rows.length;
 
-    return { rows, starting, lowest, endingCash, totalIn, totalOut, avgLevered };
+    return { rows, starting, lowest, endingCash, totalIn, totalOut, avgLevered, closedMonths, year: yr };
   }
 
   // ── HTML renderer for forecast ─────────────────────────────────────────
@@ -7046,16 +7120,18 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // KPI strip
     const projectedGrowth = fc.endingCash > fc.starting.total;
     const endingReserve = fc.rows[fc.rows.length - 1].reserveBalance;
+    const closedCount = (fc.closedMonths && fc.closedMonths.size) || 0;
+    const lastClosed = closedCount ? [...fc.closedMonths].slice(-1)[0] : null;
     let html = `<div class="fb-kpi-grid">
       <div class="fb-kpi-card" style="border-left:4px solid var(--green)">
-        <div class="fb-kpi-label">Property Cash (Today)</div>
+        <div class="fb-kpi-label">Start-of-Year Cash</div>
         <div class="fb-kpi-value">${fmtK(fc.starting.total)}</div>
-        <div class="fb-kpi-sub"><span class="fb-kpi-meta">Operating ${fmtK(fc.starting.operating)} · Reserves ${fmtK(fc.starting.reserve)}</span></div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">Jan 1, ${fc.year} · Operating ${fmtK(fc.starting.operating)} · Reserves ${fmtK(fc.starting.reserve)}</span></div>
       </div>
       <div class="fb-kpi-card" style="border-left:4px solid var(--${projectedGrowth ? 'green' : 'amber'})">
-        <div class="fb-kpi-label">12-Mo Projected End Cash</div>
+        <div class="fb-kpi-label">Year-End Cash (${fc.year})</div>
         <div class="fb-kpi-value">${fmtK(fc.endingCash)}</div>
-        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${fc.endingCash >= fc.starting.total ? '+' : ''}${fmtK(fc.endingCash - fc.starting.total)} vs today</span></div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${fc.endingCash >= fc.starting.total ? '+' : ''}${fmtK(fc.endingCash - fc.starting.total)} vs Jan 1${closedCount ? ` · Act thru ${lastClosed}` : ''}</span></div>
       </div>
       <div class="fb-kpi-card" style="border-left:4px solid var(--amber)">
         <div class="fb-kpi-label">Lowest Operating Cash</div>
@@ -7063,7 +7139,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         <div class="fb-kpi-sub"><span class="fb-kpi-meta">${fc.lowest ? fc.lowest.label : ''}</span></div>
       </div>
       <div class="fb-kpi-card" style="border-left:4px solid #d97e2b">
-        <div class="fb-kpi-label">Reserve Balance (12-Mo)</div>
+        <div class="fb-kpi-label">Year-End Reserve</div>
         <div class="fb-kpi-value">${fmtK(endingReserve)}</div>
         <div class="fb-kpi-sub"><span class="fb-kpi-meta">${endingReserve >= fc.starting.reserve ? '+' : ''}${fmtK(endingReserve - fc.starting.reserve)} net (deposits − draws)</span></div>
       </div>
@@ -7273,8 +7349,8 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     return `<div class="fb-chart-card" style="position:relative">
       <div class="fb-chart-head">
         <div>
-          <div class="fb-chart-title">Projected Cash Balance — ${baseProp.name} · Next 12 Months</div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Starting cash ${fmtAxis(fc.starting.total)} · ${fc.rows[0].label} → ${fc.rows[11].label}</div>
+          <div class="fb-chart-title">Cash Forecast — ${baseProp.name} · ${fc.rows[0].label} → ${fc.rows[11].label}</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Start-of-year cash ${fmtAxis(fc.starting.total)}${fc.closedMonths && fc.closedMonths.size ? ` · Actuals through ${[...fc.closedMonths].slice(-1)[0]} · Budget thereafter` : ' · Budget-only projection'}</div>
         </div>
       </div>
       <div class="fb-chart-legend" style="margin-bottom:10px">
