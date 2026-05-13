@@ -538,6 +538,13 @@
   .bgt-row-header.bgt-section-expense td { background:rgba(229,83,75,.08); color:#c0392b; border-top:2.5px solid rgba(229,83,75,.35); }
   .bgt-row-header.bgt-section-noi td { background:rgba(0,176,212,.08); color:var(--accent); border-top:2.5px solid rgba(0,176,212,.35); }
   .bgt-row-header.bgt-section-other td { background:var(--surface2); color:var(--text); }
+  /* Monthly view: the sticky first column sets a hard background (line ~497).
+     Re-apply the section/total colors with higher specificity so the colored
+     header/total rows look identical to Annual — first cell included. */
+  .bgt-table-monthly .bgt-row-header.bgt-section-income td:first-child { background:rgba(20,168,142,.08); }
+  .bgt-table-monthly .bgt-row-header.bgt-section-expense td:first-child { background:rgba(229,83,75,.08); }
+  .bgt-table-monthly .bgt-row-header.bgt-section-noi td:first-child { background:rgba(0,176,212,.08); }
+  .bgt-table-monthly .bgt-row-header.bgt-section-other td:first-child { background:var(--surface2); }
   .bgt-row-total td { background:rgba(0,176,212,.03); font-weight:700 !important; border-top:1.5px solid var(--border); }
   .bgt-row-total td:first-child { color:var(--accent); }
   /* Key totals that should POP */
@@ -547,6 +554,54 @@
   .bgt-row-total.bgt-total-expense td:first-child { color:#c0392b; font-size:13px; }
   .bgt-row-total.bgt-total-noi td { background:rgba(0,176,212,.12); border-top:3px solid var(--accent); font-size:14px; padding:12px 10px; letter-spacing:.3px; }
   .bgt-row-total.bgt-total-noi td:first-child { color:var(--accent); font-size:14px; }
+  /* Monthly view: re-apply total-row colors to the sticky first column so
+     Total Income / Total Expenses / NOI rows look identical to Annual. */
+  .bgt-table-monthly .bgt-row-total td:first-child { background:rgba(0,176,212,.03); }
+  .bgt-table-monthly .bgt-row-total.bgt-total-income td:first-child { background:rgba(20,168,142,.10); }
+  .bgt-table-monthly .bgt-row-total.bgt-total-expense td:first-child { background:rgba(229,83,75,.10); }
+  .bgt-table-monthly .bgt-row-total.bgt-total-noi td:first-child { background:rgba(0,176,212,.12); }
+
+  /* ── Monthly view: sticky Total column on the right ────────────────────
+     Mirrors the sticky Line Item column on the left. The 3 sub-cells
+     (Act / Bgt / Var) each pin to the right at offsets 180/90/0, with a
+     90px min-width so widths line up with the colspan=3 group header above.
+     ALL backgrounds here are fully opaque (solid hex) so the underlying
+     month cells don't bleed through when the user scrolls horizontally. */
+  .bgt-table-monthly .bgt-col-tot {
+    position:sticky; background:#F5FBFC; z-index:2;
+    min-width:90px;
+  }
+  .bgt-table-monthly .bgt-col-tot-a { right:180px; }
+  .bgt-table-monthly .bgt-col-tot-b { right:90px; }
+  .bgt-table-monthly .bgt-col-tot-c { right:0; box-shadow:-6px 0 10px -4px rgba(0,0,0,.18); }
+  /* Group header (colspan=3) — sticks at right:0 with width = 3 × 90px */
+  .bgt-table-monthly thead .bgt-col-tot-group {
+    position:sticky; right:0; min-width:270px;
+    background:#E5F7FA; z-index:7;
+    box-shadow:-6px 0 10px -4px rgba(0,0,0,.18);
+  }
+  .bgt-table-monthly thead .bgt-col-tot { z-index:7; background:#E5F7FA; }
+  /* Section-header rows: opaque tinted hex (pre-blended over white) */
+  .bgt-table-monthly .bgt-row-header.bgt-section-income .bgt-col-tot { background:#E8F6F3; }
+  .bgt-table-monthly .bgt-row-header.bgt-section-expense .bgt-col-tot { background:#FCEEED; }
+  .bgt-table-monthly .bgt-row-header.bgt-section-noi .bgt-col-tot { background:#E5F7FA; }
+  .bgt-table-monthly .bgt-row-header.bgt-section-other .bgt-col-tot { background:var(--surface2); }
+  /* Colored total rows — opaque tinted hex */
+  .bgt-table-monthly .bgt-row-total .bgt-col-tot { background:#F0F8FB; }
+  .bgt-table-monthly .bgt-row-total.bgt-total-income .bgt-col-tot { background:#DEF2EF; }
+  .bgt-table-monthly .bgt-row-total.bgt-total-expense .bgt-col-tot { background:#FBE6E5; }
+  .bgt-table-monthly .bgt-row-total.bgt-total-noi .bgt-col-tot { background:#D6F2F8; }
+
+  /* Always-visible horizontal scrollbar on the table wrap so the user knows
+     they can scroll through months on macOS (where scrollbars auto-hide).
+     The -webkit-appearance:none is critical — without it macOS Chrome/Safari
+     still hide the scrollbar regardless of width/color overrides. */
+  .bgt-table-wrap { scrollbar-color:rgba(0,176,212,.55) rgba(0,0,0,.06); scrollbar-width:auto; }
+  .bgt-table-wrap::-webkit-scrollbar { -webkit-appearance:none; height:14px; width:14px; background:rgba(0,0,0,.05); }
+  .bgt-table-wrap::-webkit-scrollbar-thumb { background:rgba(0,176,212,.55); border-radius:8px; border:3px solid rgba(0,0,0,0); background-clip:padding-box; min-width:40px; }
+  .bgt-table-wrap::-webkit-scrollbar-thumb:hover { background:rgba(0,176,212,.85); background-clip:padding-box; border:3px solid rgba(0,0,0,0); }
+  .bgt-table-wrap::-webkit-scrollbar-track { background:rgba(0,0,0,.04); border-radius:8px; }
+  .bgt-table-wrap::-webkit-scrollbar-corner { background:transparent; }
   .bgt-neg { color:#e5534b !important; }
   .bgt-pos { color:#1a9a6b !important; }
   .bgt-pos { color:var(--green) !important; }
@@ -5311,6 +5366,16 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
   //
   // Pulls live from rent_roll via the existing fbRentRollCache so it
   // matches whatever the user sees on the Rent Roll tab.
+  // Tenant-name-based license detection. Returns true for service licenses
+  // that should render as a slim Ground-row strip (alongside Roof/parking)
+  // regardless of which suite they sit in. Examples: UPS Store, FedEx Office,
+  // Cafeteria, Coffee Shop, ATM, Newsstand, Dry Cleaner, Barber, etc.
+  function fbIsLicenseTenant(r) {
+    const name = String((r && r.tenant_name) || '').trim();
+    if (!name) return false;
+    return /\b(UPS|FedEx|USPS|Postal|Cafe|Cafeteria|Deli|Coffee|Starbucks|Dunkin|ATM|Vending|Newsstand|News\s*Stand|Dry\s*Clean|Cleaners?|Barber|Nail\s*Salon|Kiosk|Pharmacy|Shoe\s*Shine|Gym|Fitness)\b/i.test(name);
+  }
+
   function fbInferFloor(suite) {
     const s = String(suite || '').trim().toUpperCase();
     if (!s) return { key: 9999, label: 'Other', kind: 'other' };
@@ -5318,6 +5383,15 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     if (s.startsWith('PARK') || s.startsWith('BOX')
         || s.startsWith('SHACK') || s.startsWith('SIGN')
         || s.startsWith('KIOSK')) return { key: 9000, label: 'Ground', kind: 'license' };
+    // Ground-floor retail / food / vending / amenity licenses — render in
+    // the same muted strip as Roof and Parking. None of these are "real"
+    // lease-rollover risk; they're amenity infrastructure.
+    if (s.startsWith('CAFE') || s.startsWith('CAFETERIA')
+        || s.startsWith('DELI') || s.startsWith('RESTAURANT')
+        || s.startsWith('RETAIL') || s.startsWith('NEWS')
+        || s.startsWith('ATM') || s.startsWith('VENDING')
+        || s.startsWith('STORAGE') || s.startsWith('GYM')
+        || s.startsWith('LICENSE')) return { key: 9000, label: 'Ground', kind: 'license' };
     if (s.startsWith('CABLE') || s.startsWith('TELE')) return { key: -1, label: 'Roof', kind: 'telecom' };
     if (s.startsWith('BSMT') || s.startsWith('BASEMENT') || s.startsWith('B-')) return { key: 0, label: 'B', kind: 'other' };
     // Numeric / alphanumeric: first digit is the floor
@@ -5412,7 +5486,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       brows.forEach(r => {
         // Floor inference uses the suite portion AFTER the building prefix
         const inferredFrom = r._parsedSuite || r.suite;
-        const floor = fbInferFloor(inferredFrom);
+        let floor = fbInferFloor(inferredFrom);
+        // Override by tenant name: UPS / FedEx / Cafe / ATM / dry cleaner /
+        // newsstand and similar service licenses get pulled to the Ground row
+        // regardless of their assigned suite number, so they group with the
+        // other slim license strips (Roof, Parking, etc).
+        if (floor.kind !== 'telecom' && floor.kind !== 'license' && fbIsLicenseTenant(r)) {
+          floor = { key: 9000, label: 'Ground', kind: 'license' };
+        }
         if (!floors.has(floor.key)) floors.set(floor.key, { ...floor, tenants: [] });
         floors.get(floor.key).tenants.push(r);
       });
@@ -5527,17 +5608,38 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       const floorPsf = floorSf > 0 ? floorAnnualRent / floorSf : null;
       const equalShare = floor.tenants.every(t => !Number(t.sf));
 
-      html += `<div style="display:flex;gap:4px;align-items:stretch;min-height:68px">
-        <div style="width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:6px">${floor.label}</div>
+      // Roof / telecom / parking / kiosk rows aren't lease-rollover-risk
+      // bearing — they're recurring infrastructure leases. Render them as
+      // a slim, muted strip so they don't visually dominate the stack
+      // (especially on multi-building properties like Red Bank where each
+      // building has its own ROOF/parking license set).
+      const isLicenseFloor = floor.kind === 'telecom' || floor.kind === 'license';
+      const rowMinH    = isLicenseFloor ? 32 : 68;
+      const blockPad   = isLicenseFloor ? '3px 7px' : '6px 8px';
+      const labelPx    = isLicenseFloor ? 11 : 12;
+      const labelStyle = isLicenseFloor
+        ? `width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:${labelPx}px;color:#a09686;background:#f5f2eb;border:1px solid #d9d2c3;border-radius:6px`
+        : `width:44px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:${labelPx}px;color:var(--text-dim);background:var(--surface2);border:1px solid var(--border);border-radius:6px`;
+
+      html += `<div style="display:flex;gap:4px;align-items:stretch;min-height:${rowMinH}px">
+        <div style="${labelStyle}">${floor.label}</div>
         <div style="flex:1;display:flex;gap:3px;min-width:0">`;
 
       floor.tenants.forEach(t => {
-        const b = bucketFor(t);
-        const isVacant = b === VACANT_BUCKET;
+        let b = bucketFor(t);
+        let isVacant = b === VACANT_BUCKET;
+        // License/telecom blocks override the year-bucket palette with a
+        // muted parchment tone — no red expiring-soon glow, no black vacant
+        // glow. These are background infrastructure and shouldn't shout.
+        if (isLicenseFloor) {
+          b = isVacant
+            ? { bg: '#ECE6D8', border: '#cabea5', text: '#8a7d63', label: 'Available' }
+            : { bg: '#F2EEE4', border: '#cabea5', text: '#5e5343', label: b.label };
+        }
         const flexVal = equalShare ? '1 1 0' : `${Number(t.sf) || 1} 1 0`;
         const tenantName = isVacant ? (t.tenant_name || 'Vacant') : (t.tenant_name || '(vacant)');
         const sfText = Number(t.sf) ? fmtSf(t.sf) + ' SF' : (Number(t.monthly_rent) ? '$' + Math.round(Number(t.monthly_rent)).toLocaleString() + '/mo' : 'license');
-        const subColor = isVacant ? 'rgba(245,245,245,0.7)' : 'rgba(0,0,0,0.55)';
+        const subColor = isVacant && !isLicenseFloor ? 'rgba(245,245,245,0.7)' : 'rgba(0,0,0,0.55)';
 
         // Stash enriched details for the hover tooltip.
         fbStackPayload[t.id] = {
@@ -5571,28 +5673,49 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
         // Border: vacant gets a dashed outline (mirrors VTS "Available"
         // pattern); leased blocks get a flat 1px border in the bucket's
-        // border color.
-        const borderStyle = isVacant ? `2px dashed ${b.border}` : `1px solid ${b.border}`;
+        // border color. License floors use a thinner, softer border.
+        const borderStyle = isLicenseFloor
+          ? `1px solid ${b.border}`
+          : (isVacant ? `2px dashed ${b.border}` : `1px solid ${b.border}`);
 
         // In multi-building mode, show just the suffix (e.g. "103") because
         // the building is already labelled in the section header.
         const suiteDisplay = (bKey !== '__single' && t._parsedSuite) ? t._parsedSuite : (t.suite || '');
-        html += `<div data-stack-key="${t.id}"
-          onmouseenter="fbStackTooltipShow(event, this)"
-          onmouseleave="fbStackTooltipHide()"
-          style="flex:${flexVal};min-width:0;padding:6px 8px;background:${b.bg};border:${borderStyle};border-radius:6px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;cursor:default">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:4px;min-width:0">
-            <span style="font-size:10px;font-weight:600;color:${b.text};flex-shrink:0">${suiteDisplay}</span>
-            <span style="font-size:9.5px;color:${subColor};flex-shrink:0">${fmtDate(t.lease_end)}</span>
-          </div>
-          <div style="font-size:11px;font-weight:500;color:${b.text};line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${tenantName}</div>
-          <div style="font-size:10px;color:${subColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sfText}</div>
-        </div>`;
+
+        if (isLicenseFloor) {
+          // Slim one-line layout: suite · tenant · sf/mo · date
+          html += `<div data-stack-key="${t.id}"
+            onmouseenter="fbStackTooltipShow(event, this)"
+            onmouseleave="fbStackTooltipHide()"
+            style="flex:1 1 0;min-width:0;padding:${blockPad};background:${b.bg};border:${borderStyle};border-radius:5px;display:flex;align-items:center;gap:8px;overflow:hidden;cursor:default;font-size:10.5px;color:${b.text}">
+            <span style="font-weight:600;flex-shrink:0;opacity:.75">${suiteDisplay}</span>
+            <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${tenantName}</span>
+            <span style="flex-shrink:0;opacity:.7;font-size:10px">${sfText}</span>
+            ${t.lease_end ? `<span style="flex-shrink:0;opacity:.55;font-size:9.5px">${fmtDate(t.lease_end)}</span>` : ''}
+          </div>`;
+        } else {
+          html += `<div data-stack-key="${t.id}"
+            onmouseenter="fbStackTooltipShow(event, this)"
+            onmouseleave="fbStackTooltipHide()"
+            style="flex:${flexVal};min-width:0;padding:${blockPad};background:${b.bg};border:${borderStyle};border-radius:6px;display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;cursor:default">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:4px;min-width:0">
+              <span style="font-size:10px;font-weight:600;color:${b.text};flex-shrink:0">${suiteDisplay}</span>
+              <span style="font-size:9.5px;color:${subColor};flex-shrink:0">${fmtDate(t.lease_end)}</span>
+            </div>
+            <div style="font-size:11px;font-weight:500;color:${b.text};line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">${tenantName}</div>
+            <div style="font-size:10px;color:${subColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${sfText}</div>
+          </div>`;
+        }
       });
 
       html += `</div>
-        <div style="width:120px;flex-shrink:0;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;font-size:11px;color:var(--text-dim);padding-left:6px">`;
-      if (floorSf > 0) {
+        <div style="width:120px;flex-shrink:0;display:flex;flex-direction:${isLicenseFloor ? 'row' : 'column'};align-items:${isLicenseFloor ? 'center' : 'flex-end'};justify-content:${isLicenseFloor ? 'flex-end' : 'center'};gap:${isLicenseFloor ? '8px' : '0'};font-size:11px;color:var(--text-dim);padding-left:6px">`;
+      if (isLicenseFloor) {
+        // Slim single-line summary: total $/mo · N licenses
+        const totalMoLic = floor.tenants.reduce((s, t) => s + (Number(t.monthly_rent) || 0), 0);
+        if (totalMoLic) html += `<span style="font-weight:600;color:var(--text);font-size:11.5px">$${Math.round(totalMoLic).toLocaleString()}/mo</span>`;
+        html += `<span style="opacity:.7">${floor.tenants.length}</span>`;
+      } else if (floorSf > 0) {
         html += `<div style="font-weight:600;color:var(--text);font-size:13px">${floorSf.toLocaleString()} SF</div>
                  <div style="font-weight:500;color:${floorPsf != null ? 'var(--accent)' : 'var(--text-dim)'};font-size:11.5px">${floorPsf != null ? fmtPsf(floorPsf) + ' / SF' : '—'}</div>
                  <div>${floor.tenants.length} tenant${floor.tenants.length === 1 ? '' : 's'}</div>`;
@@ -7199,18 +7322,31 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       <div style="font-size:11px;color:var(--text-dim)">${yr} Actual vs Budget · ${isPsf ? '$/SF' : '$'}</div>
     </div>`;
 
-    html += `<div class="bgt-table-wrap" style="overflow-x:auto;overflow-y:visible"><table class="bgt-table bgt-table-monthly" style="min-width:${100 + colGroups.length * 240}px">
+    // Min-width includes label (220px) + 240px per period group + 270px for the
+    // sticky Total column. We use overflow-x:scroll (not auto) so the scrollbar
+    // is always present — macOS hides "auto" scrollbars until you start
+    // scrolling, which made Morris think scrolling was broken. width:100% +
+    // max-width:100% + box-sizing forces the wrap to stay inside its parent so
+    // the OUTER #view-financials scrollbar doesn't swallow the horizontal
+    // overflow at the page level.
+    html += `<div class="bgt-table-wrap" style="overflow-x:scroll;overflow-y:visible;width:100%;max-width:100%;box-sizing:border-box"><table class="bgt-table bgt-table-monthly" style="min-width:${220 + colGroups.length * 240 + 270}px;width:max-content">
       <thead>
         <tr>
           <th rowspan="2" class="bgt-th-label" style="min-width:220px;position:sticky;left:0;background:var(--surface2);z-index:5">Line Item</th>`;
     colGroups.forEach(g => {
       html += `<th colspan="3" class="bgt-th-group" style="text-align:center">${g.label}</th>`;
     });
-    html += `<th colspan="3" class="bgt-th-group" style="text-align:center;background:rgba(0,176,212,0.08)">Total</th></tr><tr>`;
+    // Sticky Total column header (colspan=3 spanning Act/Bgt/Var)
+    html += `<th colspan="3" class="bgt-th-group bgt-col-tot-group" style="text-align:center">Total</th></tr><tr>`;
     for (let i = 0; i < colGroups.length + 1; i++) {
       const isTotal = (i === colGroups.length);
-      const bg = isTotal ? 'background:rgba(0,176,212,0.05);' : '';
-      html += `<th class="bgt-th-sub" style="${bg}">Act</th><th class="bgt-th-sub" style="${bg}">Bgt</th><th class="bgt-th-sub" style="${bg}">Var$</th>`;
+      if (isTotal) {
+        html += `<th class="bgt-th-sub bgt-col-tot bgt-col-tot-a">Act</th>`;
+        html += `<th class="bgt-th-sub bgt-col-tot bgt-col-tot-b">Bgt</th>`;
+        html += `<th class="bgt-th-sub bgt-col-tot bgt-col-tot-c">Var$</th>`;
+      } else {
+        html += `<th class="bgt-th-sub">Act</th><th class="bgt-th-sub">Bgt</th><th class="bgt-th-sub">Var$</th>`;
+      }
     }
     html += `</tr></thead><tbody>`;
 
@@ -7275,13 +7411,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         }
         out += `<td style="text-align:right;font-weight:${bold ? 700 : 400}" class="${(a || b) ? vCls : ''}">${(a || b) ? fmt(v) : '—'}</td>`;
       });
-      // Year total column
+      // Year total column — these 3 cells are sticky to the right edge so
+      // the year total is always visible even when the user scrolls through
+      // months. Background colors live in CSS (.bgt-col-tot rules).
       const vTot = totA - totB;
       const vTotCls = fbValClass(vTot, expense);
-      const totBg = 'background:rgba(0,176,212,0.05)';
-      out += `<td style="text-align:right;font-weight:700;${totBg}">${totA ? fmt(totA) : '—'}</td>`;
-      out += `<td class="fb-bgt-row-total" data-row-idx="${editRowIdx != null ? editRowIdx : -1}" style="text-align:right;color:var(--text-dim);font-weight:700;${totBg}">${totB ? fmt(totB) : '—'}</td>`;
-      out += `<td style="text-align:right;font-weight:700;${totBg}" class="${(totA || totB) ? vTotCls : ''}">${(totA || totB) ? fmt(vTot) : '—'}</td>`;
+      out += `<td class="bgt-col-tot bgt-col-tot-a" style="text-align:right;font-weight:700">${totA ? fmt(totA) : '—'}</td>`;
+      out += `<td class="fb-bgt-row-total bgt-col-tot bgt-col-tot-b" data-row-idx="${editRowIdx != null ? editRowIdx : -1}" style="text-align:right;color:var(--text-dim);font-weight:700">${totB ? fmt(totB) : '—'}</td>`;
+      out += `<td class="bgt-col-tot bgt-col-tot-c ${(totA || totB) ? vTotCls : ''}" style="text-align:right;font-weight:700">${(totA || totB) ? fmt(vTot) : '—'}</td>`;
       return out;
     }
 
