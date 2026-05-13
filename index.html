@@ -540,10 +540,12 @@
   .bgt-row-header.bgt-section-other td { background:var(--surface2); color:var(--text); }
   /* Monthly view: the sticky first column sets a hard background (line ~497).
      Re-apply the section/total colors with higher specificity so the colored
-     header/total rows look identical to Annual — first cell included. */
-  .bgt-table-monthly .bgt-row-header.bgt-section-income td:first-child { background:rgba(20,168,142,.08); }
-  .bgt-table-monthly .bgt-row-header.bgt-section-expense td:first-child { background:rgba(229,83,75,.08); }
-  .bgt-table-monthly .bgt-row-header.bgt-section-noi td:first-child { background:rgba(0,176,212,.08); }
+     header/total rows look identical to Annual — first cell included.
+     CRITICAL: backgrounds here MUST be fully opaque (solid hex pre-blended
+     over white) so months don't bleed through during horizontal scroll. */
+  .bgt-table-monthly .bgt-row-header.bgt-section-income td:first-child { background:#E8F6F3; }
+  .bgt-table-monthly .bgt-row-header.bgt-section-expense td:first-child { background:#FCEEED; }
+  .bgt-table-monthly .bgt-row-header.bgt-section-noi td:first-child { background:#E5F7FA; }
   .bgt-table-monthly .bgt-row-header.bgt-section-other td:first-child { background:var(--surface2); }
   .bgt-row-total td { background:rgba(0,176,212,.03); font-weight:700 !important; border-top:1.5px solid var(--border); }
   .bgt-row-total td:first-child { color:var(--accent); }
@@ -555,11 +557,12 @@
   .bgt-row-total.bgt-total-noi td { background:rgba(0,176,212,.12); border-top:3px solid var(--accent); font-size:14px; padding:12px 10px; letter-spacing:.3px; }
   .bgt-row-total.bgt-total-noi td:first-child { color:var(--accent); font-size:14px; }
   /* Monthly view: re-apply total-row colors to the sticky first column so
-     Total Income / Total Expenses / NOI rows look identical to Annual. */
-  .bgt-table-monthly .bgt-row-total td:first-child { background:rgba(0,176,212,.03); }
-  .bgt-table-monthly .bgt-row-total.bgt-total-income td:first-child { background:rgba(20,168,142,.10); }
-  .bgt-table-monthly .bgt-row-total.bgt-total-expense td:first-child { background:rgba(229,83,75,.10); }
-  .bgt-table-monthly .bgt-row-total.bgt-total-noi td:first-child { background:rgba(0,176,212,.12); }
+     Total Income / Total Expenses / NOI rows look identical to Annual.
+     Opaque hex required for the same scroll-bleed reason as above. */
+  .bgt-table-monthly .bgt-row-total td:first-child { background:#F0F8FB; }
+  .bgt-table-monthly .bgt-row-total.bgt-total-income td:first-child { background:#DEF2EF; }
+  .bgt-table-monthly .bgt-row-total.bgt-total-expense td:first-child { background:#FBE6E5; }
+  .bgt-table-monthly .bgt-row-total.bgt-total-noi td:first-child { background:#D6F2F8; }
 
   /* ── Monthly view: sticky Total column on the right ────────────────────
      Mirrors the sticky Line Item column on the left. The 3 sub-cells
@@ -592,52 +595,56 @@
   .bgt-table-monthly .bgt-row-total.bgt-total-expense .bgt-col-tot { background:#FBE6E5; }
   .bgt-table-monthly .bgt-row-total.bgt-total-noi .bgt-col-tot { background:#D6F2F8; }
 
-  /* ── Always-visible horizontal scrollbar on the Monthly P&L wrap ──
-     macOS Chrome/Safari hide scrollbars by default ("auto"). To force one
-     visible we have to: (1) use overflow-x:scroll not auto, (2) call out
-     -webkit-appearance:none AND appearance:none, (3) give the scrollbar an
-     explicit non-zero height, (4) set display:block on the pseudo-element.
-     All flagged !important so nothing on the page can suppress them.
-     Scoped to .bgt-table-wrap-monthly so the Annual view stays clean. */
+  /* ── Custom always-visible scrollbar for Monthly P&L ──
+     We can't rely on the native scrollbar (macOS Chrome auto-hides even
+     custom ::-webkit-scrollbar without active interaction). Instead, the
+     wrap hides its native scrollbar, and we render a separate
+     .bgt-monthly-scrollbar element underneath it. JS (fbWireMonthlyScrollbar)
+     keeps the thumb in sync with wrap.scrollLeft. */
+  .bgt-monthly-scroll-wrap { position:relative; }
   .bgt-table-wrap-monthly {
-    overflow-x: scroll !important;
-    overflow-y: visible !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    box-sizing: border-box !important;
-    display: block !important;
-    scrollbar-color: #00b0d4 #d6eef2 !important;
-    scrollbar-width: auto !important;
+    overflow-x: scroll;
+    overflow-y: visible;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: block;
+    /* Hide native scrollbar — we use our own */
+    scrollbar-width: none;
   }
-  .bgt-table-wrap-monthly::-webkit-scrollbar {
-    -webkit-appearance: none !important;
-    appearance: none !important;
-    display: block !important;
-    height: 14px !important;
-    width: 14px !important;
-    background: #d6eef2 !important;
-  }
-  .bgt-table-wrap-monthly::-webkit-scrollbar-track {
-    background: #d6eef2 !important;
-    border-radius: 7px !important;
-  }
-  .bgt-table-wrap-monthly::-webkit-scrollbar-thumb {
-    background: #00b0d4 !important;
-    border-radius: 7px !important;
-    min-width: 60px !important;
-  }
-  .bgt-table-wrap-monthly::-webkit-scrollbar-thumb:hover {
-    background: #008cb0 !important;
-  }
-  .bgt-table-wrap-monthly::-webkit-scrollbar-corner {
-    background: transparent !important;
-  }
+  .bgt-table-wrap-monthly::-webkit-scrollbar { display: none; height: 0; width: 0; }
   /* The inner monthly table can grow beyond 100% of its wrap — use
      width:auto so min-width takes effect (some browser table layouts
      ignore min-width when width:100% from the base .bgt-table is in play). */
-  .bgt-table-wrap-monthly > .bgt-table-monthly {
-    width: auto !important;
+  .bgt-table-wrap-monthly > .bgt-table-monthly { width: auto; }
+
+  .bgt-monthly-scrollbar {
+    position: sticky;
+    bottom: 4px;
+    margin-top: 6px;
+    height: 14px;
+    background: #d6eef2;
+    border-radius: 7px;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,.06);
+    z-index: 10;
   }
+  .bgt-monthly-scrollbar-thumb {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    left: 0;
+    width: 60px;
+    background: #00b0d4;
+    border-radius: 6px;
+    cursor: grab;
+    transition: background .12s;
+    will-change: transform;
+  }
+  .bgt-monthly-scrollbar-thumb:hover { background: #008cb0; }
+  .bgt-monthly-scrollbar-thumb.dragging,
+  .bgt-monthly-scrollbar-thumb:active { background: #006d8a; cursor: grabbing; transition: none; }
   .bgt-neg { color:#e5534b !important; }
   .bgt-pos { color:#1a9a6b !important; }
   .bgt-pos { color:var(--green) !important; }
@@ -7358,9 +7365,11 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       <div style="font-size:11px;color:var(--text-dim)">${yr} Actual vs Budget · ${isPsf ? '$/SF' : '$'}</div>
     </div>`;
 
-    // Dedicated wrap class for the monthly view so the always-visible
-    // scrollbar CSS can be scoped to it (Annual wrap doesn't overflow and
-    // shouldn't carry a permanent scrollbar).
+    // Wrap the table AND a custom scrollbar overlay in a container. The
+    // native scrollbar is hidden — instead we render our own always-visible
+    // 12px track with a draggable cyan thumb. Wired up by
+    // fbWireMonthlyScrollbar() once the HTML is in the DOM (called below).
+    html += `<div class="bgt-monthly-scroll-wrap">`;
     html += `<div class="bgt-table-wrap bgt-table-wrap-monthly"><table class="bgt-table bgt-table-monthly" style="min-width:${220 + colGroups.length * 240 + 270}px">
       <thead>
         <tr>
@@ -7521,6 +7530,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     });
 
     html += `</tbody></table></div>`;
+    // Custom always-visible horizontal scrollbar. Mirrors the wrap's
+    // scrollLeft state via a draggable thumb. Renders right under the table
+    // so it's the first thing the eye sees when landing on the tab.
+    html += `<div class="bgt-monthly-scrollbar" data-scrollbar="monthly">
+      <div class="bgt-monthly-scrollbar-thumb"></div>
+    </div></div>`; // close bgt-monthly-scroll-wrap
 
     if (editable) {
       html += `<div style="margin-top:12px;padding:10px 14px;background:rgba(0,176,212,0.06);border:1px solid rgba(0,176,212,0.3);border-radius:8px;font-size:12px;color:var(--text)">
@@ -7533,6 +7548,93 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     }
 
     body.innerHTML = html;
+    // Wire up the custom scrollbar after DOM insertion. requestAnimationFrame
+    // gives layout a tick to settle so clientWidth / scrollWidth are accurate.
+    requestAnimationFrame(() => fbWireMonthlyScrollbar(body));
+  }
+
+  // Wire up the custom horizontal scrollbar for the Monthly P&L tab.
+  // Always-visible thumb that mirrors the table wrap's scrollLeft via
+  // wheel / drag / programmatic scroll. Doesn't rely on the OS scrollbar
+  // (macOS auto-hides those even with -webkit-appearance:none).
+  function fbWireMonthlyScrollbar(body) {
+    const wrap = body.querySelector('.bgt-table-wrap-monthly');
+    const bar = body.querySelector('.bgt-monthly-scrollbar');
+    if (!wrap || !bar) return;
+    const thumb = bar.querySelector('.bgt-monthly-scrollbar-thumb');
+
+    function refresh() {
+      const sw = wrap.scrollWidth;
+      const cw = wrap.clientWidth;
+      if (sw <= cw + 2) {
+        bar.style.display = 'none';
+        return;
+      }
+      bar.style.display = '';
+      const ratio = cw / sw;
+      const barW = bar.clientWidth;
+      const thumbW = Math.max(50, Math.round(barW * ratio));
+      const maxThumb = barW - thumbW;
+      const maxScroll = sw - cw;
+      const left = maxScroll > 0 ? Math.round((wrap.scrollLeft / maxScroll) * maxThumb) : 0;
+      thumb.style.width = thumbW + 'px';
+      thumb.style.transform = `translateX(${left}px)`;
+    }
+    refresh();
+    wrap.addEventListener('scroll', refresh, { passive: true });
+    // ResizeObserver covers window resizes + sidebar toggle etc.
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(refresh);
+      ro.observe(wrap);
+    } else {
+      window.addEventListener('resize', refresh);
+    }
+
+    // Drag the thumb to scroll
+    let drag = null;
+    thumb.addEventListener('mousedown', (e) => {
+      drag = {
+        startX: e.clientX,
+        startLeft: wrap.scrollLeft,
+        sw: wrap.scrollWidth,
+        cw: wrap.clientWidth,
+        barW: bar.clientWidth,
+      };
+      document.body.style.userSelect = 'none';
+      thumb.classList.add('dragging');
+      e.preventDefault();
+    });
+    document.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      const ratio = drag.cw / drag.sw;
+      const thumbW = Math.max(50, Math.round(drag.barW * ratio));
+      const maxThumb = drag.barW - thumbW;
+      const maxScroll = drag.sw - drag.cw;
+      const dx = e.clientX - drag.startX;
+      // Map cursor delta → scroll delta scaled by the thumb-to-scroll ratio
+      const newScroll = drag.startLeft + (dx / maxThumb) * maxScroll;
+      wrap.scrollLeft = Math.max(0, Math.min(maxScroll, newScroll));
+    });
+    document.addEventListener('mouseup', () => {
+      if (!drag) return;
+      drag = null;
+      document.body.style.userSelect = '';
+      thumb.classList.remove('dragging');
+    });
+
+    // Click on track (not thumb) to jump
+    bar.addEventListener('mousedown', (e) => {
+      if (e.target !== bar) return;
+      const rect = bar.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const ratio = wrap.clientWidth / wrap.scrollWidth;
+      const thumbW = Math.max(50, Math.round(bar.clientWidth * ratio));
+      const targetLeft = clickX - thumbW / 2;
+      const maxThumb = bar.clientWidth - thumbW;
+      const maxScroll = wrap.scrollWidth - wrap.clientWidth;
+      const clamped = Math.max(0, Math.min(maxThumb, targetLeft));
+      wrap.scrollLeft = (clamped / maxThumb) * maxScroll;
+    });
   }
 
   // ── Budget cell edit handlers (Planning year + Monthly view) ──
