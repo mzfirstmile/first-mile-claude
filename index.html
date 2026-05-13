@@ -932,6 +932,70 @@
   .fb-cap-plan-add:hover { background:#008cb0; }
   .fb-cap-plan-del { padding:2px 6px; margin-right:4px; background:transparent; border:1px solid #c94646; color:#c94646; border-radius:4px; font-size:11px; cursor:pointer; line-height:1; }
   .fb-cap-plan-del:hover { background:#c94646; color:#fff; }
+
+  /* ── Unified waterfall row kinds ──────────────────────────────────── */
+  /* Section header: bold colored band with left accent stripe + icon */
+  .fb-cap-plan-section-header td {
+    padding: 9px 14px 9px 18px;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .8px;
+    font-weight: 700;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .fb-cap-plan-section-header .fb-cap-plan-section-icon {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    line-height: 18px;
+    text-align: center;
+    border-radius: 4px;
+    margin-right: 8px;
+    font-size: 11px;
+    vertical-align: -3px;
+  }
+  /* Income — green */
+  .fb-cap-plan-section-income td { background: linear-gradient(to right, rgba(20,168,142,.18) 0, rgba(20,168,142,.06) 200px, rgba(20,168,142,.04) 100%); color: #0e7c6b; border-left: 4px solid #14a88e; }
+  .fb-cap-plan-section-income .fb-cap-plan-section-icon { background: #14a88e; color: #fff; }
+  /* Expense — red */
+  .fb-cap-plan-section-expense td { background: linear-gradient(to right, rgba(229,83,75,.18) 0, rgba(229,83,75,.06) 200px, rgba(229,83,75,.04) 100%); color: #c0392b; border-left: 4px solid #e0554d; }
+  .fb-cap-plan-section-expense .fb-cap-plan-section-icon { background: #e0554d; color: #fff; }
+  /* Capex — amber */
+  .fb-cap-plan-section-capex td { background: linear-gradient(to right, rgba(232,168,58,.22) 0, rgba(232,168,58,.07) 200px, rgba(232,168,58,.04) 100%); color: #8a5e0e; border-left: 4px solid #e8a83a; }
+  .fb-cap-plan-section-capex .fb-cap-plan-section-icon { background: #e8a83a; color: #fff; }
+  /* Reserve — darker amber/brown */
+  .fb-cap-plan-section-reserve td { background: linear-gradient(to right, rgba(217,126,43,.22) 0, rgba(217,126,43,.07) 200px, rgba(217,126,43,.04) 100%); color: #7a4818; border-left: 4px solid #d97e2b; }
+  .fb-cap-plan-section-reserve .fb-cap-plan-section-icon { background: #d97e2b; color: #fff; }
+
+  /* Read-only line items */
+  .fb-cap-plan-readonly-cell { padding: 5px 8px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+
+  /* Subtotal rows — bold cyan strip (Levered CF, Net Cash Available) */
+  .fb-cap-plan-subtotal-row td {
+    background: rgba(0,176,212,.08);
+    font-weight: 700;
+    border-top: 1.5px solid rgba(0,176,212,.45);
+    border-bottom: 1.5px solid rgba(0,176,212,.45);
+    color: var(--accent);
+  }
+  .fb-cap-plan-subtotal-row .fb-cap-plan-label { color: var(--accent); text-transform: uppercase; font-size: 10.5px; letter-spacing: .4px; }
+  .fb-cap-plan-subtotal-cell { padding: 5px 8px; text-align: right; font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 700; }
+
+  /* Rolling balance rows — green band for BB/EB so they read as anchors */
+  .fb-cap-plan-rolling-row td {
+    background: rgba(20,168,142,.10);
+    font-weight: 700;
+    border-top: 2px solid rgba(20,168,142,.55);
+    border-bottom: 2px solid rgba(20,168,142,.55);
+    color: #0e7c6b;
+  }
+  .fb-cap-plan-rolling-row .fb-cap-plan-label { color: #0e7c6b; text-transform: uppercase; font-size: 10.5px; letter-spacing: .4px; }
+  .fb-cap-plan-rolling-cell { padding: 5px 8px; text-align: right; font-variant-numeric: tabular-nums; color: #0e7c6b; font-weight: 700; }
+
+  /* Negative dollar values in red across all readonly/subtotal cells */
+  .fb-cap-plan-neg { color: #c94646; }
   .fb-variance-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:900px) { .fb-variance-grid { grid-template-columns:1fr; } }
   .fb-variance-col { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
@@ -7269,15 +7333,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // Chart (SVG combo)
     html += fbBuildForecastChart(fc, baseProp);
 
-    // Capital & Distribution Plan — editable monthly schedule that feeds
-    // into the forecast (capex, TI/LC, reserve draws, owner distributions).
+    // Unified Capital Plan + Monthly Breakdown waterfall.
     html += fbBuildCapitalPlanHTML(baseProp, cache, fc);
 
-    // Breakdown table + assumptions
-    html += `<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:18px" class="cf-forecast-grid">
-      <div class="fb-chart-card" style="padding:18px">
-        ${fbBuildForecastTable(fc)}
-      </div>
+    // Assumptions panel (no more separate breakdown table — it's merged
+    // into the Capital Plan above).
+    html += `<div style="margin-top:18px">
       ${fbBuildForecastAssumptions(baseProp, cache, fc)}
     </div>`;
 
@@ -7700,12 +7761,55 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       };
     };
 
+    // Pre-compute the rolling Beginning / Ending Balance per month so the
+    // table can reference them as read-only "rolling" rows.
+    // Net Cash = endingCash (operating) + reserveBalance per row.
+    const netCashOf = (r) => (r.endingCash || 0) + (r.reserveBalance || 0);
+    const monthlyBB = []; // beginning balance per month
+    const monthlyEB = []; // ending balance per month
+    fc.rows.forEach((r, i) => {
+      const bb = i === 0 ? fc.starting.total : netCashOf(fc.rows[i - 1]);
+      monthlyBB.push(bb);
+      monthlyEB.push(netCashOf(r));
+    });
+
+    // Helper accessors against fc.rows for the read-only line items.
+    const grab = (key, sign) => (m) => (sign || 1) * (fc.rows[m - 1][key] || 0);
+    const grabNetCashAvail = (m) => {
+      const r = fc.rows[m - 1];
+      return (r.levered || 0)
+           + (r.cap_tilc || 0) + (r.cap_capex || 0)
+           + (r.cap_reserveDraw || 0) - (r.cap_reserveDeposit || 0);
+    };
+
     const rows = [
+      // ── Beginning Balance ─────────────────────────────────────────────
+      { kind: 'rolling', id: 'beg_bal', label: 'Beginning Balance',
+        getValue: (m) => monthlyBB[m - 1] },
+
+      // ── Operating Inflows ─────────────────────────────────────────────
+      { kind: 'sectionHeader', label: 'Operating Inflows', section: 'income' },
+      { kind: 'readonly', label: 'Base Rent',          indent: true, getValue: grab('rev_baseRent') },
+      { kind: 'readonly', label: 'Expense Recoveries', indent: true, getValue: grab('rev_recoveries') },
+      { kind: 'readonly', label: 'Other Income',       indent: true, getValue: grab('rev_other') },
+      { kind: 'subtotal', label: 'Total Operating Inflows', getValue: grab('totalIn') },
+
+      // ── Operating Outflows ────────────────────────────────────────────
+      { kind: 'sectionHeader', label: 'Operating Outflows', section: 'expense' },
+      { kind: 'readonly', label: 'Operating Expenses', indent: true, isExpense: true, getValue: grab('exp_opex', -1) },
+      { kind: 'readonly', label: 'Debt Service',       indent: true, isExpense: true, getValue: grab('exp_debt', -1) },
+
+      // ── Levered CF ────────────────────────────────────────────────────
+      { kind: 'subtotal', label: 'Levered Cash Flow', getValue: grab('levered') },
+
+      // ── Capital Expenditures ──────────────────────────────────────────
+      { kind: 'sectionHeader', label: 'Capital Expenditures', section: 'capex' },
       buildCapexRow('base_bldg', 'Base Bldg', 'capex', ['7106', '7072']),
       buildCapexRow('ti',        'TI',        'ti_lc', ['7105', '7071']),
       buildCapexRow('lc',        'LC',        'ti_lc', ['7107', '7073']),
-      // Reserve Draw + Reserve Deposit grouped together since they're both
-      // movements between operating and reserve accounts.
+
+      // ── Reserve Activity ──────────────────────────────────────────────
+      { kind: 'sectionHeader', label: 'Reserve Activity', section: 'reserve' },
       { kind: 'group', id: 'reserve_draw', label: 'Total Reserve Draw',
         color: '#e8a83a',
         subRows: escrowAccounts.length
@@ -7720,6 +7824,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       },
       { kind: 'group', id: 'reserve_deposit', label: 'Total Reserve Deposit',
         color: '#d97e2b',
+        sign: -1,  // displayed negative since it's an outflow from operating
         subRows: escrowAccounts.map(acct => ({
           kind: 'subitem',
           label: `— ${acct.account_name}`,
@@ -7729,10 +7834,18 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           color: '#d97e2b',
         })),
       },
-      // Owner Distributions last — distinct from reserves (this is cash
-      // going to partners, not internal transfers).
+
+      // ── Net Cash Available for Distribution ───────────────────────────
+      { kind: 'subtotal', label: 'Net Cash Available for Distribution',
+        getValue: grabNetCashAvail },
+
+      // ── Owner Distributions ───────────────────────────────────────────
       { kind: 'item', id: 'distribution', label: 'Owner Distributions',
         eventType: 'distribution', color: '#a82540' },
+
+      // ── Ending Balance ────────────────────────────────────────────────
+      { kind: 'rolling', id: 'end_bal', label: 'Ending Balance',
+        getValue: (m) => monthlyEB[m - 1] },
     ];
 
     // Resolve the value for a row+month, using the appropriate data source.
@@ -7793,6 +7906,55 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
     // Render a flat item row OR a group's parent (rolled-up totals).
     const renderRowHtml = (row) => {
+      // Section header: full-width strip with a colored accent stripe on
+      // the left + an icon dot. Color varies by section ('income',
+      // 'expense', 'capex', 'reserve').
+      if (row.kind === 'sectionHeader') {
+        const sec = row.section || 'other';
+        const icons = {
+          income:   '⬆',  // up arrow — money in
+          expense:  '⬇',  // down arrow — money out
+          capex:    '◆',  // diamond — capital project
+          reserve:  '⏵',  // play arrow — movement between accounts
+          other:    '•',
+        };
+        return `<tr class="fb-cap-plan-section-header fb-cap-plan-section-${sec}">
+          <td colspan="15">
+            <span class="fb-cap-plan-section-icon">${icons[sec] || icons.other}</span>
+            ${row.label}
+          </td>
+        </tr>`;
+      }
+
+      // Read-only line (Operating Inflows breakdown, OpEx, Debt Service):
+      // values come from getValue(m), no editable inputs.
+      if (row.kind === 'readonly' || row.kind === 'subtotal' || row.kind === 'rolling') {
+        let total = 0;
+        let cells = '';
+        for (let m = 1; m <= 12; m++) {
+          const v = row.getValue(m) || 0;
+          total += v;
+          // Negative values shown in parens
+          const display = v
+            ? (v < 0 ? `(${fmt(Math.abs(v))})` : fmt(v))
+            : (row.kind === 'rolling' ? '$0' : '—');
+          cells += `<td class="fb-cap-plan-${row.kind}-cell${v < 0 ? ' fb-cap-plan-neg' : ''}">${display}</td>`;
+        }
+        // For rolling rows show ending value only (last month's EB or sum dummy)
+        const totalDisplay = (row.kind === 'rolling')
+          ? '—'  // total doesn't make sense for a rolling balance
+          : (total < 0 ? `(${fmt(Math.abs(total))})` : fmtTot(total));
+        const trClass = row.kind === 'subtotal' ? 'fb-cap-plan-subtotal-row'
+                      : row.kind === 'rolling'  ? 'fb-cap-plan-rolling-row'
+                      : '';
+        return `<tr class="${trClass}">
+          <td class="fb-cap-plan-label${row.indent ? ' fb-cap-plan-sublabel' : ''}">${row.label}</td>
+          ${cells}
+          <td class="fb-cap-plan-total">${totalDisplay}</td>
+          <td class="fb-cap-plan-actions"></td>
+        </tr>`;
+      }
+
       // Group parent: sum sub-row values for each month, render as a
       // collapsible header. Sub-rows render only when expanded.
       //
