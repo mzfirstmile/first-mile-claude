@@ -916,6 +916,17 @@
   .fb-cap-plan-cell.fb-cap-plan-saving { background:#fff9d6; }
   .fb-cap-plan-cell.fb-cap-plan-saved { background:#d3f3df; }
   .fb-cap-plan-cell.fb-cap-plan-save-error { background:#ffd6d3; color:#a01818; }
+
+  /* Collapsible group rows for Total Reserve Draw + Total Reserve Deposit */
+  .fb-cap-plan-grouprow { cursor:pointer; background:#fafbfd; }
+  .fb-cap-plan-grouprow:hover { background:#f0f3f8; }
+  .fb-cap-plan-grouprow .fb-cap-plan-grouplabel { font-weight:700; color:var(--text); }
+  .fb-cap-plan-grouprow .fb-cap-plan-chev { display:inline-block; width:14px; font-size:9px; color:var(--text-dim); margin-right:6px; transition:transform .15s; }
+  .fb-cap-plan-group-cell { padding:6px 10px; text-align:right; font-weight:700; color:var(--text); font-variant-numeric:tabular-nums; background:#fafbfd; }
+  .fb-cap-plan-grouprow:hover .fb-cap-plan-group-cell { background:#f0f3f8; }
+  .fb-cap-plan-grouptotal { background:rgba(0,176,212,.08) !important; font-size:12px; }
+  .fb-cap-plan-subrow .fb-cap-plan-sublabel { padding-left:36px; font-weight:500; color:var(--text); font-size:11px; }
+  .fb-cap-plan-subrow .fb-cap-plan-subtotal { background:rgba(0,176,212,.03); }
   .fb-variance-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:900px) { .fb-variance-grid { grid-template-columns:1fr; } }
   .fb-variance-col { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
@@ -7535,9 +7546,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const yr = fc.year;
     const events = cache.events || [];
 
-    // Existing event lookup by (year, month, event_type) → absolute amount
-    const lookupAbs = (eventType, month) => {
-      const ev = events.find(e => e.year === yr && e.month === month && e.event_type === eventType);
+    // Existing event lookup by (year, month, event_type) → absolute amount.
+    // For reserve_draw / reserve_deposit, optionally filter by bs_code.
+    const lookupAbs = (eventType, month, bsCode) => {
+      const ev = events.find(e => {
+        if (e.year !== yr || e.month !== month || e.event_type !== eventType) return false;
+        if (bsCode != null) return e.bs_code === bsCode;
+        return e.bs_code == null;
+      });
       if (!ev) return 0;
       return Math.abs(Number(ev.amount) || 0);
     };
@@ -7576,107 +7592,165 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
                 && ((Number(r.amount) > 0) || (Number(r.monthly_deposit) > 0)))
       .sort((a, b) => String(a.bs_code).localeCompare(String(b.bs_code)));
 
+    // Expand/collapse state for grouped rows persists in localStorage so
+    // the user's choice survives re-renders.
+    const expandKey = `fbCapPlanExpanded_${propId}`;
+    let expandedGroups = new Set();
+    try {
+      expandedGroups = new Set(JSON.parse(localStorage.getItem(expandKey) || '[]'));
+    } catch (e) {}
+
+    // Row tree:
+    //   kind:'item'    → standalone editable row (Base Bldg, TI/LC, Owner Distributions)
+    //   kind:'group'   → collapsible parent with rolled-up totals + sub-rows
+    //   kind:'subitem' → indented child of a group (per-reserve-account row)
+    //
+    // GL codes include BOTH old-COA and new-COA versions because actuals
+    // get remapped to the new COA on load (e.g. 7105 → 7071), but budget
+    // rows stay on whatever COA they were stored in.
     const rows = [
-      // GL codes include BOTH old-COA and new-COA versions because actuals
-      // get remapped to the new COA on load (e.g. 7105 → 7071), but budget
-      // rows stay on whatever COA they were stored in. Filtering against
-      // both ensures we catch the data regardless of source COA.
-      { label: 'Base Bldg',           eventType: 'capex',         color: '#c94646',
-        glClosed: ['7106', '7072'],   help: 'Capital improvements / Base Bldg costs' },
-      { label: 'TI / LC',             eventType: 'ti_lc',         color: '#c94646',
-        glClosed: ['7105', '7107', '7071', '7073'],   help: 'Tenant Improvements + Brokerage Commissions' },
-      { label: 'Reserve Draw',        eventType: 'reserve_draw',  color: '#e8a83a',
-        help: 'Cash pulled FROM reserve INTO operating (no P&L GL — manual entry)' },
-      { label: 'Owner Distributions', eventType: 'distribution',  color: '#a82540',
-        help: 'Monthly cash distributions to partners/owners (no P&L GL — manual entry)' },
-      // Per-reserve-account deposit rows (dynamic, from balance sheet)
-      ...escrowAccounts.map(acct => ({
-        label: `Reserve Deposit — ${acct.account_name}`,
-        eventType: 'reserve_deposit_bs',
-        bs_code: acct.bs_code,
-        monthly: Number(acct.monthly_deposit) || 0,
+      { kind: 'item', id: 'capex', label: 'Base Bldg', eventType: 'capex',
+        color: '#c94646', glClosed: ['7106', '7072'] },
+      { kind: 'item', id: 'tilc', label: 'TI / LC', eventType: 'ti_lc',
+        color: '#c94646', glClosed: ['7105', '7107', '7071', '7073'] },
+      { kind: 'group', id: 'reserve_draw', label: 'Total Reserve Draw',
+        color: '#e8a83a',
+        subRows: escrowAccounts.length
+          ? escrowAccounts.map(a => ({
+              kind: 'subitem',
+              label: `— ${a.account_name}`,
+              eventType: 'reserve_draw',
+              bs_code: a.bs_code,
+              color: '#e8a83a',
+            }))
+          : [{ kind: 'subitem', label: '— (no reserve accounts on balance sheet)', eventType: 'reserve_draw', color: '#e8a83a' }],
+      },
+      { kind: 'item', id: 'distribution', label: 'Owner Distributions',
+        eventType: 'distribution', color: '#a82540' },
+      { kind: 'group', id: 'reserve_deposit', label: 'Total Reserve Deposit',
         color: '#d97e2b',
-        help: `Fixed monthly deposit into the ${acct.account_name} escrow (bs_code ${acct.bs_code}). Edit any cell to update the monthly amount — applies to all 12 months.`,
-      })),
+        subRows: escrowAccounts.map(acct => ({
+          kind: 'subitem',
+          label: `— ${acct.account_name}`,
+          eventType: 'reserve_deposit_bs',
+          bs_code: acct.bs_code,
+          monthly: Number(acct.monthly_deposit) || 0,
+          color: '#d97e2b',
+        })),
+      },
     ];
 
-    const renderRow = (row) => {
-      let total = 0;
-      let cells = '';
-      const isBsDeposit = row.eventType === 'reserve_deposit_bs';
+    // Resolve the value for a row+month, using the appropriate data source.
+    function valueForRow(row, m) {
+      const monthName = MONTHS[m - 1];
+      const isClosed = closedSet.has(monthName);
+      if (row.eventType === 'reserve_deposit_bs') return Number(row.monthly) || 0;
+      if (isClosed && row.glClosed) {
+        const gls = Array.isArray(row.glClosed) ? row.glClosed : [row.glClosed];
+        return gls.reduce((s, g) => s + glAmount(actualsYd, g, monthName), 0);
+      }
+      return lookupAbs(row.eventType, m, row.bs_code || null);
+    }
 
-      for (let m = 1; m <= 12; m++) {
-        const monthName = MONTHS[m - 1];
-        const isClosed = closedSet.has(monthName);
+    // Render a single editable/read-only cell for a given row + month.
+    const cellHtml = (row, m, v) => {
+      const monthName = MONTHS[m - 1];
+      const isClosed = closedSet.has(monthName);
 
-        // Value selection:
-        //   • reserve_deposit_bs: single monthly_deposit applied to all 12 months
-        //   • Closed + has glClosed: actuals GL (read-only)
-        //   • Otherwise: cash_forecast_events (editable)
-        let v = 0;
-        if (isBsDeposit) {
-          v = row.monthly;
-        } else if (isClosed && row.glClosed) {
-          const gls = Array.isArray(row.glClosed) ? row.glClosed : [row.glClosed];
-          v = gls.reduce((s, g) => s + glAmount(actualsYd, g, monthName), 0);
-        } else {
-          v = lookupAbs(row.eventType, m);
+      // Reserve Deposit per-account: editable, saves bs_row's monthly_deposit
+      if (row.eventType === 'reserve_deposit_bs') {
+        return `<td class="fb-cap-plan-input-cell">
+          <input type="text" class="fb-cap-plan-cell fb-cap-plan-cell-reserve"
+            data-prop="${propId}" data-bs-code="${row.bs_code}" data-row-type="reserve_deposit_bs"
+            value="${v ? fmt(v) : ''}" placeholder="—"
+            onfocus="this.select()" onblur="fbSaveReserveDepositCell(this)"
+            onkeydown="fbCapPlanCellKey(event)" />
+        </td>`;
+      }
+      // Closed-month + GL-linked: read-only actuals cell
+      if (isClosed && row.glClosed) {
+        const tooltipTitle = `From actuals GL ${Array.isArray(row.glClosed) ? row.glClosed.join(' + ') : row.glClosed}`;
+        return `<td class="fb-cap-plan-closed" title="${tooltipTitle}">${v ? fmt(v) : '—'}</td>`;
+      }
+      // Otherwise: editable cash_forecast_events cell (with optional bs_code)
+      return `<td class="fb-cap-plan-input-cell">
+        <input type="text" class="fb-cap-plan-cell"
+          data-prop="${propId}" data-year="${yr}" data-month="${m}"
+          data-event-type="${row.eventType}"${row.bs_code ? ` data-bs-code="${row.bs_code}"` : ''}
+          value="${v ? fmt(v) : ''}" placeholder="—"
+          onfocus="this.select()" onblur="fbSaveCapitalPlanCell(this)"
+          onkeydown="fbCapPlanCellKey(event)" />
+      </td>`;
+    };
+
+    // Render a flat item row OR a group's parent (rolled-up totals).
+    const renderRowHtml = (row) => {
+      // Group parent: sum sub-row values for each month, render as a
+      // collapsible header. Sub-rows render only when expanded.
+      if (row.kind === 'group') {
+        const isExpanded = expandedGroups.has(row.id);
+        let total = 0;
+        let cells = '';
+        const monthTotals = [];
+        for (let m = 1; m <= 12; m++) {
+          const mTotal = row.subRows.reduce((s, sr) => s + valueForRow(sr, m), 0);
+          monthTotals.push(mTotal);
+          total += mTotal;
+          cells += `<td class="fb-cap-plan-group-cell">${mTotal ? fmt(mTotal) : '—'}</td>`;
         }
-        total += v;
-
-        // Per-account reserve deposit: editable in every cell — each edit
-        // overwrites the single monthly_deposit value applied to all 12.
-        if (isBsDeposit) {
-          cells += `<td class="fb-cap-plan-input-cell">
-            <input type="text"
-              class="fb-cap-plan-cell fb-cap-plan-cell-reserve"
-              data-prop="${propId}"
-              data-bs-code="${row.bs_code}"
-              data-row-type="reserve_deposit_bs"
-              value="${v ? fmt(v) : ''}"
-              placeholder="—"
-              onfocus="this.select()"
-              onblur="fbSaveReserveDepositCell(this)"
-              onkeydown="fbCapPlanCellKey(event)" />
-          </td>`;
-          continue;
-        }
-
-        // Other rows: existing actuals-or-events logic
-        const lockedCell = isClosed && row.glClosed;
-        if (lockedCell) {
-          const tooltipTitle = `From actuals GL ${Array.isArray(row.glClosed) ? row.glClosed.join(' + ') : row.glClosed}`;
-          cells += `<td class="fb-cap-plan-closed" title="${tooltipTitle}">${v ? fmt(v) : '—'}</td>`;
-        } else {
-          cells += `<td class="fb-cap-plan-input-cell">
-            <input type="text"
-              class="fb-cap-plan-cell"
-              data-prop="${propId}"
-              data-year="${yr}"
-              data-month="${m}"
-              data-event-type="${row.eventType}"
-              value="${v ? fmt(v) : ''}"
-              placeholder="—"
-              onfocus="this.select()"
-              onblur="fbSaveCapitalPlanCell(this)"
-              onkeydown="fbCapPlanCellKey(event)" />
-          </td>`;
-        }
+        const chev = isExpanded ? '&#9660;' : '&#9654;';
+        const subRowsHtml = isExpanded
+          ? row.subRows.map(sr => {
+              let srTotal = 0;
+              let srCells = '';
+              for (let m = 1; m <= 12; m++) {
+                const v = valueForRow(sr, m);
+                srTotal += v;
+                srCells += cellHtml(sr, m, v);
+              }
+              return `<tr class="fb-cap-plan-subrow">
+                <td class="fb-cap-plan-label fb-cap-plan-sublabel">${sr.label}</td>
+                ${srCells}
+                <td class="fb-cap-plan-total fb-cap-plan-subtotal">${fmtTot(srTotal)}</td>
+                <td class="fb-cap-plan-actions">
+                  ${sr.eventType === 'reserve_deposit_bs'
+                    ? '<span style="font-size:10px;color:var(--text-dim)" title="Monthly fixed amount — edit any cell to update all 12">monthly</span>'
+                    : `<button class="fb-cap-plan-spread" onclick="fbCapPlanSpreadBs('${propId}', ${yr}, '${sr.eventType}', '${sr.bs_code || ''}')">↔ Spread</button>`
+                  }
+                </td>
+              </tr>`;
+            }).join('')
+          : '';
+        return `<tr class="fb-cap-plan-grouprow" onclick="fbCapPlanToggleGroup('${propId}', '${row.id}')">
+          <td class="fb-cap-plan-label fb-cap-plan-grouplabel">
+            <span class="fb-cap-plan-chev">${chev}</span>
+            <span class="fb-cap-plan-dot" style="background:${row.color}"></span>${row.label}
+          </td>
+          ${cells}
+          <td class="fb-cap-plan-total fb-cap-plan-grouptotal">${fmtTot(total)}</td>
+          <td class="fb-cap-plan-actions">
+            <span style="font-size:10px;color:var(--text-dim)">${row.subRows.length} acct${row.subRows.length === 1 ? '' : 's'}</span>
+          </td>
+        </tr>${subRowsHtml}`;
       }
 
-      const actionCell = isBsDeposit
-        ? `<td class="fb-cap-plan-actions"><span style="font-size:10px;color:var(--text-dim)" title="Editing any cell updates the fixed monthly amount applied to all 12 months">monthly</span></td>`
-        : `<td class="fb-cap-plan-actions">
-            <button class="fb-cap-plan-spread" title="Spread evenly across open months"
-              onclick="fbCapPlanSpread('${propId}', ${yr}, '${row.eventType}')">↔ Spread</button>
-          </td>`;
+      // kind === 'item' — flat editable row
+      let total = 0;
+      let cells = '';
+      for (let m = 1; m <= 12; m++) {
+        const v = valueForRow(row, m);
+        total += v;
+        cells += cellHtml(row, m, v);
+      }
       return `<tr>
         <td class="fb-cap-plan-label">
           <span class="fb-cap-plan-dot" style="background:${row.color}"></span>${row.label}
         </td>
         ${cells}
         <td class="fb-cap-plan-total">${fmtTot(total)}</td>
-        ${actionCell}
+        <td class="fb-cap-plan-actions">
+          <button class="fb-cap-plan-spread" onclick="fbCapPlanSpread('${propId}', ${yr}, '${row.eventType}')">↔ Spread</button>
+        </td>
       </tr>`;
     };
 
@@ -7703,7 +7777,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
             </tr>
           </thead>
           <tbody>
-            ${rows.map(renderRow).join('')}
+            ${rows.map(renderRowHtml).join('')}
           </tbody>
         </table>
       </div>
@@ -7712,12 +7786,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
   // Save handler for a Capital Plan cell. Writes to cash_forecast_events
   // (DELETE existing match + INSERT new if non-zero) and re-renders the
-  // forecast so chart/table/KPIs update.
+  // forecast so chart/table/KPIs update. For reserve_draw (per-account)
+  // the row carries data-bs-code so the save filters/inserts by that key.
   async function fbSaveCapitalPlanCell(inputEl) {
     const propId = inputEl.dataset.prop;
     const year   = parseInt(inputEl.dataset.year);
     const month  = parseInt(inputEl.dataset.month);
     const eventType = inputEl.dataset.eventType;
+    const bsCode = inputEl.dataset.bsCode || null;
     const raw = String(inputEl.value || '').replace(/[$,\s]/g, '');
     const parsed = parseFloat(raw);
     let amount = isFinite(parsed) ? parsed : 0;
@@ -7729,15 +7805,18 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     inputEl.classList.add('fb-cap-plan-saving');
 
     try {
-      const qs = `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${year}&month=eq.${month}&event_type=eq.${eventType}`;
+      const bsFilter = bsCode ? `&bs_code=eq.${encodeURIComponent(bsCode)}` : '&bs_code=is.null';
+      const qs = `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${year}&month=eq.${month}&event_type=eq.${eventType}${bsFilter}`;
       await supaWrite('cash_forecast_events', 'DELETE', null, qs);
       if (Math.abs(amount) > 0.005) {
-        await supaWrite('cash_forecast_events', 'POST', [{
+        const payload = {
           property_id: propId,
           year, month, event_type: eventType,
           amount,
           description: `${eventType} plan`,
-        }], '');
+        };
+        if (bsCode) payload.bs_code = bsCode;
+        await supaWrite('cash_forecast_events', 'POST', [payload], '');
       }
       inputEl.classList.remove('fb-cap-plan-saving');
       inputEl.classList.add('fb-cap-plan-saved');
@@ -7750,6 +7829,62 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       inputEl.classList.add('fb-cap-plan-save-error');
       setTimeout(() => inputEl.classList.remove('fb-cap-plan-save-error'), 2000);
       alert('Failed to save capital plan cell: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  // Toggle expand/collapse for a grouped row (Total Reserve Draw / Total
+  // Reserve Deposit). Persists to localStorage so the choice survives
+  // re-renders.
+  function fbCapPlanToggleGroup(propId, groupId) {
+    const key = `fbCapPlanExpanded_${propId}`;
+    let set = new Set();
+    try { set = new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch (e) {}
+    if (set.has(groupId)) set.delete(groupId); else set.add(groupId);
+    localStorage.setItem(key, JSON.stringify([...set]));
+    fbRenderDetail();
+  }
+
+  // "Spread evenly" for a per-account sub-row (currently used for
+  // reserve_draw per bs_code). Same flow as fbCapPlanSpread but scoped
+  // to a specific bs_code so other reserve accounts aren't touched.
+  async function fbCapPlanSpreadBs(propId, year, eventType, bsCode) {
+    const labels = { reserve_draw: 'Reserve Draw' };
+    const ans = prompt(`Annual total to spread evenly across OPEN months for ${labels[eventType] || eventType} (bs_code ${bsCode}, ${year})?\n\nEnter $ amount (will be divided across the open months).`, '');
+    if (ans == null) return;
+    const annual = parseFloat(String(ans).replace(/[$,\s]/g, ''));
+    if (!isFinite(annual)) return;
+
+    const baseProp = bgtData[fbSelectedIdx];
+    const cache = fbCashForecastCache[propId];
+    if (!cache) return;
+    const fc = fbComputeCashForecast(baseProp, cache);
+    const closedSet = fc.closedMonths || new Set();
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const openMonths = [];
+    for (let m = 1; m <= 12; m++) if (!closedSet.has(MONTHS[m - 1])) openMonths.push(m);
+    if (openMonths.length === 0) { alert('No open months left this year.'); return; }
+    const perMonth = annual / openMonths.length;
+
+    try {
+      const bsFilter = bsCode ? `&bs_code=eq.${encodeURIComponent(bsCode)}` : '&bs_code=is.null';
+      await supaWrite('cash_forecast_events', 'DELETE', null,
+        `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${year}&event_type=eq.${eventType}&month=in.(${openMonths.join(',')})${bsFilter}`);
+      if (Math.abs(perMonth) > 0.005) {
+        const inserts = openMonths.map(m => {
+          const row = {
+            property_id: propId, year, month: m, event_type: eventType,
+            amount: Math.abs(perMonth),  // reserve_draw stored positive
+            description: `${eventType} plan (spread $${Math.round(annual).toLocaleString()}/${openMonths.length} mo)`,
+          };
+          if (bsCode) row.bs_code = bsCode;
+          return row;
+        });
+        await supaWrite('cash_forecast_events', 'POST', inserts, '');
+      }
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (err) {
+      alert('Spread failed: ' + (err && err.message ? err.message : err));
     }
   }
 
