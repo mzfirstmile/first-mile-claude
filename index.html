@@ -3524,6 +3524,50 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
   let fbReserveDraws = {}; // { propertyId: [{ year, month, reserve_type, draw_amount }] }
   let fbBsAccountNames = {}; // { propertyId: { bsCode: accountName } } — populated from balance_sheet_items
 
+  // Helper: compute Revenue / Expenses / NOI for a year blended from
+  // YTD Actuals + ROY Budget. "Closed" months are detected by sentinel
+  // rows in actualsYd that have any non-zero monthly value. For each
+  // closed month we sum actuals; for unclosed months we sum budget.
+  // Returns { rev, exp, noi } — same shape as the existing fbYearTotals.
+  function fbBlendedYearTotals(budgetYd, actualsYd) {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const aRows = (actualsYd && actualsYd.summaryRows) || [];
+    const bRows = (budgetYd && budgetYd.summaryRows) || [];
+
+    // Determine closed months from actuals — same sentinels as Annual view
+    const sentinels = ['TOTAL INCOME', 'TOTAL REVENUE', 'NET OPERATING INCOME',
+                       'TOTAL BUILDING EXPENSES', 'TOTAL OPERATING EXPENSES'];
+    const sentinelRows = aRows.filter(r => sentinels.includes(r.label));
+    const closed = new Set();
+    MONTHS.forEach(m => {
+      if (sentinelRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005)) closed.add(m);
+    });
+    if (closed.size === 0) {
+      MONTHS.forEach(m => {
+        if (aRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005)) closed.add(m);
+      });
+    }
+    // If no actuals data at all, return null so the caller can skip
+    if (closed.size === 0) return null;
+
+    const findRow = (rows, labels) => rows.find(r => labels.includes(r.label));
+    const aTI  = findRow(aRows, ['TOTAL INCOME', 'TOTAL REVENUE']);
+    const bTI  = findRow(bRows, ['TOTAL INCOME', 'TOTAL REVENUE']);
+    const aTE  = findRow(aRows, ['TOTAL OPERATING EXPENSES', 'TOTAL BUILDING EXPENSES']);
+    const bTE  = findRow(bRows, ['TOTAL OPERATING EXPENSES', 'TOTAL BUILDING EXPENSES']);
+
+    const blend = (aRow, bRow) => MONTHS.reduce((s, m) => {
+      const v = closed.has(m)
+        ? ((aRow && aRow.months && aRow.months[m]) || 0)
+        : ((bRow && bRow.months && bRow.months[m]) || 0);
+      return s + v;
+    }, 0);
+
+    const rev = blend(aTI, bTI);
+    const exp = blend(aTE, bTE);
+    return { rev: Math.abs(rev), exp: Math.abs(exp), noi: rev - Math.abs(exp) };
+  }
+
   function fbBuildYearData(rows, gl, glLookup, propertyId, year) {
     const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const byGl = {};
@@ -3877,10 +3921,43 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
               actuals: actualsYd,
             };
             years[yr] = yd;
-            fbYearTotals[meta.name][parseInt(yr)] = {
+
+            // ── Chart-ready year totals ──
+            // Rules (drives the property's line chart):
+            //   • Active year (2026): blend YTD Actuals + ROY Budget so the
+            //     dot represents a true 12-month forecast comparable to
+            //     adjacent year-end totals. Requires both budget & actuals.
+            //   • Historical year: use actuals only — skip from chart if
+            //     there are no actuals on file.
+            //   • Planning / future year: skip from chart (no actuals).
+            const yearInt = parseInt(yr);
+            const yMeta = FB_YEARS.find(y => y.year === yearInt);
+            const yStatus = yMeta ? yMeta.status : 'historical';
+
+            const hasActuals = !!(actualsYd && actualsYd.summaryRows && actualsYd.summaryRows.some(
+              r => r.months && Object.values(r.months).some(v => Math.abs(v || 0) > 0.005)
+            ));
+
+            let chartTotals = null;
+            if (yStatus === 'active' && budgetYd && actualsYd) {
+              chartTotals = fbBlendedYearTotals(budgetYd, actualsYd);
+            } else if (yStatus === 'historical' && hasActuals && actualsYd) {
+              chartTotals = {
+                rev: Math.abs(actualsYd.totalIncome),
+                exp: Math.abs(actualsYd.totalExpenses),
+                noi: actualsYd.noi,
+              };
+            } // planning + missing-actuals historical fall through with null
+
+            fbYearTotals[meta.name][yearInt] = {
               rev: Math.abs(yd.totalIncome),
               exp: Math.abs(yd.totalExpenses),
-              noi: yd.noi
+              noi: yd.noi,
+              hasChartData: chartTotals != null,
+              chartRev: chartTotals ? chartTotals.rev : null,
+              chartExp: chartTotals ? chartTotals.exp : null,
+              chartNoi: chartTotals ? chartTotals.noi : null,
+              hasActuals,
             };
           }
 
@@ -4188,12 +4265,24 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const container = document.getElementById('fbChartBody');
     if (!container) return;
 
-    // Use year-specific totals from fbYearTotals
+    // Use year-specific CHART totals from fbYearTotals.
+    // Rules (see fbYearTotals build for details):
+    //   • Active year: blended YTD Actuals + ROY Budget (always shown)
+    //   • Historical year: actuals only — skipped if no actuals
+    //   • Planning year: skipped (no actuals possible)
     const totals = fbYearTotals[p.name] || {};
-    const yearData = FB_YEARS.map(y => {
-      const t = totals[y.year] || { rev: 0, exp: 0, noi: 0 };
-      return { year: y.year, rev: t.rev, exp: t.exp, noi: t.noi };
-    });
+    const yearData = FB_YEARS
+      .map(y => {
+        const t = totals[y.year];
+        if (!t || !t.hasChartData) return null;
+        return { year: y.year, rev: t.chartRev, exp: t.chartExp, noi: t.chartNoi };
+      })
+      .filter(d => d != null);
+
+    if (yearData.length === 0) {
+      container.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-dim);font-size:12px">No actuals on file yet for this property. Chart appears once monthly actuals start coming in.</div>`;
+      return;
+    }
 
     const rect = container.getBoundingClientRect();
     const W = Math.max(rect.width || 400, 300);
