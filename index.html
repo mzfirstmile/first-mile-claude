@@ -7750,11 +7750,17 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     //                      or a non-zero monthly_deposit. Cells display the
     //                      monthly_deposit fixed amount (editable — updates
     //                      balance_sheet_items.monthly_deposit on save).
+    // Escrow accounts that participate in the Reserve Draw / Deposit
+    // breakdown. Excludes accounts whose name starts with "Cash" —
+    // those are operating-cash-style accounts that happen to be filed
+    // under the escrow section but aren't true reserve accounts that
+    // receive monthly deposits or get drawn against.
     const escrowAccounts = ((cache.bsLatest && cache.bsLatest.rows) || [])
       .filter(r => (r.account_section || '').toLowerCase() === 'escrow'
                 && (r.account_type || '').toLowerCase() === 'asset'
                 && !r.is_header
                 && !r.is_total
+                && !/^cash[\s\-]/i.test(String(r.account_name || ''))
                 && ((Number(r.amount) > 0) || (Number(r.monthly_deposit) > 0)))
       .sort((a, b) => String(a.bs_code).localeCompare(String(b.bs_code)));
 
