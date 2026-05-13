@@ -6943,19 +6943,30 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           supaFetch('capex_projects', `?property_id=eq.${encodeURIComponent(propId)}&order=sort_order&limit=200`)
             .catch(() => []),
           // Pull balance_sheet_items for the latest period so we can derive
-          // starting cash automatically from the books.
+          // starting cash automatically from the books. ALSO pull all
+          // periods' escrow account rows so reserve-draw actuals can be
+          // back-computed via month-to-month balance differencing.
           (async () => {
-            const latest = await supaFetch(
+            const all = await supaFetch(
               'balance_sheet_items',
-              `?property_id=eq.${encodeURIComponent(propId)}&select=period&order=period.desc&limit=1`
+              `?property_id=eq.${encodeURIComponent(propId)}&is_header=eq.false&is_total=eq.false&select=period,bs_code,account_name,account_type,account_section,amount,monthly_deposit&order=period.desc&limit=1000`
             ).catch(() => []);
-            const period = latest[0]?.period;
-            if (!period) return { period: null, rows: [] };
-            const rows = await supaFetch(
-              'balance_sheet_items',
-              `?property_id=eq.${encodeURIComponent(propId)}&period=eq.${period}&is_header=eq.false&is_total=eq.false&limit=500`
-            ).catch(() => []);
-            return { period, rows };
+            if (!all.length) return { period: null, rows: [], allPeriods: [] };
+            // Latest period only for the existing "starting cash" derivation
+            const latestPeriod = all[0].period;
+            const rows = all.filter(r => r.period === latestPeriod);
+            // Distinct periods sorted oldest → newest
+            const periodSet = [...new Set(all.map(r => r.period))].sort();
+            // Group escrow rows by period for differencing
+            const escrowByPeriod = {};
+            periodSet.forEach(p => { escrowByPeriod[p] = []; });
+            all.forEach(r => {
+              if ((r.account_section || '').toLowerCase() === 'escrow'
+                  && (r.account_type || '').toLowerCase() === 'asset') {
+                escrowByPeriod[r.period].push(r);
+              }
+            });
+            return { period: latestPeriod, rows, periods: periodSet, escrowByPeriod };
           })(),
         ]);
         cache = {
@@ -7682,6 +7693,46 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         .reduce((s, d) => s + (d.months && d.months[monthName] ? d.months[monthName] : 0), 0));
     };
 
+    // Derive ACTUAL reserve draws from balance sheet differencing.
+    // For each pair of adjacent BS snapshots, derived_draw = prior_balance
+    // + deposits_in_gap − current_balance. The total for the gap is
+    // attributed to the closing snapshot's month (we don't know per-month
+    // breakdown without monthly snapshots).
+    //
+    // Returns { bs_code: { monthNumber: derivedDrawAmount, ... }, ... }
+    const periods = (cache.bsLatest && cache.bsLatest.periods) || [];
+    const escrowByPeriod = (cache.bsLatest && cache.bsLatest.escrowByPeriod) || {};
+    const actualReserveDraws = {};
+    if (periods.length >= 2) {
+      for (let i = 1; i < periods.length; i++) {
+        const prior = periods[i - 1];
+        const curr  = periods[i];
+        const m1 = /^(\d{4})-(\d{2})$/.exec(prior);
+        const m2 = /^(\d{4})-(\d{2})$/.exec(curr);
+        if (!m1 || !m2) continue;
+        const [py, pm] = [parseInt(m1[1]), parseInt(m1[2])];
+        const [cy, cm] = [parseInt(m2[1]), parseInt(m2[2])];
+        // Only consider gaps that land in the current forecast year
+        if (cy !== yr) continue;
+        const priorRows = escrowByPeriod[prior] || [];
+        const currRows  = escrowByPeriod[curr]  || [];
+        const codes = new Set([...priorRows.map(r => r.bs_code), ...currRows.map(r => r.bs_code)]);
+        const monthsInGap = (cy - py) * 12 + (cm - pm);  // e.g. Dec 2025 → Mar 2026 = 3
+        codes.forEach(bsCode => {
+          const pAcct = priorRows.find(r => r.bs_code === bsCode);
+          const cAcct = currRows.find(r => r.bs_code === bsCode);
+          const priorAmt = pAcct ? Number(pAcct.amount) || 0 : 0;
+          const currAmt  = cAcct ? Number(cAcct.amount) || 0 : 0;
+          const monthlyDep = Number((cAcct || pAcct || {}).monthly_deposit) || 0;
+          const depositsInGap = monthlyDep * monthsInGap;
+          const totalDraw = priorAmt + depositsInGap - currAmt;
+          if (!actualReserveDraws[bsCode]) actualReserveDraws[bsCode] = {};
+          // Attribute the derived total to the closing snapshot's month
+          actualReserveDraws[bsCode][cm] = (actualReserveDraws[bsCode][cm] || 0) + totalDraw;
+        });
+      }
+    }
+
     const fmt = (v) => v ? '$' + Math.round(v).toLocaleString() : '';
     const fmtTot = (v) => v ? '$' + Math.round(v).toLocaleString() : '$0';
     // closedSet: months with actuals data (drives values + actuals badge in header)
@@ -7857,6 +7908,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       // (the per-project budget). Closed-month actuals roll up only at the
       // PARENT level (we don't have actuals broken down by project).
       if (row.project_id) return lookupAbs(row.eventType, m, null, row.project_id);
+      // Reserve draw sub-rows: use derived actual when closed + we have
+      // BS snapshots to compute from; else fall back to budget event.
+      if (row.eventType === 'reserve_draw' && row.bs_code && isClosed) {
+        const derived = (actualReserveDraws[row.bs_code] || {})[m];
+        if (derived != null) return Math.abs(derived);
+      }
       if (isClosed && row.glClosed) {
         const gls = Array.isArray(row.glClosed) ? row.glClosed : [row.glClosed];
         return gls.reduce((s, g) => s + glAmount(actualsYd, g, monthName), 0);
@@ -7890,6 +7947,13 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       if (isClosed && row.glClosed) {
         const tooltipTitle = `From actuals GL ${Array.isArray(row.glClosed) ? row.glClosed.join(' + ') : row.glClosed}`;
         return `<td class="fb-cap-plan-closed" title="${tooltipTitle}">${v ? fmt(v) : '—'}</td>`;
+      }
+      // Closed-month reserve_draw with derived actual: also read-only
+      if (isClosed && row.eventType === 'reserve_draw' && row.bs_code) {
+        const derived = (actualReserveDraws[row.bs_code] || {})[m];
+        if (derived != null) {
+          return `<td class="fb-cap-plan-closed" title="Derived from BS balance discrepancies (actual)">${v ? fmt(v) : '$0'}</td>`;
+        }
       }
       // Otherwise: editable cash_forecast_events cell (with optional bs_code / project_id)
       return `<td class="fb-cap-plan-input-cell">
