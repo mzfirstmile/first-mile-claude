@@ -881,6 +881,41 @@
   .fb-cf-tooltip .fb-cf-tt-row.total { margin-top:6px; padding-top:5px; border-top:1px solid #2d4360; font-weight:700; }
   .fb-cf-tooltip .fb-cf-tt-row.total span, .fb-cf-tooltip .fb-cf-tt-row.total b { color:#fff; font-size:12px; }
   .fb-cf-hover { cursor:default; }
+
+  /* ── Capital & Distribution Plan grid ─────────────────────────────────── */
+  .fb-cap-plan-table { width:100%; border-collapse:separate; border-spacing:0; font-size:11.5px; }
+  .fb-cap-plan-table thead th { background:var(--surface2); padding:8px 6px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--text-dim); border-bottom:1px solid var(--border); text-align:right; }
+  .fb-cap-plan-table thead th.fb-cap-plan-label-h { text-align:left; min-width:200px; padding-left:12px; }
+  .fb-cap-plan-table thead th.fb-cap-plan-total-h { background:rgba(0,176,212,.08); color:var(--accent); min-width:90px; }
+  .fb-cap-plan-table thead th.fb-cap-plan-closed-h { background:#eef0f4; color:#7a8aa1; }
+  .fb-cap-plan-table tbody td { padding:5px 4px; border-bottom:1px solid var(--border); }
+  .fb-cap-plan-table tbody tr:last-child td { border-bottom:none; }
+  .fb-cap-plan-table td.fb-cap-plan-label { text-align:left; font-weight:600; padding-left:12px; min-width:180px; }
+  .fb-cap-plan-table td.fb-cap-plan-label .fb-cap-plan-dot { display:inline-block; width:9px; height:9px; border-radius:2px; margin-right:6px; vertical-align:middle; }
+  .fb-cap-plan-table td.fb-cap-plan-label .fb-cap-plan-help { display:inline-block; margin-left:6px; width:14px; height:14px; line-height:14px; text-align:center; border-radius:50%; background:var(--surface2); color:var(--text-dim); font-size:9px; font-weight:700; cursor:help; vertical-align:middle; }
+  .fb-cap-plan-table td.fb-cap-plan-input-cell { padding:2px 3px; text-align:right; min-width:80px; }
+  .fb-cap-plan-table td.fb-cap-plan-closed { padding:6px 8px; text-align:right; color:#7a8aa1; background:#f6f7f9; font-variant-numeric:tabular-nums; }
+  .fb-cap-plan-table td.fb-cap-plan-total { text-align:right; font-weight:700; background:rgba(0,176,212,.05); color:var(--accent); font-variant-numeric:tabular-nums; padding:6px 10px; min-width:90px; }
+  .fb-cap-plan-table td.fb-cap-plan-actions { padding:4px 8px; text-align:right; }
+  .fb-cap-plan-spread { padding:3px 10px; background:var(--surface2); border:1px solid var(--border); border-radius:5px; font-size:10.5px; color:var(--text); cursor:pointer; font-weight:500; }
+  .fb-cap-plan-spread:hover { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  .fb-cap-plan-cell {
+    width:100%; box-sizing:border-box;
+    padding:5px 8px;
+    border:1px solid transparent;
+    border-radius:4px;
+    background:rgba(0,176,212,.04);
+    color:var(--text);
+    font-family:inherit; font-size:11.5px;
+    text-align:right; font-variant-numeric:tabular-nums;
+    transition:background .12s, border-color .12s;
+  }
+  .fb-cap-plan-cell:hover { background:rgba(0,176,212,.10); }
+  .fb-cap-plan-cell:focus { outline:none; border-color:var(--accent); background:#fff; box-shadow:inset 0 0 0 1px var(--accent); }
+  .fb-cap-plan-cell.fb-cap-plan-saving { background:#fff9d6; }
+  .fb-cap-plan-cell.fb-cap-plan-saved { background:#d3f3df; }
+  .fb-cap-plan-cell.fb-cap-plan-save-error { background:#ffd6d3; color:#a01818; }
   .fb-variance-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:900px) { .fb-variance-grid { grid-template-columns:1fr; } }
   .fb-variance-col { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
@@ -7016,9 +7051,16 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     });
 
     // Pass 1: compute line items + netDelta for every month using the
-    // appropriate data source (actuals for closed months, budget+rent-roll
-    // for open months). No running balances yet — we need the full deltas
-    // before we can back-solve Jan-1.
+    // appropriate data source.
+    //
+    // Source-of-truth per category:
+    //   Revenue, Opex, Debt:  closed→actuals, open→budget+rentroll+P&I calc
+    //   Base Bldg (Capex):    closed→actuals GL 7106, open→cash_forecast_events 'capex'
+    //   TI / LC:              closed→actuals GL 7105+7107, open→events 'ti_lc'
+    //   Reserve Deposit:      closed→actuals GL 7101, open→budget GL 7101
+    //                         (fixed monthly known amount — not user-editable)
+    //   Reserve Draw:         closed→events, open→events (manual; no P&L line)
+    //   Distributions:        closed→events, open→events (manual; no P&L line)
     const monthlyData = forecastMonths.map((fm, idx) => {
       const isClosed = closedMonths.has(fm.monthName);
       const srcYd = isClosed ? actualsYd : budgetYd;
@@ -7049,13 +7091,30 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
       const key = `${fm.year}-${fm.month}`;
       const ev  = eventsByYM[key] || { ti_lc:0, capex:0, distribution:0, contribution:0, other:0 };
-      const cap_tilc        = Number(ev.ti_lc) || 0;
-      const cap_capex       = Number(ev.capex) || 0;
+
+      // Capex (Base Bldg) — closed pulls from actuals GL 7106; open from events
+      const cap_capex = isClosed
+        ? -Math.abs(glSum(srcYd, '7106', fm.monthName))
+        : (Number(ev.capex) || 0);
+
+      // TI / LC — closed pulls from actuals GL 7105 (TI) + 7107 (LC); open from events
+      const cap_tilc = isClosed
+        ? -(Math.abs(glSum(srcYd, '7105', fm.monthName)) + Math.abs(glSum(srcYd, '7107', fm.monthName)))
+        : (Number(ev.ti_lc) || 0);
+
+      // Reserve Deposit — fixed monthly amount known from budget (GL 7101).
+      // Closed pulls actuals 7101; open pulls budget 7101 (default value;
+      // manual reserve_deposit events in eventsByYM would override).
+      const budgetedDeposit = Math.abs(glSum(budgetYd, '7101', fm.monthName));
+      const actualsDeposit  = Math.abs(glSum(actualsYd, '7101', fm.monthName));
+      const cap_reserveDeposit = isClosed
+        ? (actualsDeposit || Number(depositsByYM[key]) || 0)
+        : (Number(depositsByYM[key]) || budgetedDeposit);
+
       const cap_distrib     = Number(ev.distribution) || 0;
       const cap_contrib     = Number(ev.contribution) || 0;
       const cap_other       = Number(ev.other) || 0;
-      const cap_reserveDraw    = Number(drawsByYM[key]) || 0;
-      const cap_reserveDeposit = Number(depositsByYM[key]) || 0;
+      const cap_reserveDraw = Number(drawsByYM[key]) || 0;
 
       const netDelta = levered + cap_tilc + cap_capex + cap_distrib + cap_contrib + cap_other
                      + cap_reserveDraw - cap_reserveDeposit;
@@ -7148,6 +7207,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // Chart (SVG combo)
     html += fbBuildForecastChart(fc, baseProp);
 
+    // Capital & Distribution Plan — editable monthly schedule that feeds
+    // into the forecast (capex, TI/LC, reserve draws, owner distributions).
+    html += fbBuildCapitalPlanHTML(baseProp, cache, fc);
+
     // Breakdown table + assumptions
     html += `<div style="display:grid;grid-template-columns:1fr 320px;gap:18px;margin-top:18px" class="cf-forecast-grid">
       <div class="fb-chart-card" style="padding:18px">
@@ -7194,7 +7257,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // main green/red bar, so the Y scale needs to consider whichever is
     // taller — operating outflow or capex — for each month.
     const barOutMax = fc.rows.reduce((m, r) => Math.max(m,
-      r.totalOut + Math.abs(r.cap_distrib || 0) + (r.cap_other < 0 ? Math.abs(r.cap_other) : 0),
+      r.totalOut + Math.abs(r.cap_distrib || 0) + (r.cap_other < 0 ? Math.abs(r.cap_other) : 0) + Math.abs(r.cap_reserveDeposit || 0),
       Math.abs(r.cap_tilc || 0) + Math.abs(r.cap_capex || 0)
     ), 0);
 
@@ -7275,9 +7338,11 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         bars += `<rect x="${mainX}" y="${barBaselineY - inH - drawH}" width="${barW}" height="${drawH}" fill="#f5d57a" opacity="0.92"/>
                  <line x1="${mainX}" y1="${barBaselineY - inH}" x2="${mainX + barW}" y2="${barBaselineY - inH}" stroke="#b8891c" stroke-width="0.6"/>`;
       }
-      // Operating outflow bar (red) — opex + debt + distributions only
+      // Operating outflow bar (red) — opex + debt + distributions +
+      // reserve deposit (cash leaving operating, going into reserve account)
       const operatingOutTotal = r.totalOut
         + Math.abs(r.cap_distrib)
+        + Math.abs(r.cap_reserveDeposit)
         + (r.cap_other < 0 ? Math.abs(r.cap_other) : 0);
       const outH = operatingOutTotal * barPxPerDollar;
       bars += `<rect x="${mainX}" y="${barBaselineY}" width="${barW}" height="${outH}" fill="#c94646" opacity="0.88"/>`;
@@ -7445,6 +7510,265 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
   }
 
   // ── Breakdown table ────────────────────────────────────────────────────
+  // ── Capital & Distribution Plan ────────────────────────────────────────
+  // Editable monthly grid for the 4 cash-event categories that flow into
+  // the forecast. Each cell writes to cash_forecast_events on blur:
+  //   • capex / ti_lc / distribution → stored as NEGATIVE (outflow)
+  //   • reserve_draw                  → stored as POSITIVE (inflow)
+  // Closed months render as read-only "actuals" rows pulled from the
+  // existing event data (so historical plan isn't editable retroactively
+  // — actuals are the source of truth there).
+  function fbBuildCapitalPlanHTML(baseProp, cache, fc) {
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const propId = baseProp.id;
+    const yr = fc.year;
+    const events = cache.events || [];
+
+    // Existing event lookup by (year, month, event_type) → absolute amount
+    const lookupAbs = (eventType, month) => {
+      const ev = events.find(e => e.year === yr && e.month === month && e.event_type === eventType);
+      if (!ev) return 0;
+      return Math.abs(Number(ev.amount) || 0);
+    };
+
+    // GL-based lookup for closed-month actuals + budget reserve deposit.
+    // glSum returns positive or negative; we treat all as positive amounts for display.
+    const yd        = (baseProp.years && baseProp.years[yr]) || null;
+    const actualsYd = yd && yd.actuals;
+    const budgetYd  = yd && yd.budget;
+    const glAmount = (sourceYd, glPrefix, monthName) => {
+      if (!sourceYd || !sourceYd.detailRows) return 0;
+      return Math.abs(sourceYd.detailRows
+        .filter(d => String(d.gl || '').startsWith(String(glPrefix)))
+        .reduce((s, d) => s + (d.months && d.months[monthName] ? d.months[monthName] : 0), 0));
+    };
+
+    const fmt = (v) => v ? '$' + Math.round(v).toLocaleString() : '';
+    const fmtTot = (v) => v ? '$' + Math.round(v).toLocaleString() : '$0';
+    const closedSet = fc.closedMonths || new Set();
+
+    // Rows:
+    //   Base Bldg / TI-LC: closed-month value pulled from actuals GL (read-only);
+    //                      open-month value comes from cash_forecast_events (editable)
+    //   Reserve Draw / Distributions: events-only, editable both open & closed
+    //                                 (no GL counterpart in the P&L)
+    //   Reserve Deposit: read-only ALWAYS — fixed monthly amount from
+    //                    budget GL 7101 (or actuals 7101 for closed months)
+    const rows = [
+      { label: 'Base Bldg',           eventType: 'capex',         color: '#c94646',
+        glClosed: '7106',             help: 'Capital improvements / Base Bldg costs (GL 7106 in P&L)' },
+      { label: 'TI / LC',             eventType: 'ti_lc',         color: '#c94646',
+        glClosed: ['7105', '7107'],   help: 'Tenant Improvements (GL 7105) + Brokerage Commissions (GL 7107)' },
+      { label: 'Reserve Draw',        eventType: 'reserve_draw',  color: '#e8a83a',
+        help: 'Cash pulled FROM reserve INTO operating (no P&L GL — manual entry)' },
+      { label: 'Owner Distributions', eventType: 'distribution',  color: '#a82540',
+        help: 'Monthly cash distributions to partners/owners (no P&L GL — manual entry)' },
+      { label: 'Reserve Deposit',     eventType: 'reserve_deposit', color: '#d97e2b',
+        glAuto: '7101',               readOnly: true,
+        help: 'Fixed monthly deposit into capital reserve (GL 7101 — pulled from budget/actuals; not editable)' },
+    ];
+
+    const renderRow = (row) => {
+      let total = 0;
+      let cells = '';
+      for (let m = 1; m <= 12; m++) {
+        const monthName = MONTHS[m - 1];
+        const isClosed = closedSet.has(monthName);
+
+        // Value selection:
+        //   • readOnly (Reserve Deposit): always GL-driven (actuals for closed, budget for open)
+        //   • Closed + has glClosed: actuals GL
+        //   • Otherwise: cash_forecast_events
+        let v = 0;
+        if (row.readOnly && row.glAuto) {
+          v = isClosed
+            ? glAmount(actualsYd, row.glAuto, monthName)
+            : glAmount(budgetYd, row.glAuto, monthName);
+        } else if (isClosed && row.glClosed) {
+          const gls = Array.isArray(row.glClosed) ? row.glClosed : [row.glClosed];
+          v = gls.reduce((s, g) => s + glAmount(actualsYd, g, monthName), 0);
+        } else {
+          v = lookupAbs(row.eventType, m);
+        }
+        total += v;
+
+        const lockedCell = row.readOnly || (isClosed && row.glClosed);
+        if (lockedCell) {
+          const tooltipTitle = row.readOnly
+            ? `Auto from budget GL ${row.glAuto}`
+            : `From actuals GL ${Array.isArray(row.glClosed) ? row.glClosed.join(' + ') : row.glClosed}`;
+          cells += `<td class="fb-cap-plan-closed" title="${tooltipTitle}">${v ? fmt(v) : '—'}</td>`;
+        } else {
+          cells += `<td class="fb-cap-plan-input-cell">
+            <input type="text"
+              class="fb-cap-plan-cell"
+              data-prop="${propId}"
+              data-year="${yr}"
+              data-month="${m}"
+              data-event-type="${row.eventType}"
+              value="${v ? fmt(v) : ''}"
+              placeholder="—"
+              onfocus="this.select()"
+              onblur="fbSaveCapitalPlanCell(this)"
+              onkeydown="fbCapPlanCellKey(event)" />
+          </td>`;
+        }
+      }
+      const actionCell = row.readOnly
+        ? `<td class="fb-cap-plan-actions"><span style="font-size:10px;color:var(--text-dim)">auto</span></td>`
+        : `<td class="fb-cap-plan-actions">
+            <button class="fb-cap-plan-spread" title="Spread evenly across open months"
+              onclick="fbCapPlanSpread('${propId}', ${yr}, '${row.eventType}')">↔ Spread</button>
+          </td>`;
+      return `<tr>
+        <td class="fb-cap-plan-label">
+          <span class="fb-cap-plan-dot" style="background:${row.color}"></span>${row.label}
+          <span class="fb-cap-plan-help" title="${row.help}">?</span>
+        </td>
+        ${cells}
+        <td class="fb-cap-plan-total">${fmtTot(total)}</td>
+        ${actionCell}
+      </tr>`;
+    };
+
+    const monthHeaders = MONTHS.map(m => {
+      const isClosed = closedSet.has(m);
+      return `<th class="${isClosed ? 'fb-cap-plan-closed-h' : ''}">${m}${isClosed ? '<br><span style="font-size:8px;font-weight:500;letter-spacing:0">closed</span>' : ''}</th>`;
+    }).join('');
+
+    return `<div class="fb-chart-card" style="padding:18px;margin-top:14px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;gap:12px;flex-wrap:wrap">
+        <div>
+          <div class="fb-chart-title">Capital &amp; Distribution Plan — ${yr}</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Edits save automatically. Closed months are read-only (actuals own those values).</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;margin-top:10px">
+        <table class="fb-cap-plan-table">
+          <thead>
+            <tr>
+              <th class="fb-cap-plan-label-h">Category</th>
+              ${monthHeaders}
+              <th class="fb-cap-plan-total-h">Total</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(renderRow).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
+  }
+
+  // Save handler for a Capital Plan cell. Writes to cash_forecast_events
+  // (DELETE existing match + INSERT new if non-zero) and re-renders the
+  // forecast so chart/table/KPIs update.
+  async function fbSaveCapitalPlanCell(inputEl) {
+    const propId = inputEl.dataset.prop;
+    const year   = parseInt(inputEl.dataset.year);
+    const month  = parseInt(inputEl.dataset.month);
+    const eventType = inputEl.dataset.eventType;
+    const raw = String(inputEl.value || '').replace(/[$,\s]/g, '');
+    const parsed = parseFloat(raw);
+    let amount = isFinite(parsed) ? parsed : 0;
+    // Sign convention: outflow events stored as negative
+    const OUTFLOW = ['capex', 'ti_lc', 'distribution'];
+    if (OUTFLOW.includes(eventType) && amount > 0) amount = -amount;
+
+    inputEl.value = amount ? '$' + Math.abs(Math.round(amount)).toLocaleString() : '';
+    inputEl.classList.add('fb-cap-plan-saving');
+
+    try {
+      const qs = `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${year}&month=eq.${month}&event_type=eq.${eventType}`;
+      await supaWrite('cash_forecast_events', 'DELETE', null, qs);
+      if (Math.abs(amount) > 0.005) {
+        await supaWrite('cash_forecast_events', 'POST', [{
+          property_id: propId,
+          year, month, event_type: eventType,
+          amount,
+          description: `${eventType} plan`,
+        }], '');
+      }
+      inputEl.classList.remove('fb-cap-plan-saving');
+      inputEl.classList.add('fb-cap-plan-saved');
+      setTimeout(() => inputEl.classList.remove('fb-cap-plan-saved'), 700);
+      // Invalidate cache + re-render
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (err) {
+      inputEl.classList.remove('fb-cap-plan-saving');
+      inputEl.classList.add('fb-cap-plan-save-error');
+      setTimeout(() => inputEl.classList.remove('fb-cap-plan-save-error'), 2000);
+      alert('Failed to save capital plan cell: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  // Keyboard nav inside Capital Plan cells. Enter = save & move down,
+  // Escape = revert.
+  function fbCapPlanCellKey(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      e.target.blur();
+      // Move to next row, same month
+      const all = Array.from(document.querySelectorAll(
+        `.fb-cap-plan-cell[data-month="${e.target.dataset.month}"]`
+      ));
+      const idx = all.indexOf(e.target);
+      if (idx >= 0 && idx + 1 < all.length) all[idx + 1].focus();
+    } else if (e.key === 'Escape') {
+      e.target.setAttribute('data-skip-save', '1');
+      e.target.blur();
+    }
+  }
+
+  // "Spread Evenly" button — divides annual total of an event type across
+  // the open months equally. Prompt-based for v1.
+  async function fbCapPlanSpread(propId, year, eventType) {
+    const labels = { capex: 'Capex', ti_lc: 'TI / LC', distribution: 'Owner Distributions', reserve_draw: 'Reserve Draw' };
+    const ans = prompt(`Annual total to spread evenly across OPEN months for ${labels[eventType] || eventType} (${year})?\n\nEnter $ amount (will be divided across the open months).`, '');
+    if (ans == null) return;
+    const annual = parseFloat(String(ans).replace(/[$,\s]/g, ''));
+    if (!isFinite(annual)) return;
+
+    // Get the current forecast to know which months are closed
+    const baseProp = bgtData[fbSelectedIdx];
+    const cache = fbCashForecastCache[propId];
+    if (!cache) return;
+    const fc = fbComputeCashForecast(baseProp, cache);
+    const closedSet = fc.closedMonths || new Set();
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const openMonths = [];
+    for (let m = 1; m <= 12; m++) if (!closedSet.has(MONTHS[m - 1])) openMonths.push(m);
+    if (openMonths.length === 0) {
+      alert('No open months — all 12 months are already closed.');
+      return;
+    }
+    const perMonth = annual / openMonths.length;
+
+    // Sign convention
+    const OUTFLOW = ['capex', 'ti_lc', 'distribution'];
+    const signedPerMonth = OUTFLOW.includes(eventType) ? -Math.abs(perMonth) : Math.abs(perMonth);
+
+    try {
+      // DELETE all existing for this event type, this year, then bulk INSERT
+      await supaWrite('cash_forecast_events', 'DELETE', null,
+        `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${year}&event_type=eq.${eventType}&month=in.(${openMonths.join(',')})`);
+      if (Math.abs(perMonth) > 0.005) {
+        const inserts = openMonths.map(m => ({
+          property_id: propId, year, month: m, event_type: eventType,
+          amount: signedPerMonth,
+          description: `${eventType} plan (spread $${Math.round(annual).toLocaleString()}/${openMonths.length} mo)`,
+        }));
+        await supaWrite('cash_forecast_events', 'POST', inserts, '');
+      }
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (err) {
+      alert('Spread failed: ' + (err && err.message ? err.message : err));
+    }
+  }
+
   function fbBuildForecastTable(fc) {
     const fmtK = (v) => !v ? '—' : (Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : '$' + Math.round(v / 1000) + 'K');
     const fmtSigned = (v) => !v ? '—' : (v >= 0 ? fmtK(v) : '(' + fmtK(-v) + ')');
@@ -7487,7 +7811,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     html += row('Debt Service (P&I)',           r => -r.exp_debt, true, '', true);
     html += row('Levered Cash Flow',            r => r.levered, false, 'background:rgba(0,176,212,0.02);font-weight:600', false);
 
-    html += `<tr style="background:var(--surface2)"><td colspan="14" style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700">Capital Events</td></tr>`;
+    html += `<tr style="background:var(--surface2)"><td colspan="14" style="text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--text-dim);font-weight:700">Capital Expenditures</td></tr>`;
     html += row('TI / LC',                      r => r.cap_tilc, true, '', true);
     html += row('Capex',                        r => r.cap_capex, true, '', true);
     html += row('Partner Distributions',        r => r.cap_distrib, true, '', true);
