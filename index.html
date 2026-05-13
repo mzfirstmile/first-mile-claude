@@ -6953,13 +6953,19 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // Reserve cash    = sum of asset rows with account_section='escrow'    (GL 11xx)
     // property_cash table still works as a MANUAL OVERRIDE if set.
     let bsOperating = 0, bsReserve = 0;
+    let reserveDepositTotal = 0;
     const bsRows = (cache.bsLatest && cache.bsLatest.rows) || [];
     bsRows.forEach(r => {
       if (r.account_type !== 'asset') return;
       const amt = Number(r.amount) || 0;
       const section = (r.account_section || '').toLowerCase();
       if (section === 'cash') bsOperating += amt;
-      else if (section === 'escrow') bsReserve += amt;
+      else if (section === 'escrow') {
+        bsReserve += amt;
+        // Sum the fixed monthly deposit across all reserve accounts. This is
+        // the per-month outflow from operating cash into the reserve accounts.
+        reserveDepositTotal += Number(r.monthly_deposit) || 0;
+      }
     });
 
     const override = cache.cashOverride;
@@ -7102,14 +7108,13 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         ? -(Math.abs(glSum(srcYd, '7105', fm.monthName)) + Math.abs(glSum(srcYd, '7107', fm.monthName)))
         : (Number(ev.ti_lc) || 0);
 
-      // Reserve Deposit — fixed monthly amount known from budget (GL 7101).
-      // Closed pulls actuals 7101; open pulls budget 7101 (default value;
-      // manual reserve_deposit events in eventsByYM would override).
-      const budgetedDeposit = Math.abs(glSum(budgetYd, '7101', fm.monthName));
-      const actualsDeposit  = Math.abs(glSum(actualsYd, '7101', fm.monthName));
-      const cap_reserveDeposit = isClosed
-        ? (actualsDeposit || Number(depositsByYM[key]) || 0)
-        : (Number(depositsByYM[key]) || budgetedDeposit);
+      // Reserve Deposit — sum monthly_deposit across all escrow accounts on
+      // the balance sheet. Each reserve account stores its own fixed monthly
+      // amount (per PMA / loan terms). Manual reserve_deposit events override
+      // when present.
+      const cap_reserveDeposit = (Number(depositsByYM[key]) > 0)
+        ? Number(depositsByYM[key])
+        : reserveDepositTotal;
 
       const cap_distrib     = Number(ev.distribution) || 0;
       const cap_contrib     = Number(ev.contribution) || 0;
@@ -7552,8 +7557,19 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     //                      open-month value comes from cash_forecast_events (editable)
     //   Reserve Draw / Distributions: events-only, editable both open & closed
     //                                 (no GL counterpart in the P&L)
-    //   Reserve Deposit: read-only ALWAYS — fixed monthly amount from
-    //                    budget GL 7101 (or actuals 7101 for closed months)
+    //   Reserve Deposit (PER ACCOUNT): one row per escrow account on the
+    //                      balance sheet that has either a current balance
+    //                      or a non-zero monthly_deposit. Cells display the
+    //                      monthly_deposit fixed amount (editable — updates
+    //                      balance_sheet_items.monthly_deposit on save).
+    const escrowAccounts = ((cache.bsLatest && cache.bsLatest.rows) || [])
+      .filter(r => (r.account_section || '').toLowerCase() === 'escrow'
+                && (r.account_type || '').toLowerCase() === 'asset'
+                && !r.is_header
+                && !r.is_total
+                && ((Number(r.amount) > 0) || (Number(r.monthly_deposit) > 0)))
+      .sort((a, b) => String(a.bs_code).localeCompare(String(b.bs_code)));
+
     const rows = [
       { label: 'Base Bldg',           eventType: 'capex',         color: '#c94646',
         glClosed: '7106',             help: 'Capital improvements / Base Bldg costs (GL 7106 in P&L)' },
@@ -7563,27 +7579,33 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         help: 'Cash pulled FROM reserve INTO operating (no P&L GL — manual entry)' },
       { label: 'Owner Distributions', eventType: 'distribution',  color: '#a82540',
         help: 'Monthly cash distributions to partners/owners (no P&L GL — manual entry)' },
-      { label: 'Reserve Deposit',     eventType: 'reserve_deposit', color: '#d97e2b',
-        glAuto: '7101',               readOnly: true,
-        help: 'Fixed monthly deposit into capital reserve (GL 7101 — pulled from budget/actuals; not editable)' },
+      // Per-reserve-account deposit rows (dynamic, from balance sheet)
+      ...escrowAccounts.map(acct => ({
+        label: `Reserve Deposit — ${acct.account_name}`,
+        eventType: 'reserve_deposit_bs',
+        bs_code: acct.bs_code,
+        monthly: Number(acct.monthly_deposit) || 0,
+        color: '#d97e2b',
+        help: `Fixed monthly deposit into the ${acct.account_name} escrow (bs_code ${acct.bs_code}). Edit any cell to update the monthly amount — applies to all 12 months.`,
+      })),
     ];
 
     const renderRow = (row) => {
       let total = 0;
       let cells = '';
+      const isBsDeposit = row.eventType === 'reserve_deposit_bs';
+
       for (let m = 1; m <= 12; m++) {
         const monthName = MONTHS[m - 1];
         const isClosed = closedSet.has(monthName);
 
         // Value selection:
-        //   • readOnly (Reserve Deposit): always GL-driven (actuals for closed, budget for open)
-        //   • Closed + has glClosed: actuals GL
-        //   • Otherwise: cash_forecast_events
+        //   • reserve_deposit_bs: single monthly_deposit applied to all 12 months
+        //   • Closed + has glClosed: actuals GL (read-only)
+        //   • Otherwise: cash_forecast_events (editable)
         let v = 0;
-        if (row.readOnly && row.glAuto) {
-          v = isClosed
-            ? glAmount(actualsYd, row.glAuto, monthName)
-            : glAmount(budgetYd, row.glAuto, monthName);
+        if (isBsDeposit) {
+          v = row.monthly;
         } else if (isClosed && row.glClosed) {
           const gls = Array.isArray(row.glClosed) ? row.glClosed : [row.glClosed];
           v = gls.reduce((s, g) => s + glAmount(actualsYd, g, monthName), 0);
@@ -7592,11 +7614,28 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         }
         total += v;
 
-        const lockedCell = row.readOnly || (isClosed && row.glClosed);
+        // Per-account reserve deposit: editable in every cell — each edit
+        // overwrites the single monthly_deposit value applied to all 12.
+        if (isBsDeposit) {
+          cells += `<td class="fb-cap-plan-input-cell">
+            <input type="text"
+              class="fb-cap-plan-cell fb-cap-plan-cell-reserve"
+              data-prop="${propId}"
+              data-bs-code="${row.bs_code}"
+              data-row-type="reserve_deposit_bs"
+              value="${v ? fmt(v) : ''}"
+              placeholder="—"
+              onfocus="this.select()"
+              onblur="fbSaveReserveDepositCell(this)"
+              onkeydown="fbCapPlanCellKey(event)" />
+          </td>`;
+          continue;
+        }
+
+        // Other rows: existing actuals-or-events logic
+        const lockedCell = isClosed && row.glClosed;
         if (lockedCell) {
-          const tooltipTitle = row.readOnly
-            ? `Auto from budget GL ${row.glAuto}`
-            : `From actuals GL ${Array.isArray(row.glClosed) ? row.glClosed.join(' + ') : row.glClosed}`;
+          const tooltipTitle = `From actuals GL ${Array.isArray(row.glClosed) ? row.glClosed.join(' + ') : row.glClosed}`;
           cells += `<td class="fb-cap-plan-closed" title="${tooltipTitle}">${v ? fmt(v) : '—'}</td>`;
         } else {
           cells += `<td class="fb-cap-plan-input-cell">
@@ -7614,8 +7653,9 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           </td>`;
         }
       }
-      const actionCell = row.readOnly
-        ? `<td class="fb-cap-plan-actions"><span style="font-size:10px;color:var(--text-dim)">auto</span></td>`
+
+      const actionCell = isBsDeposit
+        ? `<td class="fb-cap-plan-actions"><span style="font-size:10px;color:var(--text-dim)" title="Editing any cell updates the fixed monthly amount applied to all 12 months">monthly</span></td>`
         : `<td class="fb-cap-plan-actions">
             <button class="fb-cap-plan-spread" title="Spread evenly across open months"
               onclick="fbCapPlanSpread('${propId}', ${yr}, '${row.eventType}')">↔ Spread</button>
@@ -7701,6 +7741,36 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       inputEl.classList.add('fb-cap-plan-save-error');
       setTimeout(() => inputEl.classList.remove('fb-cap-plan-save-error'), 2000);
       alert('Failed to save capital plan cell: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  // Save handler for a per-reserve-account monthly deposit cell. The cell
+  // represents a SINGLE monthly amount applied to all 12 months — editing
+  // any of the 12 input cells overwrites the bs_row's monthly_deposit value.
+  async function fbSaveReserveDepositCell(inputEl) {
+    const propId = inputEl.dataset.prop;
+    const bsCode = inputEl.dataset.bsCode;
+    const raw = String(inputEl.value || '').replace(/[$,\s]/g, '');
+    const parsed = parseFloat(raw);
+    const amount = isFinite(parsed) ? Math.abs(parsed) : 0;
+
+    inputEl.value = amount ? '$' + Math.round(amount).toLocaleString() : '';
+    inputEl.classList.add('fb-cap-plan-saving');
+
+    try {
+      const qs = `?property_id=eq.${encodeURIComponent(propId)}&bs_code=eq.${encodeURIComponent(bsCode)}`;
+      await supaWrite('balance_sheet_items', 'PATCH', { monthly_deposit: amount }, qs);
+      inputEl.classList.remove('fb-cap-plan-saving');
+      inputEl.classList.add('fb-cap-plan-saved');
+      setTimeout(() => inputEl.classList.remove('fb-cap-plan-saved'), 700);
+      // Invalidate cache + re-render
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (err) {
+      inputEl.classList.remove('fb-cap-plan-saving');
+      inputEl.classList.add('fb-cap-plan-save-error');
+      setTimeout(() => inputEl.classList.remove('fb-cap-plan-save-error'), 2000);
+      alert('Failed to save reserve deposit: ' + (err && err.message ? err.message : err));
     }
   }
 
