@@ -7217,7 +7217,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const totalOut = rows.reduce((s, r) => s + r.totalOut, 0);
     const avgLevered = rows.reduce((s, r) => s + r.levered, 0) / rows.length;
 
-    return { rows, starting, lowest, endingCash, totalIn, totalOut, avgLevered, closedMonths, lockedMonths, year: yr };
+    return { rows, starting, lowest, endingCash, totalIn, totalOut, avgLevered, closedMonths, lockedMonths, year: yr, yearStatus: yStatus };
   }
 
   // ── HTML renderer for forecast ─────────────────────────────────────────
@@ -7646,7 +7646,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // property, Base Bldg becomes a collapsible group with one sub-row
     // per project. Otherwise it stays as a flat row.
     const capexProjects = (cache.capexProjects || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-    const isPlanningYear = yStatus === 'planning';
+    const isPlanningYear = fc.yearStatus === 'planning';
 
     const baseBldgRow = capexProjects.length > 0
       ? {
