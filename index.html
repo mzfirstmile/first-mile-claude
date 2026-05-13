@@ -7353,6 +7353,32 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       ? QUARTERS.map(q => ({ label: q.label, months: q.months }))
       : MONTHS.map(m => ({ label: m, months: [m] }));
 
+    // Determine which months are "closed" (have actuals). For the active year,
+    // the Total Act column shows a BLENDED forecast: YTD Actuals (for closed
+    // months) + ROY Budget (for unclosed months) so the comparison against
+    // the full-year Budget total is apples-to-apples over the same 12 months.
+    const yrStatus = fbGetYearStatus();
+    const closedMonths = new Set();
+    if (yrStatus === 'active' && actualsYd && actualsYd.summaryRows) {
+      const sentinels = ['TOTAL INCOME', 'NET OPERATING INCOME', 'TOTAL BUILDING EXPENSES', 'TOTAL OPERATING EXPENSES'];
+      const sentinelRows = actualsYd.summaryRows.filter(r => sentinels.includes(r.label));
+      MONTHS.forEach(m => {
+        const any = sentinelRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005);
+        if (any) closedMonths.add(m);
+      });
+      // Fallback to any row if no sentinel matched
+      if (closedMonths.size === 0) {
+        MONTHS.forEach(m => {
+          const any = actualsYd.summaryRows.some(r => r.months && Math.abs(r.months[m] || 0) > 0.005);
+          if (any) closedMonths.add(m);
+        });
+      }
+    }
+    const blendActive = closedMonths.size > 0 && closedMonths.size < 12;
+    const lastClosed = blendActive ? MONTHS.filter(m => closedMonths.has(m)).slice(-1)[0] : null;
+    const totalActLabel = blendActive ? `Act thru ${lastClosed} + Bgt` : 'Act';
+    const totalGroupLabel = blendActive ? `Total — Blended Forecast` : 'Total';
+
     // Toggle bar
     let html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;gap:12px;flex-wrap:wrap">
       <div style="display:flex;gap:8px;align-items:center">
@@ -7362,7 +7388,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           <button class="bgt-tog-btn ${useQuarter ? 'active' : ''}" onclick="fbSetMonthlyGrouping('quarter')">Quarterly</button>
         </div>
       </div>
-      <div style="font-size:11px;color:var(--text-dim)">${yr} Actual vs Budget · ${isPsf ? '$/SF' : '$'}</div>
+      <div style="font-size:11px;color:var(--text-dim)">${yr} Actual vs Budget · ${isPsf ? '$/SF' : '$'}${blendActive ? ` · Total = YTD Act thru ${lastClosed} + ROY Bgt` : ''}</div>
     </div>`;
 
     // Wrap the table AND a custom scrollbar overlay in a container. The
@@ -7378,11 +7404,11 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       html += `<th colspan="3" class="bgt-th-group" style="text-align:center">${g.label}</th>`;
     });
     // Sticky Total column header (colspan=3 spanning Act/Bgt/Var)
-    html += `<th colspan="3" class="bgt-th-group bgt-col-tot-group" style="text-align:center">Total</th></tr><tr>`;
+    html += `<th colspan="3" class="bgt-th-group bgt-col-tot-group" style="text-align:center" title="${blendActive ? `YTD Actuals through ${lastClosed} + Rest-of-Year Budget — 12-month forecast comparable to full Budget.` : 'Year totals'}">${totalGroupLabel}</th></tr><tr>`;
     for (let i = 0; i < colGroups.length + 1; i++) {
       const isTotal = (i === colGroups.length);
       if (isTotal) {
-        html += `<th class="bgt-th-sub bgt-col-tot bgt-col-tot-a">Act</th>`;
+        html += `<th class="bgt-th-sub bgt-col-tot bgt-col-tot-a" style="font-size:${blendActive ? 8 : 9}px">${totalActLabel}</th>`;
         html += `<th class="bgt-th-sub bgt-col-tot bgt-col-tot-b">Bgt</th>`;
         html += `<th class="bgt-th-sub bgt-col-tot bgt-col-tot-c">Var$</th>`;
       } else {
@@ -7463,11 +7489,25 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       // Year total column — these 3 cells are sticky to the right edge so
       // the year total is always visible even when the user scrolls through
       // months. Background colors live in CSS (.bgt-col-tot rules).
-      const vTot = totA - totB;
+      //
+      // ACTIVE-YEAR BLENDING: Total Act = YTD Actuals (closed months) +
+      // ROY Budget (unclosed months). Makes the comparison against the
+      // full-year Budget total apples-to-apples over 12 months instead
+      // of comparing partial-year actuals to a full year of budget.
+      let totActDisplay = totA;
+      if (blendActive) {
+        totActDisplay = MONTHS.reduce((s, m) => {
+          const v = closedMonths.has(m)
+            ? ((rA && rA.months && rA.months[m]) || 0)
+            : ((rB && rB.months && rB.months[m]) || 0);
+          return s + v;
+        }, 0);
+      }
+      const vTot = totActDisplay - totB;
       const vTotCls = fbValClass(vTot, expense);
-      out += `<td class="bgt-col-tot bgt-col-tot-a" style="text-align:right;font-weight:700">${totA ? fmt(totA) : '—'}</td>`;
+      out += `<td class="bgt-col-tot bgt-col-tot-a" style="text-align:right;font-weight:700">${totActDisplay ? fmt(totActDisplay) : '—'}</td>`;
       out += `<td class="fb-bgt-row-total bgt-col-tot bgt-col-tot-b" data-row-idx="${editRowIdx != null ? editRowIdx : -1}" style="text-align:right;color:var(--text-dim);font-weight:700">${totB ? fmt(totB) : '—'}</td>`;
-      out += `<td class="bgt-col-tot bgt-col-tot-c ${(totA || totB) ? vTotCls : ''}" style="text-align:right;font-weight:700">${(totA || totB) ? fmt(vTot) : '—'}</td>`;
+      out += `<td class="bgt-col-tot bgt-col-tot-c ${(totActDisplay || totB) ? vTotCls : ''}" style="text-align:right;font-weight:700">${(totActDisplay || totB) ? fmt(vTot) : '—'}</td>`;
       return out;
     }
 
