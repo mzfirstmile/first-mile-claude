@@ -7233,26 +7233,31 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const fmtK = (v) => v === 0 ? '$0' : (Math.abs(v) >= 1e6 ? '$' + (v / 1e6).toFixed(2) + 'M' : (Math.abs(v) >= 1000 ? '$' + Math.round(v / 1000) + 'K' : fmt(v)));
     const fmtSigned = (v) => v === 0 ? '—' : (v >= 0 ? fmtK(v) : '(' + fmtK(-v) + ')');
 
-    // KPI strip
-    const projectedGrowth = fc.endingCash > fc.starting.total;
+    // KPI strip — Net Cash = operating + reserve combined
+    const netCashOfRow = (r) => (r.endingCash || 0) + (r.reserveBalance || 0);
+    const yearEndNet = netCashOfRow(fc.rows[fc.rows.length - 1]);
+    const startNet = fc.starting.total; // already operating + reserve
+    const projectedGrowth = yearEndNet > startNet;
     const endingReserve = fc.rows[fc.rows.length - 1].reserveBalance;
     const closedCount = (fc.closedMonths && fc.closedMonths.size) || 0;
     const lastClosed = closedCount ? [...fc.closedMonths].slice(-1)[0] : null;
+    // Lowest NET cash month
+    const lowNetRow = fc.rows.reduce((lo, r) => (lo == null || netCashOfRow(r) < netCashOfRow(lo)) ? r : lo, null);
     let html = `<div class="fb-kpi-grid">
       <div class="fb-kpi-card" style="border-left:4px solid var(--green)">
-        <div class="fb-kpi-label">Start-of-Year Cash</div>
-        <div class="fb-kpi-value">${fmtK(fc.starting.total)}</div>
+        <div class="fb-kpi-label">Start-of-Year Net Cash</div>
+        <div class="fb-kpi-value">${fmtK(startNet)}</div>
         <div class="fb-kpi-sub"><span class="fb-kpi-meta">Jan 1, ${fc.year} · Operating ${fmtK(fc.starting.operating)} · Reserves ${fmtK(fc.starting.reserve)}</span></div>
       </div>
       <div class="fb-kpi-card" style="border-left:4px solid var(--${projectedGrowth ? 'green' : 'amber'})">
-        <div class="fb-kpi-label">Year-End Cash (${fc.year})</div>
-        <div class="fb-kpi-value">${fmtK(fc.endingCash)}</div>
-        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${fc.endingCash >= fc.starting.total ? '+' : ''}${fmtK(fc.endingCash - fc.starting.total)} vs Jan 1${closedCount ? ` · Act thru ${lastClosed}` : ''}</span></div>
+        <div class="fb-kpi-label">Year-End Net Cash (${fc.year})</div>
+        <div class="fb-kpi-value">${fmtK(yearEndNet)}</div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${yearEndNet >= startNet ? '+' : ''}${fmtK(yearEndNet - startNet)} vs Jan 1${closedCount ? ` · Act thru ${lastClosed}` : ''}</span></div>
       </div>
       <div class="fb-kpi-card" style="border-left:4px solid var(--amber)">
-        <div class="fb-kpi-label">Lowest Operating Cash</div>
-        <div class="fb-kpi-value">${fc.lowest ? fmtK(fc.lowest.endingCash) : '—'}</div>
-        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${fc.lowest ? fc.lowest.label : ''}</span></div>
+        <div class="fb-kpi-label">Lowest Net Cash</div>
+        <div class="fb-kpi-value">${lowNetRow ? fmtK(netCashOfRow(lowNetRow)) : '—'}</div>
+        <div class="fb-kpi-sub"><span class="fb-kpi-meta">${lowNetRow ? lowNetRow.label : ''}</span></div>
       </div>
       <div class="fb-kpi-card" style="border-left:4px solid #d97e2b">
         <div class="fb-kpi-label">Year-End Reserve</div>
@@ -7320,6 +7325,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
     const allVals = fc.rows.map(r => r.endingCash)
       .concat(fc.rows.map(r => r.reserveBalance))
+      .concat(fc.rows.map(r => (r.endingCash || 0) + (r.reserveBalance || 0))) // net-cash line
       .concat([fc.starting.total, fc.starting.reserve, 0, barInMax, -barOutMax]);
     const rawMax = Math.max(...allVals);
     const rawMin = Math.min(...allVals);
@@ -7377,8 +7383,13 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const barGap = 3;
     let bars = '';
     let annotations = '';
+    // Net Cash = operating cash balance + reserve balance for each month.
+    // Reserve deposits/draws are internal transfers between the two buckets
+    // so they zero out in the combined total — the line trends with REAL
+    // cash movement (rev, opex, debt, capex, TILC, distributions, contribs).
+    const netCashOf = (r) => (r.endingCash || 0) + (r.reserveBalance || 0);
     const cumPts = [];
-    // Prepend starting-cash point at x=padL (virtual x="now")
+    // Prepend starting Net Cash point at x=padL (virtual x="now")
     cumPts.push(`${padL},${yCash(fc.starting.total)}`);
     fc.rows.forEach((r, i) => {
       const cx = xOf(i);
@@ -7412,23 +7423,24 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         bars += `<rect x="${capexX}" y="${barBaselineY}" width="${capexBarW}" height="${capexH}" fill="#e8a83a" opacity="0.92" stroke="#a87618" stroke-width="0.5"/>`;
       }
 
-      cumPts.push(`${cx},${yCash(r.endingCash)}`);
+      cumPts.push(`${cx},${yCash(netCashOf(r))}`);
     });
 
-    // Low-point annotation
-    if (fc.lowest) {
-      const i = fc.rows.indexOf(fc.lowest);
+    // Low-point annotation — now keyed off NET cash (operating + reserve)
+    const lowNet = fc.rows.reduce((lo, r) => (lo == null || netCashOf(r) < netCashOf(lo)) ? r : lo, null);
+    if (lowNet) {
+      const i = fc.rows.indexOf(lowNet);
       const cx = xOf(i);
-      const cy = yCash(fc.lowest.endingCash);
+      const cy = yCash(netCashOf(lowNet));
       annotations += `<circle cx="${cx}" cy="${cy}" r="5" fill="#fff" stroke="#c94646" stroke-width="2"/>
                        <line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - 22}" stroke="#c94646" stroke-width="1"/>
-                       <rect x="${cx - 70}" y="${cy - 42}" width="140" height="20" fill="#c94646" rx="3"/>
-                       <text x="${cx}" y="${cy - 28}" text-anchor="middle" fill="#fff" font-weight="600" font-size="10">Low: ${fmtAxis(fc.lowest.endingCash)} (${fc.lowest.monthName})</text>`;
+                       <rect x="${cx - 80}" y="${cy - 42}" width="160" height="20" fill="#c94646" rx="3"/>
+                       <text x="${cx}" y="${cy - 28}" text-anchor="middle" fill="#fff" font-weight="600" font-size="10">Low Net Cash: ${fmtAxis(netCashOf(lowNet))} (${lowNet.monthName})</text>`;
     }
 
-    // Cumulative cash line + dots
+    // Net Cash line + dots (was: operating cash balance)
     const linePath = `<polyline fill="none" stroke="#00b0d4" stroke-width="2.8" points="${cumPts.join(' ')}"/>`;
-    const dots = fc.rows.map((r, i) => `<circle cx="${xOf(i)}" cy="${yCash(r.endingCash)}" r="3.5" fill="#00b0d4"/>`).join('');
+    const dots = fc.rows.map((r, i) => `<circle cx="${xOf(i)}" cy="${yCash(netCashOf(r))}" r="3.5" fill="#00b0d4"/>`).join('');
     const startDot = `<circle cx="${padL}" cy="${yCash(fc.starting.total)}" r="4" fill="#00b0d4"/>`;
 
     // Reserve balance line (amber, after draws/deposits)
@@ -7476,7 +7488,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         </div>
       </div>
       <div class="fb-chart-legend" style="margin-bottom:10px">
-        <span><span style="display:inline-block;width:14px;height:3px;background:#00b0d4;margin-right:5px;vertical-align:middle"></span>Operating cash balance</span>
+        <span><span style="display:inline-block;width:14px;height:3px;background:#00b0d4;margin-right:5px;vertical-align:middle"></span>Net Cash Balance (operating + reserve)</span>
         <span><span style="display:inline-block;width:14px;height:0;border-top:2px dashed #d97e2b;margin-right:5px;vertical-align:middle"></span>Reserve balance</span>
         <span><span class="fb-legend-dot" style="background:#1a9a6b"></span>Operating inflow (NOI)</span>
         <span><span class="fb-legend-dot" style="background:#f5d57a"></span>Reserve draw</span>
@@ -7525,8 +7537,9 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         const html = `
           <div class="fb-cf-tt-month">${d.label}</div>
           <div class="fb-cf-tt-section">
-            <div class="fb-cf-tt-row balance"><span>Operating Cash (end)</span><b>${fmt(d.endingCash)}</b></div>
-            <div class="fb-cf-tt-row balance"><span>Reserve Balance</span><b>${fmt(d.reserveBalance)}</b></div>
+            <div class="fb-cf-tt-row balance"><span>Net Cash (end)</span><b>${fmt((d.endingCash||0)+(d.reserveBalance||0))}</b></div>
+            <div class="fb-cf-tt-row" style="font-size:10px"><span style="padding-left:8px;opacity:.7">Operating</span><b style="opacity:.85">${fmt(d.endingCash)}</b></div>
+            <div class="fb-cf-tt-row" style="font-size:10px"><span style="padding-left:8px;opacity:.7">Reserve</span><b style="opacity:.85">${fmt(d.reserveBalance)}</b></div>
           </div>
           <div class="fb-cf-tt-section">
             <div class="fb-cf-tt-h">Operating</div>
