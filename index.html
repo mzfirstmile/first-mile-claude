@@ -6972,12 +6972,27 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       MONTHS.forEach(m => closedMonths.add(m));
     }
 
-    // lockedMonths kept as alias of closedMonths so existing references
-    // still work. A month is closed (and therefore locked) ONLY if we
-    // have the actuals income statement for it. We previously also
-    // locked calendar-passed months even without data, but that mislead
-    // the user into thinking Crown had delivered files for those months.
-    const lockedMonths = closedMonths;
+    // Two related sets:
+    //   closedMonths — DATA-DRIVEN. Drives the "closed" tag in the month
+    //                  header. Only months Crown has delivered an income
+    //                  statement for.
+    //   lockedMonths — DATA + CALENDAR. Drives parent rollup behavior +
+    //                  cell-editing lock. Past months without data still
+    //                  use actuals ($0) for the rollup, because no real
+    //                  cash moved off the books that we know about.
+    const lockedMonths = new Set(closedMonths);
+    if (yStatus === 'active') {
+      const today = new Date();
+      if (today.getFullYear() === yr) {
+        for (let mi = 0; mi < today.getMonth(); mi++) {
+          lockedMonths.add(MONTHS[mi]);
+        }
+      } else if (yr < today.getFullYear()) {
+        MONTHS.forEach(m => lockedMonths.add(m));
+      }
+    } else if (yStatus === 'historical') {
+      MONTHS.forEach(m => lockedMonths.add(m));
+    }
 
     // Derive starting cash from the latest balance sheet period.
     // Operating cash  = sum of asset rows with account_section='cash'      (GL 10xx)
@@ -7634,38 +7649,48 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // GL codes include BOTH old-COA and new-COA versions because actuals
     // get remapped to the new COA on load (e.g. 7105 → 7071), but budget
     // rows stay on whatever COA they were stored in.
-    // Capex projects (Base Bldg sub-rows). If projects exist for this
-    // property, Base Bldg becomes a collapsible group with one sub-row
-    // per project. Otherwise it stays as a flat row.
-    const capexProjects = (cache.capexProjects || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    // Capex projects partitioned by category. Each category becomes its
+    // own collapsible group (Base Bldg / TI / LC) with sub-rows = projects.
+    const allCapexProjects = (cache.capexProjects || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const projectsByCat = { base_bldg: [], ti: [], lc: [] };
+    allCapexProjects.forEach(p => {
+      const cat = (p.category || 'base_bldg').toLowerCase();
+      if (projectsByCat[cat]) projectsByCat[cat].push(p);
+    });
     const isPlanningYear = fc.yearStatus === 'planning';
 
-    const baseBldgRow = capexProjects.length > 0
-      ? {
-          kind: 'group',
-          id: 'capex',
-          label: 'Base Bldg',
+    // Factory: build either a group (when projects exist) or a flat item
+    // for a given capex category.
+    const buildCapexRow = (catKey, label, eventType, glClosedCodes) => {
+      const projs = projectsByCat[catKey] || [];
+      if (projs.length === 0) {
+        return { kind: 'item', id: catKey, label, eventType, color: '#c94646', glClosed: glClosedCodes };
+      }
+      return {
+        kind: 'group',
+        id: catKey,
+        label,
+        color: '#c94646',
+        glClosed: glClosedCodes,
+        allowAdd: isPlanningYear,
+        allowDelete: isPlanningYear,
+        addCategory: catKey,
+        subRows: projs.map(p => ({
+          kind: 'subitem',
+          label: `— ${p.name}${p.status === 'deferred' ? ' (deferred)' : ''}`,
+          eventType,
+          project_id: p.id,
+          project_name: p.name,
+          project_status: p.status,
           color: '#c94646',
-          glClosed: ['7106', '7072'],   // parent rolls up actuals for closed months
-          allowAdd: isPlanningYear,      // "+ Add Project" only in Planning year
-          allowDelete: isPlanningYear,   // sub-row delete buttons only in Planning year
-          subRows: capexProjects.map(p => ({
-            kind: 'subitem',
-            label: `— ${p.name}${p.status === 'deferred' ? ' (deferred)' : ''}`,
-            eventType: 'capex',
-            project_id: p.id,
-            project_name: p.name,
-            project_status: p.status,
-            color: '#c94646',
-          })),
-        }
-      : { kind: 'item', id: 'capex', label: 'Base Bldg', eventType: 'capex',
-          color: '#c94646', glClosed: ['7106', '7072'] };
+        })),
+      };
+    };
 
     const rows = [
-      baseBldgRow,
-      { kind: 'item', id: 'tilc', label: 'TI / LC', eventType: 'ti_lc',
-        color: '#c94646', glClosed: ['7105', '7107', '7071', '7073'] },
+      buildCapexRow('base_bldg', 'Base Bldg', 'capex', ['7106', '7072']),
+      buildCapexRow('ti',        'TI',        'ti_lc', ['7105', '7071']),
+      buildCapexRow('lc',        'LC',        'ti_lc', ['7107', '7073']),
       // Reserve Draw + Reserve Deposit grouped together since they're both
       // movements between operating and reserve accounts.
       { kind: 'group', id: 'reserve_draw', label: 'Total Reserve Draw',
@@ -7813,7 +7838,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
             }).join('') + (row.allowAdd
               ? `<tr class="fb-cap-plan-subrow fb-cap-plan-addrow">
                    <td class="fb-cap-plan-label fb-cap-plan-sublabel" colspan="15">
-                     <button class="fb-cap-plan-add" onclick="event.stopPropagation(); fbCapPlanAddProject('${propId}')">+ Add Project</button>
+                     <button class="fb-cap-plan-add" onclick="event.stopPropagation(); fbCapPlanAddProject('${propId}', '${row.addCategory || 'base_bldg'}')">+ Add ${row.id === 'ti' ? 'TI ' : (row.id === 'lc' ? 'LC ' : '')}Project</button>
                      <span style="margin-left:10px;font-size:10px;color:var(--text-dim)">Planning year only — projects persist across years</span>
                    </td>
                  </tr>`
@@ -7852,9 +7877,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       </tr>`;
     };
 
+    // Header "closed" tag only shows on months where Crown delivered an
+    // income statement (data-driven closedSet), NOT on calendar-passed
+    // months that haven't been delivered yet.
     const monthHeaders = MONTHS.map(m => {
-      const isPast = lockedSet.has(m);
-      return `<th class="${isPast ? 'fb-cap-plan-closed-h' : ''}">${m}${isPast ? '<br><span style="font-size:8px;font-weight:500;letter-spacing:0">closed</span>' : ''}</th>`;
+      const isClosed = closedSet.has(m);
+      return `<th class="${isClosed ? 'fb-cap-plan-closed-h' : ''}">${m}${isClosed ? '<br><span style="font-size:8px;font-weight:500;letter-spacing:0">closed</span>' : ''}</th>`;
     }).join('');
 
     return `<div class="fb-chart-card" style="padding:18px;margin-top:14px">
@@ -7950,18 +7978,21 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     fbRenderDetail();
   }
 
-  // Add a new capex project (Base Bldg sub-row). Planning year only —
-  // the row's allowAdd flag gates the button visibility, this function
-  // only fires from there.
-  async function fbCapPlanAddProject(propId) {
-    const name = prompt('New Base Bldg project name (e.g. "Roof Replacement"):', '');
+  // Add a new capex project to the given category (base_bldg / ti / lc).
+  // Planning year only — the row's allowAdd flag gates button visibility.
+  async function fbCapPlanAddProject(propId, category) {
+    const cat = category || 'base_bldg';
+    const labels = { base_bldg: 'Base Bldg', ti: 'TI', lc: 'LC' };
+    const exName = cat === 'ti' ? 'Suite 460 (UBS)' : cat === 'lc' ? 'Suite 460 (UBS)' : 'Roof Replacement';
+    const name = prompt(`New ${labels[cat] || cat} project name (e.g. "${exName}"):`, '');
     if (!name || !name.trim()) return;
     try {
-      const result = await supaWrite('capex_projects', 'POST', [{
+      await supaWrite('capex_projects', 'POST', [{
         property_id: propId,
         name: name.trim(),
         sort_order: 100,
         status: 'active',
+        category: cat,
       }], '');
       delete fbCashForecastCache[propId];
       fbRenderDetail();
