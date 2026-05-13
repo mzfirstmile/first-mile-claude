@@ -7495,7 +7495,21 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           html += renderMonthlyCells(matchTotal.label, true, isExpenseSection);
           html += `</tr>`;
         } else {
-          html += `<tr class="bgt-row-header${collapsedCls} ${sectionCls}" data-section="${sectionIdx}" onclick="fbToggleSection(this)"><td colspan="${1 + (colGroups.length + 1) * 3}" style="padding:8px 10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:11px"><span class="bgt-chevron">&#9654;</span>${label}</td></tr>`;
+          // Top-level section header (no merged total). Split into cells so
+          // the first column stays sticky-visible while scrolling, and the
+          // Total column on the right also gets its sticky positioning.
+          html += `<tr class="bgt-row-header${collapsedCls} ${sectionCls}" data-section="${sectionIdx}" onclick="fbToggleSection(this)">`;
+          html += `<td style="padding:8px 10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;font-size:11px"><span class="bgt-chevron">&#9654;</span>${label}</td>`;
+          // Empty cells for each month group (Act/Bgt/Var × N) — section color
+          // carries through via .bgt-row-header.bgt-section-X td CSS.
+          for (let i = 0; i < colGroups.length; i++) {
+            html += `<td></td><td></td><td></td>`;
+          }
+          // Sticky Total column placeholder cells (right-pinned)
+          html += `<td class="bgt-col-tot bgt-col-tot-a"></td>`;
+          html += `<td class="bgt-col-tot bgt-col-tot-b"></td>`;
+          html += `<td class="bgt-col-tot bgt-col-tot-c"></td>`;
+          html += `</tr>`;
         }
         return;
       }
