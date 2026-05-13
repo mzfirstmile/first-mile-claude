@@ -7865,16 +7865,18 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     }
 
     // Render a single editable/read-only cell for a given row + month.
+    // Edit-locking is DATA-DRIVEN — only locked when Crown delivered the
+    // income statement (closedSet). Calendar-past months without data
+    // stay editable so Morris can revise the budget for them.
     const cellHtml = (row, m, v) => {
       const monthName = MONTHS[m - 1];
       const isClosed = closedSet.has(monthName);
-      const isLocked = lockedSet.has(monthName);
 
-      // Reserve Deposit per-account: editable, saves bs_row's monthly_deposit.
-      // Locked-month cells stay read-only (can't edit a past month's deposit).
+      // Reserve Deposit per-account: editable except in confirmed-closed
+      // months (we don't want to overwrite an actual past deposit).
       if (row.eventType === 'reserve_deposit_bs') {
-        if (isLocked) {
-          return `<td class="fb-cap-plan-closed" title="${isClosed ? 'Closed (actuals)' : 'Past month — locked'}">${v ? fmt(v) : '—'}</td>`;
+        if (isClosed) {
+          return `<td class="fb-cap-plan-closed" title="Closed (actuals delivered)">${v ? fmt(v) : '—'}</td>`;
         }
         return `<td class="fb-cap-plan-input-cell">
           <input type="text" class="fb-cap-plan-cell fb-cap-plan-cell-reserve"
@@ -7888,10 +7890,6 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       if (isClosed && row.glClosed) {
         const tooltipTitle = `From actuals GL ${Array.isArray(row.glClosed) ? row.glClosed.join(' + ') : row.glClosed}`;
         return `<td class="fb-cap-plan-closed" title="${tooltipTitle}">${v ? fmt(v) : '—'}</td>`;
-      }
-      // Locked-but-no-data: read-only, gray, no value
-      if (isLocked) {
-        return `<td class="fb-cap-plan-closed" title="Past month — locked from editing">${v ? fmt(v) : '—'}</td>`;
       }
       // Otherwise: editable cash_forecast_events cell (with optional bs_code / project_id)
       return `<td class="fb-cap-plan-input-cell">
