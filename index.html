@@ -7082,13 +7082,16 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
                            + glSum(srcYd, '48', fm.monthName);
       const exp_opex       = Math.abs(glSum(srcYd, '5', fm.monthName))
                            + Math.abs(glSum(srcYd, '65', fm.monthName));
-      // Debt service: actuals 715x GL for closed months; computed P&I for open.
+      // Debt service: actuals 715x GL (legacy) + 7091 (new COA) for closed
+      // months; computed P&I for open. Actuals get remapped on load
+      // (7150-7154 → 7091) so we have to check both.
       const exp_debt = isClosed
         ? (Math.abs(glSum(srcYd, '7150', fm.monthName))
          + Math.abs(glSum(srcYd, '7151', fm.monthName))
          + Math.abs(glSum(srcYd, '7152', fm.monthName))
          + Math.abs(glSum(srcYd, '7153', fm.monthName))
-         + Math.abs(glSum(srcYd, '7154', fm.monthName)))
+         + Math.abs(glSum(srcYd, '7154', fm.monthName))
+         + Math.abs(glSum(srcYd, '7091', fm.monthName)))
         : monthlyDebtService;
 
       const totalIn  = rev_baseRent + rev_recoveries + rev_other;
@@ -7098,14 +7101,17 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       const key = `${fm.year}-${fm.month}`;
       const ev  = eventsByYM[key] || { ti_lc:0, capex:0, distribution:0, contribution:0, other:0 };
 
-      // Capex (Base Bldg) — closed pulls from actuals GL 7106; open from events
+      // Capex (Base Bldg) — closed pulls from actuals GL 7106 (legacy) or
+      // 7072 (new COA after remap); open from events. Both checked.
       const cap_capex = isClosed
-        ? -Math.abs(glSum(srcYd, '7106', fm.monthName))
+        ? -(Math.abs(glSum(srcYd, '7106', fm.monthName)) + Math.abs(glSum(srcYd, '7072', fm.monthName)))
         : (Number(ev.capex) || 0);
 
-      // TI / LC — closed pulls from actuals GL 7105 (TI) + 7107 (LC); open from events
+      // TI / LC — closed pulls from actuals GL 7105+7107 (legacy) and
+      // 7071+7073 (new COA after remap); open from events.
       const cap_tilc = isClosed
-        ? -(Math.abs(glSum(srcYd, '7105', fm.monthName)) + Math.abs(glSum(srcYd, '7107', fm.monthName)))
+        ? -(Math.abs(glSum(srcYd, '7105', fm.monthName)) + Math.abs(glSum(srcYd, '7107', fm.monthName))
+          + Math.abs(glSum(srcYd, '7071', fm.monthName)) + Math.abs(glSum(srcYd, '7073', fm.monthName)))
         : (Number(ev.ti_lc) || 0);
 
       // Reserve Deposit — sum monthly_deposit across all escrow accounts on
@@ -7571,10 +7577,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       .sort((a, b) => String(a.bs_code).localeCompare(String(b.bs_code)));
 
     const rows = [
+      // GL codes include BOTH old-COA and new-COA versions because actuals
+      // get remapped to the new COA on load (e.g. 7105 → 7071), but budget
+      // rows stay on whatever COA they were stored in. Filtering against
+      // both ensures we catch the data regardless of source COA.
       { label: 'Base Bldg',           eventType: 'capex',         color: '#c94646',
-        glClosed: '7106',             help: 'Capital improvements / Base Bldg costs (GL 7106 in P&L)' },
+        glClosed: ['7106', '7072'],   help: 'Capital improvements / Base Bldg costs' },
       { label: 'TI / LC',             eventType: 'ti_lc',         color: '#c94646',
-        glClosed: ['7105', '7107'],   help: 'Tenant Improvements (GL 7105) + Brokerage Commissions (GL 7107)' },
+        glClosed: ['7105', '7107', '7071', '7073'],   help: 'Tenant Improvements + Brokerage Commissions' },
       { label: 'Reserve Draw',        eventType: 'reserve_draw',  color: '#e8a83a',
         help: 'Cash pulled FROM reserve INTO operating (no P&L GL — manual entry)' },
       { label: 'Owner Distributions', eventType: 'distribution',  color: '#a82540',
