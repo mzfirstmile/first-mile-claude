@@ -857,6 +857,30 @@
   .fb-chart-legend { display:flex; gap:14px; font-size:11px; color:var(--text-dim); flex-wrap:wrap; }
   .fb-legend-dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:5px; vertical-align:middle; }
   .fb-chart-svg { width:100%; height:240px; display:block; }
+  /* Cash Forecast chart hover tooltip */
+  .fb-cf-tooltip {
+    position:absolute; pointer-events:none; opacity:0; transition:opacity .12s;
+    background:#1a2940; color:#f5f5f5; border:1px solid #2d4360; border-radius:8px;
+    padding:10px 12px; font-size:11px; line-height:1.45; min-width:230px; max-width:280px;
+    box-shadow:0 8px 24px rgba(0,0,0,.35); z-index:1000;
+  }
+  .fb-cf-tooltip.show { opacity:1; }
+  .fb-cf-tooltip .fb-cf-tt-month { font-weight:700; font-size:12.5px; color:#fff; margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid #2d4360; letter-spacing:.4px; text-transform:uppercase; }
+  .fb-cf-tooltip .fb-cf-tt-section { margin:6px 0; padding:0; }
+  .fb-cf-tooltip .fb-cf-tt-section + .fb-cf-tt-section { border-top:1px dashed #2d4360; padding-top:6px; }
+  .fb-cf-tooltip .fb-cf-tt-h { font-size:9.5px; font-weight:600; text-transform:uppercase; color:#8ca5c8; letter-spacing:.5px; margin-bottom:3px; }
+  .fb-cf-tooltip .fb-cf-tt-row { display:flex; justify-content:space-between; gap:14px; padding:1.5px 0; }
+  .fb-cf-tooltip .fb-cf-tt-row span { color:#b6c5da; }
+  .fb-cf-tooltip .fb-cf-tt-row b { color:#fff; font-weight:600; font-variant-numeric:tabular-nums; }
+  .fb-cf-tooltip .fb-cf-tt-row.pos b { color:#7adfae; }
+  .fb-cf-tooltip .fb-cf-tt-row.neg b { color:#ff8a82; }
+  .fb-cf-tooltip .fb-cf-tt-row.cap b { color:#f5c97a; }
+  .fb-cf-tooltip .fb-cf-tt-row.balance b { color:#5ed4f5; }
+  .fb-cf-tooltip .fb-cf-tt-row.sub { padding-top:3px; border-top:1px dotted #2d4360; margin-top:3px; }
+  .fb-cf-tooltip .fb-cf-tt-row.sub b { color:#7adfae; font-weight:700; }
+  .fb-cf-tooltip .fb-cf-tt-row.total { margin-top:6px; padding-top:5px; border-top:1px solid #2d4360; font-weight:700; }
+  .fb-cf-tooltip .fb-cf-tt-row.total span, .fb-cf-tooltip .fb-cf-tt-row.total b { color:#fff; font-size:12px; }
+  .fb-cf-hover { cursor:default; }
   .fb-variance-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:900px) { .fb-variance-grid { grid-template-columns:1fr; } }
   .fb-variance-col { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
@@ -6832,6 +6856,11 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
     const forecast = fbComputeCashForecast(baseProp, cache);
     body.innerHTML = fbBuildCashForecastHTML(baseProp, cache, forecast);
+    // Inline <script> tags inside innerHTML don't execute — wire the
+    // chart tooltip explicitly here, on next paint.
+    if (typeof fbWireCashForecastTooltip === 'function') {
+      requestAnimationFrame(fbWireCashForecastTooltip);
+    }
   }
 
   // ── Forecast computation ──────────────────────────────────────────────
@@ -7084,9 +7113,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     //   • monthly outflow bars (extending DOWN from zero, shown as -totalOut)
     const barInMax = fc.rows.reduce((m, r) => Math.max(m,
       r.totalIn + (r.cap_reserveDraw || 0) + (r.cap_contrib > 0 ? r.cap_contrib : 0)), 0);
+    // Operating outflows = opex + debt + distributions + neg "other".
+    // Capex (cap_capex + cap_tilc) gets its OWN yellow bar next to the
+    // main green/red bar, so the Y scale needs to consider whichever is
+    // taller — operating outflow or capex — for each month.
     const barOutMax = fc.rows.reduce((m, r) => Math.max(m,
-      r.totalOut + Math.abs(r.cap_tilc || 0) + Math.abs(r.cap_capex || 0)
-      + Math.abs(r.cap_distrib || 0) + (r.cap_other < 0 ? Math.abs(r.cap_other) : 0)), 0);
+      r.totalOut + Math.abs(r.cap_distrib || 0) + (r.cap_other < 0 ? Math.abs(r.cap_other) : 0),
+      Math.abs(r.cap_tilc || 0) + Math.abs(r.cap_capex || 0)
+    ), 0);
 
     const allVals = fc.rows.map(r => r.endingCash)
       .concat(fc.rows.map(r => r.reserveBalance))
@@ -7135,8 +7169,16 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
     // Bar baseline = $0 gridline, already rendered above
 
-    // Monthly bars + cumulative cash line
-    const barW = Math.max(chartW / 12 * 0.55, 14);
+    // Monthly bars + cumulative cash line.
+    // Each month gets TWO side-by-side bars within its slot:
+    //   • Main bar (green up / red down): operating inflow & operating outflow
+    //   • Capex bar (yellow down + small green up if capex is a refund):
+    //     capex spend + TI/LC. Pulled out of the red stack so capital
+    //     activity is visually distinct from operating activity.
+    const slotW = chartW / 12;
+    const barW = Math.max(slotW * 0.30, 12);
+    const capexBarW = Math.max(slotW * 0.22, 10);
+    const barGap = 3;
     let bars = '';
     let annotations = '';
     const cumPts = [];
@@ -7144,21 +7186,33 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     cumPts.push(`${padL},${yCash(fc.starting.total)}`);
     fc.rows.forEach((r, i) => {
       const cx = xOf(i);
-      const x0 = cx - barW / 2;
+      const totalGroupW = barW + barGap + capexBarW;
+      const mainX = cx - totalGroupW / 2;
+      const capexX = mainX + barW + barGap;
 
       // Inflow bar (green) — totalIn above baseline
       const inH = r.totalIn * barPxPerDollar;
-      bars += `<rect x="${x0}" y="${barBaselineY - inH}" width="${barW}" height="${inH}" fill="#1a9a6b" opacity="0.88"/>`;
+      bars += `<rect x="${mainX}" y="${barBaselineY - inH}" width="${barW}" height="${inH}" fill="#1a9a6b" opacity="0.88"/>`;
       // Reserve draw (yellow) stacked ABOVE green inflow
       if (r.cap_reserveDraw > 0) {
         const drawH = r.cap_reserveDraw * barPxPerDollar;
-        bars += `<rect x="${x0}" y="${barBaselineY - inH - drawH}" width="${barW}" height="${drawH}" fill="#e8b544" opacity="0.92"/>
-                 <line x1="${x0}" y1="${barBaselineY - inH}" x2="${x0 + barW}" y2="${barBaselineY - inH}" stroke="#b8891c" stroke-width="0.6"/>`;
+        bars += `<rect x="${mainX}" y="${barBaselineY - inH - drawH}" width="${barW}" height="${drawH}" fill="#f5d57a" opacity="0.92"/>
+                 <line x1="${mainX}" y1="${barBaselineY - inH}" x2="${mainX + barW}" y2="${barBaselineY - inH}" stroke="#b8891c" stroke-width="0.6"/>`;
       }
-      // Outflow bar (red) — totalOut + capex/TI/dist below baseline
-      const outTotal = r.totalOut + Math.abs(r.cap_tilc) + Math.abs(r.cap_capex) + Math.abs(r.cap_distrib) + Math.abs(r.cap_other < 0 ? r.cap_other : 0);
-      const outH = outTotal * barPxPerDollar;
-      bars += `<rect x="${x0}" y="${barBaselineY}" width="${barW}" height="${outH}" fill="#c94646" opacity="0.88"/>`;
+      // Operating outflow bar (red) — opex + debt + distributions only
+      const operatingOutTotal = r.totalOut
+        + Math.abs(r.cap_distrib)
+        + (r.cap_other < 0 ? Math.abs(r.cap_other) : 0);
+      const outH = operatingOutTotal * barPxPerDollar;
+      bars += `<rect x="${mainX}" y="${barBaselineY}" width="${barW}" height="${outH}" fill="#c94646" opacity="0.88"/>`;
+
+      // Capex bar (yellow) — cap_capex + cap_tilc, BELOW baseline,
+      // positioned to the right of the main bar.
+      const capexSpend = Math.abs(r.cap_capex) + Math.abs(r.cap_tilc);
+      if (capexSpend > 0) {
+        const capexH = capexSpend * barPxPerDollar;
+        bars += `<rect x="${capexX}" y="${barBaselineY}" width="${capexBarW}" height="${capexH}" fill="#e8a83a" opacity="0.92" stroke="#a87618" stroke-width="0.5"/>`;
+      }
 
       cumPts.push(`${cx},${yCash(r.endingCash)}`);
     });
@@ -7186,7 +7240,37 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const reserveDots = fc.rows.map((r, i) => `<circle cx="${xOf(i)}" cy="${yCash(r.reserveBalance)}" r="3" fill="#d97e2b"/>`).join('');
     const reserveStartDot = `<circle cx="${padL}" cy="${yCash(fc.starting.reserve)}" r="3.5" fill="#d97e2b"/>`;
 
-    return `<div class="fb-chart-card">
+    // Invisible hover zones — one rect per month, full slot width. Each
+    // carries a data-payload encoded as a JSON string the tooltip reads.
+    // Drawn ON TOP of bars/lines so the cursor catches the whole column.
+    const slotWidth = chartW / 12;
+    const hoverZones = fc.rows.map((r, i) => {
+      const x = padL + (i / 12) * chartW;
+      const payload = encodeURIComponent(JSON.stringify({
+        label: r.label,
+        endingCash: r.endingCash,
+        reserveBalance: r.reserveBalance,
+        totalIn: r.totalIn,
+        totalOut: r.totalOut,
+        rev_baseRent: r.rev_baseRent,
+        rev_recoveries: r.rev_recoveries,
+        rev_other: r.rev_other,
+        exp_opex: r.exp_opex,
+        exp_debt: r.exp_debt,
+        levered: r.levered,
+        cap_capex: r.cap_capex,
+        cap_tilc: r.cap_tilc,
+        cap_distrib: r.cap_distrib,
+        cap_contrib: r.cap_contrib,
+        cap_other: r.cap_other,
+        cap_reserveDraw: r.cap_reserveDraw,
+        cap_reserveDeposit: r.cap_reserveDeposit,
+        netDelta: r.netDelta,
+      }));
+      return `<rect x="${x}" y="${padT}" width="${slotWidth}" height="${chartH}" fill="transparent" class="fb-cf-hover" data-payload="${payload}"/>`;
+    }).join('');
+
+    return `<div class="fb-chart-card" style="position:relative">
       <div class="fb-chart-head">
         <div>
           <div class="fb-chart-title">Projected Cash Balance — ${baseProp.name} · Next 12 Months</div>
@@ -7197,10 +7281,11 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         <span><span style="display:inline-block;width:14px;height:3px;background:#00b0d4;margin-right:5px;vertical-align:middle"></span>Operating cash balance</span>
         <span><span style="display:inline-block;width:14px;height:0;border-top:2px dashed #d97e2b;margin-right:5px;vertical-align:middle"></span>Reserve balance</span>
         <span><span class="fb-legend-dot" style="background:#1a9a6b"></span>Operating inflow (NOI)</span>
-        <span><span class="fb-legend-dot" style="background:#e8b544"></span>Reserve draw</span>
-        <span><span class="fb-legend-dot" style="background:#c94646"></span>Outflows (debt, opex, capex)</span>
+        <span><span class="fb-legend-dot" style="background:#f5d57a"></span>Reserve draw</span>
+        <span><span class="fb-legend-dot" style="background:#e8a83a"></span>Capex / TI&amp;LC</span>
+        <span><span class="fb-legend-dot" style="background:#c94646"></span>Outflows (debt, opex, distributions)</span>
       </div>
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:340px;display:block">
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:340px;display:block" id="fbCfChartSvg">
         ${gridLines}
         ${bars}
         ${reserveLine}
@@ -7209,8 +7294,78 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         ${startDot}${dots}
         ${xLabels}
         ${annotations}
+        ${hoverZones}
       </svg>
+      <div class="fb-cf-tooltip" id="fbCfTooltip"></div>
     </div>`;
+  }
+
+  // Hover-tooltip wiring for the Cash Forecast chart. Reads data-payload
+  // from each .fb-cf-hover rect; positions a custom tooltip near the
+  // cursor. Re-runs on every chart render (fbBuildForecastChart returns
+  // a <script> tag that calls this on next animation frame).
+  function fbWireCashForecastTooltip() {
+    const tip = document.getElementById('fbCfTooltip');
+    if (!tip) return;
+    const fmt = (v) => {
+      if (!v) return '—';
+      const sign = v < 0 ? '(' : '';
+      const closeSign = v < 0 ? ')' : '';
+      const abs = Math.abs(v);
+      if (abs >= 1e6) return sign + '$' + (abs / 1e6).toFixed(2) + 'M' + closeSign;
+      if (abs >= 1000) return sign + '$' + Math.round(abs / 1000) + 'K' + closeSign;
+      return sign + '$' + Math.round(abs) + closeSign;
+    };
+    const card = tip.closest('.fb-chart-card');
+    const zones = document.querySelectorAll('#fbCfChartSvg .fb-cf-hover');
+    zones.forEach(zone => {
+      zone.addEventListener('mouseenter', (e) => {
+        let d;
+        try { d = JSON.parse(decodeURIComponent(zone.dataset.payload)); }
+        catch (err) { return; }
+        const capexTotal = (d.cap_capex || 0) + (d.cap_tilc || 0);
+        const html = `
+          <div class="fb-cf-tt-month">${d.label}</div>
+          <div class="fb-cf-tt-section">
+            <div class="fb-cf-tt-row balance"><span>Operating Cash (end)</span><b>${fmt(d.endingCash)}</b></div>
+            <div class="fb-cf-tt-row balance"><span>Reserve Balance</span><b>${fmt(d.reserveBalance)}</b></div>
+          </div>
+          <div class="fb-cf-tt-section">
+            <div class="fb-cf-tt-h">Operating</div>
+            <div class="fb-cf-tt-row pos"><span>Base Rent</span><b>${fmt(d.rev_baseRent)}</b></div>
+            <div class="fb-cf-tt-row pos"><span>Recoveries</span><b>${fmt(d.rev_recoveries)}</b></div>
+            <div class="fb-cf-tt-row pos"><span>Other Income</span><b>${fmt(d.rev_other)}</b></div>
+            <div class="fb-cf-tt-row neg"><span>Opex</span><b>${fmt(-d.exp_opex)}</b></div>
+            <div class="fb-cf-tt-row neg"><span>Debt Service</span><b>${fmt(-d.exp_debt)}</b></div>
+            <div class="fb-cf-tt-row sub"><span>Levered CF</span><b>${fmt(d.levered)}</b></div>
+          </div>
+          <div class="fb-cf-tt-section">
+            <div class="fb-cf-tt-h">Capital</div>
+            <div class="fb-cf-tt-row cap"><span>Capex</span><b>${fmt(d.cap_capex)}</b></div>
+            <div class="fb-cf-tt-row cap"><span>TI / LC</span><b>${fmt(d.cap_tilc)}</b></div>
+            ${d.cap_distrib ? `<div class="fb-cf-tt-row neg"><span>Distributions</span><b>${fmt(d.cap_distrib)}</b></div>` : ''}
+            ${d.cap_contrib ? `<div class="fb-cf-tt-row pos"><span>Contributions</span><b>${fmt(d.cap_contrib)}</b></div>` : ''}
+            ${d.cap_reserveDraw ? `<div class="fb-cf-tt-row pos"><span>Reserve Draw</span><b>${fmt(d.cap_reserveDraw)}</b></div>` : ''}
+            ${d.cap_reserveDeposit ? `<div class="fb-cf-tt-row neg"><span>Reserve Deposit</span><b>${fmt(-d.cap_reserveDeposit)}</b></div>` : ''}
+          </div>
+          <div class="fb-cf-tt-row total"><span>Net Δ</span><b>${fmt(d.netDelta)}</b></div>
+        `;
+        tip.innerHTML = html;
+        tip.classList.add('show');
+      });
+      zone.addEventListener('mousemove', (e) => {
+        if (!card) return;
+        const r = card.getBoundingClientRect();
+        const x = e.clientX - r.left;
+        const y = e.clientY - r.top;
+        // Position to the right of the cursor unless we're near the right edge
+        const tipW = tip.offsetWidth || 240;
+        const left = (x + tipW + 20 > r.width) ? (x - tipW - 14) : (x + 14);
+        tip.style.left = Math.max(8, left) + 'px';
+        tip.style.top = Math.max(8, Math.min(r.height - (tip.offsetHeight || 250) - 8, y - 30)) + 'px';
+      });
+      zone.addEventListener('mouseleave', () => { tip.classList.remove('show'); });
+    });
   }
 
   // ── Breakdown table ────────────────────────────────────────────────────
