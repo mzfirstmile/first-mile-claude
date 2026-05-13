@@ -592,16 +592,52 @@
   .bgt-table-monthly .bgt-row-total.bgt-total-expense .bgt-col-tot { background:#FBE6E5; }
   .bgt-table-monthly .bgt-row-total.bgt-total-noi .bgt-col-tot { background:#D6F2F8; }
 
-  /* Always-visible horizontal scrollbar on the table wrap so the user knows
-     they can scroll through months on macOS (where scrollbars auto-hide).
-     The -webkit-appearance:none is critical — without it macOS Chrome/Safari
-     still hide the scrollbar regardless of width/color overrides. */
-  .bgt-table-wrap { scrollbar-color:rgba(0,176,212,.55) rgba(0,0,0,.06); scrollbar-width:auto; }
-  .bgt-table-wrap::-webkit-scrollbar { -webkit-appearance:none; height:14px; width:14px; background:rgba(0,0,0,.05); }
-  .bgt-table-wrap::-webkit-scrollbar-thumb { background:rgba(0,176,212,.55); border-radius:8px; border:3px solid rgba(0,0,0,0); background-clip:padding-box; min-width:40px; }
-  .bgt-table-wrap::-webkit-scrollbar-thumb:hover { background:rgba(0,176,212,.85); background-clip:padding-box; border:3px solid rgba(0,0,0,0); }
-  .bgt-table-wrap::-webkit-scrollbar-track { background:rgba(0,0,0,.04); border-radius:8px; }
-  .bgt-table-wrap::-webkit-scrollbar-corner { background:transparent; }
+  /* ── Always-visible horizontal scrollbar on the Monthly P&L wrap ──
+     macOS Chrome/Safari hide scrollbars by default ("auto"). To force one
+     visible we have to: (1) use overflow-x:scroll not auto, (2) call out
+     -webkit-appearance:none AND appearance:none, (3) give the scrollbar an
+     explicit non-zero height, (4) set display:block on the pseudo-element.
+     All flagged !important so nothing on the page can suppress them.
+     Scoped to .bgt-table-wrap-monthly so the Annual view stays clean. */
+  .bgt-table-wrap-monthly {
+    overflow-x: scroll !important;
+    overflow-y: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    scrollbar-color: #00b0d4 #d6eef2 !important;
+    scrollbar-width: auto !important;
+  }
+  .bgt-table-wrap-monthly::-webkit-scrollbar {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    display: block !important;
+    height: 14px !important;
+    width: 14px !important;
+    background: #d6eef2 !important;
+  }
+  .bgt-table-wrap-monthly::-webkit-scrollbar-track {
+    background: #d6eef2 !important;
+    border-radius: 7px !important;
+  }
+  .bgt-table-wrap-monthly::-webkit-scrollbar-thumb {
+    background: #00b0d4 !important;
+    border-radius: 7px !important;
+    min-width: 60px !important;
+  }
+  .bgt-table-wrap-monthly::-webkit-scrollbar-thumb:hover {
+    background: #008cb0 !important;
+  }
+  .bgt-table-wrap-monthly::-webkit-scrollbar-corner {
+    background: transparent !important;
+  }
+  /* The inner monthly table can grow beyond 100% of its wrap — use
+     width:auto so min-width takes effect (some browser table layouts
+     ignore min-width when width:100% from the base .bgt-table is in play). */
+  .bgt-table-wrap-monthly > .bgt-table-monthly {
+    width: auto !important;
+  }
   .bgt-neg { color:#e5534b !important; }
   .bgt-pos { color:#1a9a6b !important; }
   .bgt-pos { color:var(--green) !important; }
@@ -7322,14 +7358,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       <div style="font-size:11px;color:var(--text-dim)">${yr} Actual vs Budget · ${isPsf ? '$/SF' : '$'}</div>
     </div>`;
 
-    // Min-width includes label (220px) + 240px per period group + 270px for the
-    // sticky Total column. We use overflow-x:scroll (not auto) so the scrollbar
-    // is always present — macOS hides "auto" scrollbars until you start
-    // scrolling, which made Morris think scrolling was broken. width:100% +
-    // max-width:100% + box-sizing forces the wrap to stay inside its parent so
-    // the OUTER #view-financials scrollbar doesn't swallow the horizontal
-    // overflow at the page level.
-    html += `<div class="bgt-table-wrap" style="overflow-x:scroll;overflow-y:visible;width:100%;max-width:100%;box-sizing:border-box"><table class="bgt-table bgt-table-monthly" style="min-width:${220 + colGroups.length * 240 + 270}px;width:max-content">
+    // Dedicated wrap class for the monthly view so the always-visible
+    // scrollbar CSS can be scoped to it (Annual wrap doesn't overflow and
+    // shouldn't carry a permanent scrollbar).
+    html += `<div class="bgt-table-wrap bgt-table-wrap-monthly"><table class="bgt-table bgt-table-monthly" style="min-width:${220 + colGroups.length * 240 + 270}px">
       <thead>
         <tr>
           <th rowspan="2" class="bgt-th-label" style="min-width:220px;position:sticky;left:0;background:var(--surface2);z-index:5">Line Item</th>`;
@@ -7367,18 +7399,26 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // items to enter them). Otherwise default to collapsed like Annual view.
     const defaultExpanded = editable;
 
-    // Map each top-level header label → its matching TOTAL row, so section
-    // totals can be merged into the header's right-hand cells (matches the
-    // Annual view's pattern).
-    const totalByHeader = {};
+    // Mirror Annual's merge logic precisely:
+    //   • Sub-section totals (e.g. "TOTAL ADMINISTRATIVE EXPENSES") merge
+    //     into their matching sub-header ("ADMINISTRATIVE EXPENSES") so the
+    //     collapsed bar shows the section total inline.
+    //   • Top-level totals (TOTAL INCOME / TOTAL OPERATING EXPENSES / NOI /
+    //     NET INCOME) DO NOT merge — they stay as standalone strong-styled
+    //     rows below the detail lines, exactly like the Annual view.
+    // headerLabels excludes top-level headers (matched by topLevelPattern).
+    const headerLabels = new Set();
     skeleton.forEach(r => {
-      if (r.isTotal) {
-        const stripped = r.label.replace(/^TOTAL\s+/i, '').toUpperCase();
-        totalByHeader[stripped] = r;
+      if (r.isHeader && !topLevelPattern.test(r.label)) {
+        headerLabels.add(r.label.toUpperCase());
       }
     });
-    const headerLabels = new Set();
-    skeleton.forEach(r => { if (r.isHeader) headerLabels.add(r.label.toUpperCase()); });
+    const totalByHeader = {};
+    skeleton.forEach(r => {
+      if (!r.isTotal) return;
+      const stripped = r.label.replace(/^TOTAL\s+/i, '').toUpperCase();
+      if (headerLabels.has(stripped)) totalByHeader[stripped] = r;
+    });
 
     // Helper: render the value cells (Act / Bgt / Var per period + Total)
     // for a single row reference. `rowLbl` is used to look up rowA/rowB.
