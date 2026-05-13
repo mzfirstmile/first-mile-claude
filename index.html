@@ -7766,18 +7766,21 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       // Group parent: sum sub-row values for each month, render as a
       // collapsible header. Sub-rows render only when expanded.
       //
-      // SPECIAL CASE for Base Bldg: closed months use the actuals GL roll-up
-      // (since we don't have actuals broken down by project), open months
-      // sum the sub-row project budgets.
+      // PAST vs FUTURE for Base Bldg / TI-LC:
+      //   • Past months (lockedSet) → use ACTUALS GL roll-up. Even when
+      //     actuals are missing (sync didn't fill that month), this shows
+      //     $0 — the cash that REALLY left the property — rather than
+      //     falling back to the budget (which would inflate the rollup).
+      //   • Future months → sum of sub-row project budgets.
       if (row.kind === 'group') {
         const isExpanded = expandedGroups.has(row.id);
         let total = 0;
         let cells = '';
         for (let m = 1; m <= 12; m++) {
           const monthName = MONTHS[m - 1];
-          const isClosed = closedSet.has(monthName);
+          const isPastMonth = lockedSet.has(monthName);
           let mTotal;
-          if (row.glClosed && isClosed) {
+          if (row.glClosed && isPastMonth) {
             const gls = Array.isArray(row.glClosed) ? row.glClosed : [row.glClosed];
             mTotal = gls.reduce((s, g) => s + glAmount(actualsYd, g, monthName), 0);
           } else {
@@ -7858,8 +7861,8 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     };
 
     const monthHeaders = MONTHS.map(m => {
-      const isClosed = closedSet.has(m);
-      return `<th class="${isClosed ? 'fb-cap-plan-closed-h' : ''}">${m}${isClosed ? '<br><span style="font-size:8px;font-weight:500;letter-spacing:0">closed</span>' : ''}</th>`;
+      const isPast = lockedSet.has(m);
+      return `<th class="${isPast ? 'fb-cap-plan-closed-h' : ''}">${m}${isPast ? '<br><span style="font-size:8px;font-weight:500;letter-spacing:0">closed</span>' : ''}</th>`;
     }).join('');
 
     return `<div class="fb-chart-card" style="padding:18px;margin-top:14px">
