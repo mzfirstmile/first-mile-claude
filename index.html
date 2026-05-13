@@ -927,6 +927,11 @@
   .fb-cap-plan-grouptotal { background:rgba(0,176,212,.08) !important; font-size:12px; }
   .fb-cap-plan-subrow .fb-cap-plan-sublabel { padding-left:36px; font-weight:500; color:var(--text); font-size:11px; }
   .fb-cap-plan-subrow .fb-cap-plan-subtotal { background:rgba(0,176,212,.03); }
+  .fb-cap-plan-addrow { background:#fafbfd; }
+  .fb-cap-plan-add { padding:4px 12px; background:var(--accent); color:#fff; border:none; border-radius:5px; font-size:11px; font-weight:600; cursor:pointer; }
+  .fb-cap-plan-add:hover { background:#008cb0; }
+  .fb-cap-plan-del { padding:2px 6px; margin-right:4px; background:transparent; border:1px solid #c94646; color:#c94646; border-radius:4px; font-size:11px; cursor:pointer; line-height:1; }
+  .fb-cap-plan-del:hover { background:#c94646; color:#fff; }
   .fb-variance-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   @media (max-width:900px) { .fb-variance-grid { grid-template-columns:1fr; } }
   .fb-variance-col { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; }
@@ -6861,7 +6866,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     let cache = fbCashForecastCache[propId];
     if (!cache) {
       try {
-        const [rentRoll, events, cashOverride, liabilities, bsLatest] = await Promise.all([
+        const [rentRoll, events, cashOverride, liabilities, capexProjects, bsLatest] = await Promise.all([
           supaFetch('rent_roll', `?property_id=eq.${encodeURIComponent(propId)}&limit=1000`)
             .catch(() => []),
           supaFetch('cash_forecast_events', `?property_id=eq.${encodeURIComponent(propId)}&limit=1000`)
@@ -6869,6 +6874,9 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           supaFetch('property_cash', `?property_id=eq.${encodeURIComponent(propId)}&limit=1`)
             .catch(() => []),
           supaFetch('exec_liabilities', `?related_deal=ilike.*${encodeURIComponent(propName.split(' ')[0])}*&limit=20`)
+            .catch(() => []),
+          // Capex projects — Base Bldg sub-rows when populated
+          supaFetch('capex_projects', `?property_id=eq.${encodeURIComponent(propId)}&order=sort_order&limit=200`)
             .catch(() => []),
           // Pull balance_sheet_items for the latest period so we can derive
           // starting cash automatically from the books.
@@ -6888,6 +6896,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         ]);
         cache = {
           rentRoll, events, liabilities,
+          capexProjects,                              // Array of {id, name, sort_order, status}
           cashOverride: cashOverride[0] || null,   // manual override (rarely used now)
           bsLatest,                                  // { period, rows }
         };
@@ -6935,9 +6944,13 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       });
     }
 
-    // Detect closed months (months where actuals have non-zero values).
-    // Active year only — historical years are "all closed" but render
-    // from actuals exclusively; planning years have none closed.
+    // Two related sets:
+    //   closedMonths — months with ACTUALS DATA. Drives forecast computation
+    //                  (use actuals vs budget per month) + chart subtitle.
+    //   lockedMonths — broader. Includes closedMonths AND all calendar-passed
+    //                  months. Drives UI edit-locking on the Capital Plan
+    //                  grid (so you can't edit Jan if it's already May,
+    //                  even if Crown hasn't loaded Jan actuals yet).
     const yd        = (baseProp.years && baseProp.years[yr]) || null;
     const actualsYd = yd && yd.actuals;
     const budgetYd  = yd && yd.budget;
@@ -6957,6 +6970,21 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       }
     } else if (yStatus === 'historical' && actualsYd) {
       MONTHS.forEach(m => closedMonths.add(m));
+    }
+
+    // lockedMonths = closedMonths ∪ calendar-passed-months. Used for UI only.
+    const lockedMonths = new Set(closedMonths);
+    if (yStatus === 'active') {
+      const today = new Date();
+      if (today.getFullYear() === yr) {
+        for (let mi = 0; mi < today.getMonth(); mi++) {
+          lockedMonths.add(MONTHS[mi]);
+        }
+      } else if (yr < today.getFullYear()) {
+        MONTHS.forEach(m => lockedMonths.add(m));
+      }
+    } else if (yStatus === 'historical') {
+      MONTHS.forEach(m => lockedMonths.add(m));
     }
 
     // Derive starting cash from the latest balance sheet period.
@@ -7189,7 +7217,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const totalOut = rows.reduce((s, r) => s + r.totalOut, 0);
     const avgLevered = rows.reduce((s, r) => s + r.levered, 0) / rows.length;
 
-    return { rows, starting, lowest, endingCash, totalIn, totalOut, avgLevered, closedMonths, year: yr };
+    return { rows, starting, lowest, endingCash, totalIn, totalOut, avgLevered, closedMonths, lockedMonths, year: yr };
   }
 
   // ── HTML renderer for forecast ─────────────────────────────────────────
@@ -7548,11 +7576,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
     // Existing event lookup by (year, month, event_type) → absolute amount.
     // For reserve_draw / reserve_deposit, optionally filter by bs_code.
-    const lookupAbs = (eventType, month, bsCode) => {
+    // For capex, optionally filter by project_id (Base Bldg sub-rows).
+    const lookupAbs = (eventType, month, bsCode, projectId) => {
       const ev = events.find(e => {
         if (e.year !== yr || e.month !== month || e.event_type !== eventType) return false;
+        if (projectId != null) return e.project_id === projectId;
         if (bsCode != null) return e.bs_code === bsCode;
-        return e.bs_code == null;
+        // Default: events not tied to a project or bs_code
+        return e.bs_code == null && e.project_id == null;
       });
       if (!ev) return 0;
       return Math.abs(Number(ev.amount) || 0);
@@ -7572,7 +7603,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
 
     const fmt = (v) => v ? '$' + Math.round(v).toLocaleString() : '';
     const fmtTot = (v) => v ? '$' + Math.round(v).toLocaleString() : '$0';
+    // closedSet: months with actuals data (drives values + actuals badge in header)
+    // lockedSet: closedSet ∪ calendar-passed-months (drives edit-locking).
     const closedSet = fc.closedMonths || new Set();
+    const lockedSet = fc.lockedMonths || closedSet;
 
     // Rows:
     //   Base Bldg / TI-LC: closed-month value pulled from actuals GL (read-only);
@@ -7608,11 +7642,40 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     // GL codes include BOTH old-COA and new-COA versions because actuals
     // get remapped to the new COA on load (e.g. 7105 → 7071), but budget
     // rows stay on whatever COA they were stored in.
+    // Capex projects (Base Bldg sub-rows). If projects exist for this
+    // property, Base Bldg becomes a collapsible group with one sub-row
+    // per project. Otherwise it stays as a flat row.
+    const capexProjects = (cache.capexProjects || []).slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const isPlanningYear = yStatus === 'planning';
+
+    const baseBldgRow = capexProjects.length > 0
+      ? {
+          kind: 'group',
+          id: 'capex',
+          label: 'Base Bldg',
+          color: '#c94646',
+          glClosed: ['7106', '7072'],   // parent rolls up actuals for closed months
+          allowAdd: isPlanningYear,      // "+ Add Project" only in Planning year
+          allowDelete: isPlanningYear,   // sub-row delete buttons only in Planning year
+          subRows: capexProjects.map(p => ({
+            kind: 'subitem',
+            label: `— ${p.name}${p.status === 'deferred' ? ' (deferred)' : ''}`,
+            eventType: 'capex',
+            project_id: p.id,
+            project_name: p.name,
+            project_status: p.status,
+            color: '#c94646',
+          })),
+        }
+      : { kind: 'item', id: 'capex', label: 'Base Bldg', eventType: 'capex',
+          color: '#c94646', glClosed: ['7106', '7072'] };
+
     const rows = [
-      { kind: 'item', id: 'capex', label: 'Base Bldg', eventType: 'capex',
-        color: '#c94646', glClosed: ['7106', '7072'] },
+      baseBldgRow,
       { kind: 'item', id: 'tilc', label: 'TI / LC', eventType: 'ti_lc',
         color: '#c94646', glClosed: ['7105', '7107', '7071', '7073'] },
+      // Reserve Draw + Reserve Deposit grouped together since they're both
+      // movements between operating and reserve accounts.
       { kind: 'group', id: 'reserve_draw', label: 'Total Reserve Draw',
         color: '#e8a83a',
         subRows: escrowAccounts.length
@@ -7625,8 +7688,6 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
             }))
           : [{ kind: 'subitem', label: '— (no reserve accounts on balance sheet)', eventType: 'reserve_draw', color: '#e8a83a' }],
       },
-      { kind: 'item', id: 'distribution', label: 'Owner Distributions',
-        eventType: 'distribution', color: '#a82540' },
       { kind: 'group', id: 'reserve_deposit', label: 'Total Reserve Deposit',
         color: '#d97e2b',
         subRows: escrowAccounts.map(acct => ({
@@ -7638,6 +7699,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           color: '#d97e2b',
         })),
       },
+      // Owner Distributions last — distinct from reserves (this is cash
+      // going to partners, not internal transfers).
+      { kind: 'item', id: 'distribution', label: 'Owner Distributions',
+        eventType: 'distribution', color: '#a82540' },
     ];
 
     // Resolve the value for a row+month, using the appropriate data source.
@@ -7645,6 +7710,10 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       const monthName = MONTHS[m - 1];
       const isClosed = closedSet.has(monthName);
       if (row.eventType === 'reserve_deposit_bs') return Number(row.monthly) || 0;
+      // Sub-rows for capex projects: ALWAYS read from cash_forecast_events
+      // (the per-project budget). Closed-month actuals roll up only at the
+      // PARENT level (we don't have actuals broken down by project).
+      if (row.project_id) return lookupAbs(row.eventType, m, null, row.project_id);
       if (isClosed && row.glClosed) {
         const gls = Array.isArray(row.glClosed) ? row.glClosed : [row.glClosed];
         return gls.reduce((s, g) => s + glAmount(actualsYd, g, monthName), 0);
@@ -7656,9 +7725,14 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const cellHtml = (row, m, v) => {
       const monthName = MONTHS[m - 1];
       const isClosed = closedSet.has(monthName);
+      const isLocked = lockedSet.has(monthName);
 
-      // Reserve Deposit per-account: editable, saves bs_row's monthly_deposit
+      // Reserve Deposit per-account: editable, saves bs_row's monthly_deposit.
+      // Locked-month cells stay read-only (can't edit a past month's deposit).
       if (row.eventType === 'reserve_deposit_bs') {
+        if (isLocked) {
+          return `<td class="fb-cap-plan-closed" title="${isClosed ? 'Closed (actuals)' : 'Past month — locked'}">${v ? fmt(v) : '—'}</td>`;
+        }
         return `<td class="fb-cap-plan-input-cell">
           <input type="text" class="fb-cap-plan-cell fb-cap-plan-cell-reserve"
             data-prop="${propId}" data-bs-code="${row.bs_code}" data-row-type="reserve_deposit_bs"
@@ -7672,11 +7746,15 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
         const tooltipTitle = `From actuals GL ${Array.isArray(row.glClosed) ? row.glClosed.join(' + ') : row.glClosed}`;
         return `<td class="fb-cap-plan-closed" title="${tooltipTitle}">${v ? fmt(v) : '—'}</td>`;
       }
-      // Otherwise: editable cash_forecast_events cell (with optional bs_code)
+      // Locked-but-no-data: read-only, gray, no value
+      if (isLocked) {
+        return `<td class="fb-cap-plan-closed" title="Past month — locked from editing">${v ? fmt(v) : '—'}</td>`;
+      }
+      // Otherwise: editable cash_forecast_events cell (with optional bs_code / project_id)
       return `<td class="fb-cap-plan-input-cell">
         <input type="text" class="fb-cap-plan-cell"
           data-prop="${propId}" data-year="${yr}" data-month="${m}"
-          data-event-type="${row.eventType}"${row.bs_code ? ` data-bs-code="${row.bs_code}"` : ''}
+          data-event-type="${row.eventType}"${row.bs_code ? ` data-bs-code="${row.bs_code}"` : ''}${row.project_id ? ` data-project-id="${row.project_id}"` : ''}
           value="${v ? fmt(v) : ''}" placeholder="—"
           onfocus="this.select()" onblur="fbSaveCapitalPlanCell(this)"
           onkeydown="fbCapPlanCellKey(event)" />
@@ -7687,14 +7765,24 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const renderRowHtml = (row) => {
       // Group parent: sum sub-row values for each month, render as a
       // collapsible header. Sub-rows render only when expanded.
+      //
+      // SPECIAL CASE for Base Bldg: closed months use the actuals GL roll-up
+      // (since we don't have actuals broken down by project), open months
+      // sum the sub-row project budgets.
       if (row.kind === 'group') {
         const isExpanded = expandedGroups.has(row.id);
         let total = 0;
         let cells = '';
-        const monthTotals = [];
         for (let m = 1; m <= 12; m++) {
-          const mTotal = row.subRows.reduce((s, sr) => s + valueForRow(sr, m), 0);
-          monthTotals.push(mTotal);
+          const monthName = MONTHS[m - 1];
+          const isClosed = closedSet.has(monthName);
+          let mTotal;
+          if (row.glClosed && isClosed) {
+            const gls = Array.isArray(row.glClosed) ? row.glClosed : [row.glClosed];
+            mTotal = gls.reduce((s, g) => s + glAmount(actualsYd, g, monthName), 0);
+          } else {
+            mTotal = row.subRows.reduce((s, sr) => s + valueForRow(sr, m), 0);
+          }
           total += mTotal;
           cells += `<td class="fb-cap-plan-group-cell">${mTotal ? fmt(mTotal) : '—'}</td>`;
         }
@@ -7708,18 +7796,40 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
                 srTotal += v;
                 srCells += cellHtml(sr, m, v);
               }
+              // Action cell varies by sub-row type
+              let actionHtml = '';
+              if (sr.eventType === 'reserve_deposit_bs') {
+                actionHtml = '<span style="font-size:10px;color:var(--text-dim)" title="Monthly fixed amount — edit any cell to update all 12">monthly</span>';
+              } else if (sr.project_id) {
+                // Capex project sub-row
+                const delBtn = row.allowDelete
+                  ? `<button class="fb-cap-plan-del" title="Delete project" onclick="event.stopPropagation(); fbCapPlanDeleteProject('${propId}', '${sr.project_id}', '${(sr.project_name || '').replace(/'/g, "\\'")}')">✕</button>`
+                  : '';
+                actionHtml = `${delBtn}<button class="fb-cap-plan-spread" onclick="event.stopPropagation(); fbCapPlanSpreadProject('${propId}', ${yr}, '${sr.project_id}')">↔ Spread</button>`;
+              } else {
+                actionHtml = `<button class="fb-cap-plan-spread" onclick="event.stopPropagation(); fbCapPlanSpreadBs('${propId}', ${yr}, '${sr.eventType}', '${sr.bs_code || ''}')">↔ Spread</button>`;
+              }
               return `<tr class="fb-cap-plan-subrow">
                 <td class="fb-cap-plan-label fb-cap-plan-sublabel">${sr.label}</td>
                 ${srCells}
                 <td class="fb-cap-plan-total fb-cap-plan-subtotal">${fmtTot(srTotal)}</td>
-                <td class="fb-cap-plan-actions">
-                  ${sr.eventType === 'reserve_deposit_bs'
-                    ? '<span style="font-size:10px;color:var(--text-dim)" title="Monthly fixed amount — edit any cell to update all 12">monthly</span>'
-                    : `<button class="fb-cap-plan-spread" onclick="fbCapPlanSpreadBs('${propId}', ${yr}, '${sr.eventType}', '${sr.bs_code || ''}')">↔ Spread</button>`
-                  }
-                </td>
+                <td class="fb-cap-plan-actions">${actionHtml}</td>
               </tr>`;
-            }).join('')
+            }).join('') + (row.allowAdd
+              ? `<tr class="fb-cap-plan-subrow fb-cap-plan-addrow">
+                   <td class="fb-cap-plan-label fb-cap-plan-sublabel" colspan="${13 + 1}">
+                     <button class="fb-cap-plan-add" onclick="event.stopPropagation(); fbCapPlanAddProject('${propId}')">+ Add Project</button>
+                     <span style="margin-left:10px;font-size:10px;color:var(--text-dim)">Planning year only — projects persist across years</span>
+                   </td>
+                   <td colspan="2"></td>
+                 </tr>`
+              : (row.id === 'capex' && !isPlanningYear && row.subRows && row.subRows.length === 0
+                  ? `<tr class="fb-cap-plan-subrow">
+                       <td class="fb-cap-plan-label fb-cap-plan-sublabel" colspan="${13 + 2}">
+                         <span style="font-size:11px;color:var(--text-dim)">No projects yet. Switch to the Planning year (2027+) to add project line items.</span>
+                       </td>
+                     </tr>`
+                  : ''))
           : '';
         return `<tr class="fb-cap-plan-grouprow" onclick="fbCapPlanToggleGroup('${propId}', '${row.id}')">
           <td class="fb-cap-plan-label fb-cap-plan-grouplabel">
@@ -7794,6 +7904,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     const month  = parseInt(inputEl.dataset.month);
     const eventType = inputEl.dataset.eventType;
     const bsCode = inputEl.dataset.bsCode || null;
+    const projectId = inputEl.dataset.projectId || null;
     const raw = String(inputEl.value || '').replace(/[$,\s]/g, '');
     const parsed = parseFloat(raw);
     let amount = isFinite(parsed) ? parsed : 0;
@@ -7805,8 +7916,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     inputEl.classList.add('fb-cap-plan-saving');
 
     try {
-      const bsFilter = bsCode ? `&bs_code=eq.${encodeURIComponent(bsCode)}` : '&bs_code=is.null';
-      const qs = `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${year}&month=eq.${month}&event_type=eq.${eventType}${bsFilter}`;
+      // Filter: project_id takes precedence; then bs_code; default to null=null
+      let scopeFilter;
+      if (projectId) scopeFilter = `&project_id=eq.${encodeURIComponent(projectId)}`;
+      else if (bsCode) scopeFilter = `&bs_code=eq.${encodeURIComponent(bsCode)}&project_id=is.null`;
+      else scopeFilter = '&bs_code=is.null&project_id=is.null';
+      const qs = `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${year}&month=eq.${month}&event_type=eq.${eventType}${scopeFilter}`;
       await supaWrite('cash_forecast_events', 'DELETE', null, qs);
       if (Math.abs(amount) > 0.005) {
         const payload = {
@@ -7816,6 +7931,7 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
           description: `${eventType} plan`,
         };
         if (bsCode) payload.bs_code = bsCode;
+        if (projectId) payload.project_id = projectId;
         await supaWrite('cash_forecast_events', 'POST', [payload], '');
       }
       inputEl.classList.remove('fb-cap-plan-saving');
@@ -7842,6 +7958,80 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
     if (set.has(groupId)) set.delete(groupId); else set.add(groupId);
     localStorage.setItem(key, JSON.stringify([...set]));
     fbRenderDetail();
+  }
+
+  // Add a new capex project (Base Bldg sub-row). Planning year only —
+  // the row's allowAdd flag gates the button visibility, this function
+  // only fires from there.
+  async function fbCapPlanAddProject(propId) {
+    const name = prompt('New Base Bldg project name (e.g. "Roof Replacement"):', '');
+    if (!name || !name.trim()) return;
+    try {
+      const result = await supaWrite('capex_projects', 'POST', [{
+        property_id: propId,
+        name: name.trim(),
+        sort_order: 100,
+        status: 'active',
+      }], '');
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (err) {
+      alert('Add project failed: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  // Delete a capex project AND all its cash_forecast_events budget rows.
+  async function fbCapPlanDeleteProject(propId, projectId, projectName) {
+    if (!confirm(`Delete project "${projectName}"?\n\nAll monthly budget entries for this project will also be removed. (Past actuals are unaffected — they roll up by GL.)`)) return;
+    try {
+      // Wipe the budget rows first, then the project row
+      await supaWrite('cash_forecast_events', 'DELETE', null,
+        `?project_id=eq.${encodeURIComponent(projectId)}`);
+      await supaWrite('capex_projects', 'DELETE', null,
+        `?id=eq.${encodeURIComponent(projectId)}`);
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (err) {
+      alert('Delete project failed: ' + (err && err.message ? err.message : err));
+    }
+  }
+
+  // Spread an annual total evenly across OPEN months for a single
+  // capex project sub-row.
+  async function fbCapPlanSpreadProject(propId, year, projectId) {
+    const ans = prompt(`Annual capex budget to spread evenly across OPEN months for this project (${year})?\n\nEnter $ amount.`, '');
+    if (ans == null) return;
+    const annual = parseFloat(String(ans).replace(/[$,\s]/g, ''));
+    if (!isFinite(annual)) return;
+
+    const baseProp = bgtData[fbSelectedIdx];
+    const cache = fbCashForecastCache[propId];
+    if (!cache) return;
+    const fc = fbComputeCashForecast(baseProp, cache);
+    const lockedSet = fc.lockedMonths || fc.closedMonths || new Set();
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const openMonths = [];
+    for (let m = 1; m <= 12; m++) if (!lockedSet.has(MONTHS[m - 1])) openMonths.push(m);
+    if (openMonths.length === 0) { alert('No open months left this year.'); return; }
+    const perMonth = -Math.abs(annual / openMonths.length); // capex stored negative
+
+    try {
+      await supaWrite('cash_forecast_events', 'DELETE', null,
+        `?property_id=eq.${encodeURIComponent(propId)}&year=eq.${year}&event_type=eq.capex&project_id=eq.${encodeURIComponent(projectId)}&month=in.(${openMonths.join(',')})`);
+      if (Math.abs(perMonth) > 0.005) {
+        const inserts = openMonths.map(m => ({
+          property_id: propId, year, month: m, event_type: 'capex',
+          amount: perMonth,
+          project_id: projectId,
+          description: `capex plan (spread $${Math.round(annual).toLocaleString()}/${openMonths.length} mo)`,
+        }));
+        await supaWrite('cash_forecast_events', 'POST', inserts, '');
+      }
+      delete fbCashForecastCache[propId];
+      fbRenderDetail();
+    } catch (err) {
+      alert('Spread failed: ' + (err && err.message ? err.message : err));
+    }
   }
 
   // "Spread evenly" for a per-account sub-row (currently used for
