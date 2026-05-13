@@ -7817,19 +7817,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
               </tr>`;
             }).join('') + (row.allowAdd
               ? `<tr class="fb-cap-plan-subrow fb-cap-plan-addrow">
-                   <td class="fb-cap-plan-label fb-cap-plan-sublabel" colspan="${13 + 1}">
+                   <td class="fb-cap-plan-label fb-cap-plan-sublabel" colspan="15">
                      <button class="fb-cap-plan-add" onclick="event.stopPropagation(); fbCapPlanAddProject('${propId}')">+ Add Project</button>
                      <span style="margin-left:10px;font-size:10px;color:var(--text-dim)">Planning year only — projects persist across years</span>
                    </td>
-                   <td colspan="2"></td>
                  </tr>`
-              : (row.id === 'capex' && !isPlanningYear && row.subRows && row.subRows.length === 0
-                  ? `<tr class="fb-cap-plan-subrow">
-                       <td class="fb-cap-plan-label fb-cap-plan-sublabel" colspan="${13 + 2}">
-                         <span style="font-size:11px;color:var(--text-dim)">No projects yet. Switch to the Planning year (2027+) to add project line items.</span>
-                       </td>
-                     </tr>`
-                  : ''))
+              : '')
           : '';
         return `<tr class="fb-cap-plan-grouprow" onclick="fbCapPlanToggleGroup('${propId}', '${row.id}')">
           <td class="fb-cap-plan-label fb-cap-plan-grouplabel">
@@ -7873,7 +7866,9 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;gap:12px;flex-wrap:wrap">
         <div>
           <div class="fb-chart-title">Capital &amp; Distribution Plan — ${yr}</div>
-          <div style="font-size:11px;color:var(--text-dim);margin-top:2px">Edits save automatically. Closed months are read-only (actuals own those values).</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:2px">
+            Sub-rows = <b>budget</b> (your plan). Base Bldg / TI-LC parent rollups switch to <b>actuals from P&amp;L</b> for closed months so the forecast uses Actuals for past months + Budget for future months.
+          </div>
         </div>
       </div>
       <div style="overflow-x:auto;margin-top:10px">
