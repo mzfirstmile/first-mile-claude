@@ -6972,20 +6972,12 @@ You have your own phone number: +1 (866) 568-4445. You can send and search SMS m
       MONTHS.forEach(m => closedMonths.add(m));
     }
 
-    // lockedMonths = closedMonths ∪ calendar-passed-months. Used for UI only.
-    const lockedMonths = new Set(closedMonths);
-    if (yStatus === 'active') {
-      const today = new Date();
-      if (today.getFullYear() === yr) {
-        for (let mi = 0; mi < today.getMonth(); mi++) {
-          lockedMonths.add(MONTHS[mi]);
-        }
-      } else if (yr < today.getFullYear()) {
-        MONTHS.forEach(m => lockedMonths.add(m));
-      }
-    } else if (yStatus === 'historical') {
-      MONTHS.forEach(m => lockedMonths.add(m));
-    }
+    // lockedMonths kept as alias of closedMonths so existing references
+    // still work. A month is closed (and therefore locked) ONLY if we
+    // have the actuals income statement for it. We previously also
+    // locked calendar-passed months even without data, but that mislead
+    // the user into thinking Crown had delivered files for those months.
+    const lockedMonths = closedMonths;
 
     // Derive starting cash from the latest balance sheet period.
     // Operating cash  = sum of asset rows with account_section='cash'      (GL 10xx)
