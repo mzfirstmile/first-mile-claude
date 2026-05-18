@@ -14,7 +14,7 @@
   let _currentMarket = null; // detail view
   let _currentUser = null;
   let _activeFilter = 'all';
-  let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'grid'; // 'grid' | 'list'
+  let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'grid' | 'list'
 
   // ── CSS ──────────────────────────────────────────────────
   function _injectCSS() {
@@ -31,8 +31,35 @@
         display: flex; gap: 12px; align-items: flex-start;
         padding: 12px 16px;
         background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px;
-        margin-bottom: 20px;
+        margin-bottom: 14px;
       }
+
+      /* Update Rankings CTA banner */
+      #mrRoot .mr-rerank-cta {
+        display: flex; align-items: center; gap: 16px;
+        padding: 18px 22px;
+        background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+        border: 1px solid #fde68a; border-radius: 10px;
+        margin-bottom: 24px;
+      }
+      #mrRoot .mr-rerank-icon {
+        flex-shrink: 0; width: 44px; height: 44px; border-radius: 22px;
+        background: #f59e0b; color: #fff; display: flex; align-items: center;
+        justify-content: center;
+      }
+      #mrRoot .mr-rerank-title {
+        font-size: 15px; font-weight: 700; color: #78350f; margin-bottom: 3px;
+      }
+      #mrRoot .mr-rerank-desc {
+        font-size: 12px; color: #92400e; line-height: 1.5;
+      }
+      #mrRoot .mr-rerank-btn {
+        flex-shrink: 0; font-size: 13px; font-weight: 700;
+        padding: 12px 22px !important; background: #d97706 !important;
+        border-color: #d97706 !important; box-shadow: 0 2px 6px rgba(217,119,6,.3);
+      }
+      #mrRoot .mr-rerank-btn:hover { background: #b45309 !important; border-color: #b45309 !important; }
+      #mrRoot .mr-rerank-btn:disabled { opacity: 0.7; cursor: wait; }
 
       /* Header */
       #mrRoot .mr-header {
@@ -372,6 +399,20 @@
         </div>
       </div>
 
+      <!-- Update Rankings CTA — server-side Dropbox pull + weighted re-rank -->
+      <div class="mr-rerank-cta" id="mrRerankCta">
+        <div class="mr-rerank-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="mr-rerank-title">Update Rankings</div>
+          <div class="mr-rerank-desc">Click to pull the latest research files from Dropbox and re-rank every market using the current criteria weights. Runs server-side so it works even when your laptop is asleep.</div>
+        </div>
+        <button class="mr-btn mr-btn-primary mr-rerank-btn" id="mrRerankBtn" onclick="mrUpdateRankings()">
+          <span id="mrRerankBtnLabel">Update Rankings</span>
+        </button>
+      </div>
+
       <!-- List View -->
       <div class="mr-list" id="mrListView">
         <div class="mr-header">
@@ -486,7 +527,7 @@
     _currentUser = window.currentUser;
     const [markets, criteria, scores] = await Promise.all([
       window.supaFetch('market_research_markets', '?select=*&order=tier.asc.nullslast,score.desc.nullslast,name.asc'),
-      window.supaFetch('market_research_criteria', '?select=*&order=sort_order.asc,name.asc'),
+      window.supaFetch('market_research_criteria', '?select=*&order=weight.desc.nullslast,sort_order.asc,name.asc'),
       window.supaFetch('market_research_scores', '?select=*'),
     ]);
     _markets = markets || [];
@@ -753,13 +794,19 @@
           </tr>
         </thead>
         <tbody>
-          ${_criteria.filter(c => c.is_active !== false).map(c => {
+          ${_criteria.filter(c => c.is_active !== false)
+            .slice()
+            .sort((a, b) => (b.weight || 0) - (a.weight || 0) || a.name.localeCompare(b.name))
+            .map(c => {
             const s = scoreByCriterion[c.id] || {};
             const v = c.value_type === 'text' ? (s.value_text || '') : (s.value_numeric != null ? s.value_numeric : '');
             return `
               <tr>
                 <td>
-                  <div style="font-weight:500;">${_esc(c.name)}</div>
+                  <div style="font-weight:500;display:flex;align-items:center;gap:6px;">
+                    ${_esc(c.name)}
+                    <span style="font-size:10px;font-weight:600;color:#0ea5e9;background:#e0f2fe;padding:1px 6px;border-radius:8px;">w ${c.weight != null ? c.weight : 1}</span>
+                  </div>
                   ${c.description ? `<div style="font-size:11px;color:#94a3b8;">${_esc(c.description)}</div>` : ''}
                 </td>
                 <td>
@@ -1027,21 +1074,39 @@
 
   // ── Criteria management ────────────────────────────────
   function _manageCriteria() {
-    _openModal('Manage Criteria', `
+    // Always render sorted by weight DESC (heaviest at top)
+    const sorted = _criteria.slice().sort((a, b) => (b.weight || 0) - (a.weight || 0) || a.name.localeCompare(b.name));
+    const totalWeight = sorted.reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
+
+    _openModal('Manage Criteria & Weights', `
       <p style="font-size:12px;color:#64748b;margin:0 0 12px 0;">
-        Criteria appear as rows in every market's scorecard. Adjust the list and value types here.
+        Higher weight = more influence on the composite Score (1-10) and Tier (1-4).
+        Weights are relative — they're normalized when ranking is computed. Total below: <strong style="color:#0ea5e9;">${totalWeight.toFixed(1)}</strong>
       </p>
-      <div id="mrCriteriaList" style="margin-bottom:16px;">
-        ${_criteria.length === 0
-          ? '<p style="font-size:13px;color:#94a3b8;text-align:center;padding:20px;">No criteria yet. Add your first below.</p>'
-          : _criteria.map(c => `
-            <div style="display:flex;gap:8px;align-items:center;padding:8px;border-bottom:1px solid #f1f5f9;">
-              <div style="flex:1;min-width:0;">
-                <div style="font-size:13px;font-weight:500;color:#1e293b;">${_esc(c.name)}</div>
-                <div style="font-size:11px;color:#94a3b8;">${_esc(c.value_type)}${c.description ? ' · ' + _esc(c.description) : ''}</div>
-              </div>
-              <button class="mr-btn-ghost" onclick="mrDeleteCriterion('${c.id}', '${_esc(c.name).replace(/'/g, "\\'")}')" title="Delete" style="color:#b91c1c;">×</button>
-            </div>`).join('')}
+      <div id="mrCriteriaList" style="margin-bottom:18px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        ${sorted.length === 0
+          ? '<p style="font-size:13px;color:#94a3b8;text-align:center;padding:20px;margin:0;">No criteria yet. Add your first below.</p>'
+          : `<div style="display:grid;grid-template-columns:1fr 90px 30px;gap:8px;padding:8px 12px;background:#f8fafc;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0;">
+              <div>Criterion (sorted by weight)</div>
+              <div style="text-align:center;">Weight</div>
+              <div></div>
+            </div>` + sorted.map(c => {
+              const pct = totalWeight > 0 ? ((parseFloat(c.weight) || 0) / totalWeight * 100).toFixed(0) : '—';
+              return `
+                <div style="display:grid;grid-template-columns:1fr 90px 30px;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid #f1f5f9;">
+                  <div style="min-width:0;">
+                    <div style="font-size:13px;font-weight:500;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(c.name)}</div>
+                    <div style="font-size:11px;color:#94a3b8;">${_esc(c.value_type)}${c.description ? ' · ' + _esc(c.description) : ''}</div>
+                  </div>
+                  <div style="text-align:center;display:flex;flex-direction:column;align-items:center;">
+                    <input type="number" min="0" step="0.1" value="${c.weight != null ? c.weight : 1}"
+                           onchange="mrSaveCriterionWeight('${c.id}', this.value)"
+                           style="width:64px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;text-align:center;color:#1e293b;font-weight:600;">
+                    <div style="font-size:9px;color:#94a3b8;margin-top:2px;">${pct === '—' ? '' : pct + '%'}</div>
+                  </div>
+                  <button class="mr-btn-ghost" onclick="mrDeleteCriterion('${c.id}', '${_esc(c.name).replace(/'/g, "\\'")}')" title="Delete" style="color:#b91c1c;font-size:18px;line-height:1;">×</button>
+                </div>`;
+            }).join('')}
       </div>
       <h4 style="font-size:13px;color:#1e293b;margin:18px 0 8px 0;">Add new criterion</h4>
       <label>Name *</label>
@@ -1052,35 +1117,49 @@
         <div>
           <label>Value type</label>
           <select id="mrNewCriterionType">
-            <option value="number">Number</option>
-            <option value="percent">Percent (%)</option>
-            <option value="currency">Currency ($)</option>
             <option value="rating_1_10">Rating 1-10</option>
             <option value="rating_1_5">Rating 1-5</option>
+            <option value="percent">Percent (%)</option>
+            <option value="number">Number</option>
+            <option value="currency">Currency ($)</option>
             <option value="text">Text</option>
             <option value="boolean">Yes / No</option>
           </select>
         </div>
         <div>
-          <label>Typical source</label>
-          <input id="mrNewCriterionSource" placeholder="BLS, Census, CoStar…">
+          <label>Weight</label>
+          <input id="mrNewCriterionWeight" type="number" min="0" step="0.1" value="1" placeholder="1.0">
         </div>
       </div>
+      <label>Typical source</label>
+      <input id="mrNewCriterionSource" placeholder="BLS, Census, CoStar…">
       <div class="mr-modal-actions">
-        <button class="mr-btn" onclick="mrCloseModal()">Done</button>
+        <button class="mr-btn" onclick="mrCloseModal(); mrRecomputeAndRender()">Done</button>
         <button class="mr-btn mr-btn-primary" onclick="mrAddCriterion()">+ Add Criterion</button>
       </div>
     `);
+  }
+  async function _saveCriterionWeight(id, rawValue) {
+    const weight = Math.max(0, parseFloat(rawValue) || 0);
+    try {
+      await window.supaWrite('market_research_criteria', 'PATCH', { weight }, `?id=eq.${id}`);
+      const c = _criteria.find(x => x.id === id);
+      if (c) c.weight = weight;
+      _toast(`Weight → ${weight}`);
+      // Re-render the modal so order + percentages update live
+      _manageCriteria();
+    } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
   async function _addCriterion() {
     const name = document.getElementById('mrNewCriterionName').value.trim();
     if (!name) { _toast('Name is required', true); return; }
     const description = (document.getElementById('mrNewCriterionDesc').value || '').trim() || null;
     const value_type = document.getElementById('mrNewCriterionType').value;
+    const weight = parseFloat(document.getElementById('mrNewCriterionWeight').value) || 1;
     const source_note = (document.getElementById('mrNewCriterionSource').value || '').trim() || null;
     const sort_order = (_criteria.length + 1) * 10;
     try {
-      await window.supaWrite('market_research_criteria', 'POST', { name, description, value_type, source_note, sort_order });
+      await window.supaWrite('market_research_criteria', 'POST', { name, description, value_type, weight, source_note, sort_order });
       await _loadData();
       _manageCriteria(); // refresh the modal
       if (_currentMarket) _renderScorecard();
@@ -1098,6 +1177,164 @@
       else _renderGrid();
       _toast('Criterion deleted');
     } catch(e) { _toast('Error: ' + e.message, true); }
+  }
+
+  // Refresh local UI after weight tweaks — doesn't recompute server-side rankings,
+  // that's the job of "Update Rankings" button.
+  async function _recomputeAndRender() {
+    await _loadData();
+    if (_currentMarket) {
+      _currentMarket = _markets.find(m => m.id === _currentMarket.id) || _currentMarket;
+      _renderDetail();
+    } else {
+      _renderGrid();
+    }
+  }
+
+  // ── Weighted re-ranking ─────────────────────────────────
+  // For each criterion, normalize values across markets to a 0-10 scale:
+  //   • rating_1_10 / rating_1_5 → linear rescale to 0-10
+  //   • percent / number / currency → min-max rescaled to 0-10 across the populated markets
+  //   • text / boolean → ignored (no numeric value to weight)
+  // Then composite = SUM(weight × normalized) / SUM(weight). Markets with no
+  // scores at all keep their existing score+tier (manual entries preserved).
+  // Tier buckets: ≥8.0=1, ≥6.5=2, ≥5.0=3, <5.0=4.
+  function _computeWeightedRankings() {
+    const numericCriteria = _criteria.filter(c =>
+      ['rating_1_10', 'rating_1_5', 'percent', 'number', 'currency'].includes(c.value_type)
+      && (parseFloat(c.weight) || 0) > 0
+    );
+    if (numericCriteria.length === 0) {
+      return { updates: [], note: 'No weighted numeric criteria configured.' };
+    }
+
+    // Build value matrix: market_id → {criterion_id → numeric value}
+    const valByMkt = {};
+    _markets.forEach(m => { valByMkt[m.id] = {}; });
+    _scores.forEach(s => {
+      if (s.value_numeric != null && valByMkt[s.market_id]) {
+        valByMkt[s.market_id][s.criterion_id] = parseFloat(s.value_numeric);
+      }
+    });
+
+    // Min/max per criterion for normalization
+    const ranges = {}; // criterion_id → {min, max}
+    numericCriteria.forEach(c => {
+      const vals = _markets.map(m => valByMkt[m.id][c.id]).filter(v => v != null && !isNaN(v));
+      if (vals.length === 0) return;
+      ranges[c.id] = { min: Math.min(...vals), max: Math.max(...vals) };
+    });
+
+    const normalize = (val, c) => {
+      if (val == null || isNaN(val)) return null;
+      if (c.value_type === 'rating_1_10') return Math.max(0, Math.min(10, val));
+      if (c.value_type === 'rating_1_5')  return Math.max(0, Math.min(10, val * 2));
+      const r = ranges[c.id];
+      if (!r || r.max === r.min) return 5; // single value or constant → neutral
+      return ((val - r.min) / (r.max - r.min)) * 10; // 0-10
+    };
+
+    const totalWeight = numericCriteria.reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
+    const updates = [];
+
+    _markets.forEach(m => {
+      let sumWeighted = 0;
+      let sumWeightUsed = 0;
+      let used = 0;
+      numericCriteria.forEach(c => {
+        const raw = valByMkt[m.id][c.id];
+        const norm = normalize(raw, c);
+        if (norm == null) return;
+        const w = parseFloat(c.weight) || 0;
+        sumWeighted += norm * w;
+        sumWeightUsed += w;
+        used++;
+      });
+      if (used === 0 || sumWeightUsed === 0) return; // skip — preserve manual entry
+      let composite = sumWeighted / sumWeightUsed;        // 0-10
+      composite = Math.max(1, Math.min(10, composite));   // clamp to seeding bounds
+      composite = Math.round(composite * 10) / 10;        // 1 decimal place
+      const tier = composite >= 8.0 ? 1 : (composite >= 6.5 ? 2 : (composite >= 5.0 ? 3 : 4));
+      // Only push update if value changed (avoid noisy writes)
+      if (m.score !== composite || m.tier !== tier) {
+        updates.push({ id: m.id, name: m.name, score: composite, tier, prevScore: m.score, prevTier: m.tier });
+      }
+    });
+
+    return { updates, totalWeight, criteriaUsed: numericCriteria.length };
+  }
+
+  async function _applyComputedRankings(updates) {
+    if (!updates || updates.length === 0) return;
+    // Bulk PATCH each market — Supabase REST doesn't support batch PATCH by id
+    // so we issue parallel requests (small set, fast enough)
+    await Promise.all(updates.map(u =>
+      window.supaWrite('market_research_markets', 'PATCH', { score: u.score, tier: u.tier }, `?id=eq.${u.id}`)
+    ));
+  }
+
+  // ── Update Rankings button — pulls Dropbox + recomputes ─
+  async function _updateRankings() {
+    const btn = document.getElementById('mrRerankBtn');
+    const label = document.getElementById('mrRerankBtnLabel');
+    if (btn) btn.disabled = true;
+    if (label) label.textContent = 'Working…';
+
+    let dropboxStatus = 'skipped';
+    try {
+      // 1. Dropbox sync — server-side edge function pulls latest files into market_research_sources
+      try {
+        if (label) label.textContent = 'Pulling Dropbox…';
+        const url = `${window.SUPABASE_URL}/functions/v1/dropbox-sync-market-research`;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${window.SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        });
+        if (res.ok) {
+          const j = await res.json();
+          dropboxStatus = `${j.synced || 0} new file(s)`;
+        } else {
+          const t = await res.text();
+          dropboxStatus = `skipped (${res.status})`;
+          console.warn('Dropbox sync skipped:', t);
+        }
+      } catch(e) {
+        dropboxStatus = 'skipped (network)';
+        console.warn('Dropbox sync error:', e);
+      }
+
+      // 2. Reload data (criteria weights, scores, any new markets from sync)
+      if (label) label.textContent = 'Recomputing…';
+      await _loadData();
+
+      // 3. Compute weighted composite scores + tiers
+      const result = _computeWeightedRankings();
+      if (result.updates.length === 0) {
+        _toast(`No ranking changes · Dropbox: ${dropboxStatus}`);
+      } else {
+        await _applyComputedRankings(result.updates);
+        await _loadData();
+        _toast(`Updated ${result.updates.length} market(s) · Dropbox: ${dropboxStatus}`);
+      }
+
+      // 4. Re-render whatever view is active
+      if (_currentMarket) {
+        _currentMarket = _markets.find(m => m.id === _currentMarket.id) || _currentMarket;
+        _renderDetail();
+      } else {
+        _renderGrid();
+      }
+    } catch(e) {
+      _toast('Error: ' + e.message, true);
+      console.error(e);
+    } finally {
+      if (btn) btn.disabled = false;
+      if (label) label.textContent = 'Update Rankings';
+    }
   }
 
   // ── Sort handler ───────────────────────────────────────
@@ -1120,6 +1357,9 @@
   window.mrDeleteCriterion= (id, name) => _deleteCriterion(id, name);
   window.mrChangeSort     = ()    => _changeSort();
   window.mrSetViewMode    = (m)   => _setViewMode(m);
+  window.mrSaveCriterionWeight = (id, v) => _saveCriterionWeight(id, v);
+  window.mrRecomputeAndRender  = ()  => _recomputeAndRender();
+  window.mrUpdateRankings = ()    => _updateRankings();
   window.mrCloseModal     = ()    => _closeModal();
 
   // ── Main init ──────────────────────────────────────────
