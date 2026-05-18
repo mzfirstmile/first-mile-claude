@@ -499,6 +499,31 @@
       }
       #mrRoot .mr-pager-info strong { color: #0f172a; font-weight: 700; }
 
+      /* Phase coverage banner */
+      #mrRoot .mr-phase-banner {
+        background: #f8fafc; border: 1px solid #e2e8f0;
+        border-radius: 10px; padding: 14px 16px;
+        margin: 0 0 14px 0;
+      }
+      #mrRoot .mr-phase-chip {
+        display: inline-block; padding: 4px 10px;
+        border-radius: 12px; font-size: 11px; font-weight: 600;
+        background: #fff; border: 1px solid #e2e8f0;
+        color: #475569;
+      }
+      #mrRoot .mr-phase-chip.phase1 { background: #f0f9ff; border-color: #bae6fd; color: #075985; }
+      #mrRoot .mr-phase-chip.phase2 { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
+      #mrRoot .mr-phase-chip.phase3 { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+
+      /* Deep Research button */
+      #mrRoot .mr-deep-btn {
+        font-size: 11px; padding: 4px 10px;
+        background: #fff; color: #9a3412;
+        border: 1px solid #fed7aa; border-radius: 6px;
+        cursor: pointer; font-weight: 600; white-space: nowrap;
+      }
+      #mrRoot .mr-deep-btn:hover { background: #fff7ed; border-color: #fb923c; }
+
       /* Heart toggle */
       #mrRoot .mr-heart {
         cursor: pointer; padding: 4px; line-height: 1;
@@ -612,6 +637,9 @@
     company_concentrations: 'Company Concentrations',
   };
   const _CAT_ORDER = ['demographics', 'governance', 'economic_activity', 'education', 'quality_of_life', 'transit', 'company_concentrations'];
+  // Which categories Phase 2 can score programmatically. Others require Phase 3.
+  const _PHASE2_CATEGORIES = new Set(['demographics', 'education', 'company_concentrations']);
+  const _PHASE3_CATEGORIES = new Set(['governance', 'economic_activity', 'quality_of_life', 'transit']);
 
   function _fmtTarget(c) {
     if (c.target_label) return c.target_label;
@@ -671,6 +699,20 @@
           <div style="font-size:13px;color:#1e293b;font-weight:600;margin-bottom:2px;">Source folder: <span style="color:#0ea5e9;font-family:'SF Mono','Monaco',monospace;font-weight:500;">First Mile Prop Dropbox / 1.4 Special Projects / Market Research - Claude</span></div>
           <div style="font-size:12px;color:#64748b;line-height:1.45;">Criteria definitions, research links, and source datasets live here. Drop new files into that folder and Claude will pull them in to update this list (criteria, market scores, and notes).</div>
           <div style="font-size:12px;color:#0369a1;line-height:1.45;margin-top:6px;font-weight:500;">↻ Rankings will be updated as new research information and sources are added to the Dropbox folder.</div>
+        </div>
+      </div>
+
+      <!-- Phase coverage banner -->
+      <div class="mr-phase-banner">
+        <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:240px;">
+            <div style="font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Pipeline coverage</div>
+            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
+              <span class="mr-phase-chip phase1">📊 Phase 1 · Census shortlist</span>
+              <span class="mr-phase-chip phase2">⚙️ Phase 2 · Demographics + Education + Company Concentrations (3 of 7 categories)</span>
+              <span class="mr-phase-chip phase3">🔬 Phase 3 · Governance / Economic Activity / Quality of Life / Transit · per-town on demand</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1063,18 +1105,21 @@
           <thead>
             <tr>
               <th style="width:36px;"></th>
-              <th style="width:24%;">Market</th>
-              <th style="width:8%;">State</th>
+              <th style="width:22%;">Market</th>
+              <th style="width:7%;">State</th>
               <th style="width:9%;text-align:right;">Population</th>
-              <th style="width:11%;text-align:right;">Median HHI</th>
-              <th style="width:14%;">Nearby Metro</th>
+              <th style="width:10%;text-align:right;">Median HHI</th>
+              <th style="width:12%;">Nearby Metro</th>
               <th style="width:7%;text-align:center;">Score</th>
+              <th style="width:6%;text-align:center;">Tier</th>
+              <th style="width:11%;text-align:center;">Deep Research</th>
               <th>Thesis</th>
             </tr>
           </thead>
           <tbody>
             ${visible.map(m => {
               const scoreNum = m.score != null ? m.score.toFixed(1) : '—';
+              const tierLabel = m.tier != null ? `T${m.tier}` : '—';
               const pop = m.population ? parseInt(m.population).toLocaleString() : '—';
               const hhi = m.median_household_income ? '$' + parseInt(m.median_household_income).toLocaleString() : '—';
               const metro = m.nearest_top50_city || '—';
@@ -1093,6 +1138,12 @@
                   <td style="font-size:12px;color:#475569;">${_esc(metro)}</td>
                   <td style="text-align:center;">
                     <span class="mr-table-score ${_scoreClass(m.score)}">${scoreNum}</span>
+                  </td>
+                  <td style="text-align:center;">
+                    <span class="mr-tier ${_tierClass(m.tier)}">${tierLabel}</span>
+                  </td>
+                  <td style="text-align:center;">
+                    <button class="mr-deep-btn" onclick="event.stopPropagation(); mrDeepResearch('${m.id}')">🔬 Research</button>
                   </td>
                   <td>
                     ${m.thesis ? `<div class="mr-table-thesis">${_esc(m.thesis)}</div>` : '<span style="color:#cbd5e1;">—</span>'}
@@ -1217,11 +1268,15 @@
       const rows = byCat[cat].slice().sort((a,b) => (a.sort_order||0) - (b.sort_order||0) || a.name.localeCompare(b.name));
       const catObj = _categories.find(c => c.slug === cat) || {};
       const catWeight = catObj.weight != null ? catObj.weight : 1;
+      const phaseTag = _PHASE2_CATEGORIES.has(cat)
+        ? '<span style="font-size:10px;font-weight:600;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;padding:1px 7px;border-radius:8px;">⚙️ Phase 2 scored</span>'
+        : '<span style="font-size:10px;font-weight:600;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;padding:1px 7px;border-radius:8px;">🔬 Phase 3 (deep research)</span>';
       bodyHtml += `
         <tr><td colspan="3" class="mr-cat-header">
-          <span style="display:inline-flex;align-items:center;gap:8px;">
+          <span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
             ${_esc(_CAT_LABELS[cat] || cat)}
             <span style="font-size:10px;font-weight:600;color:#0ea5e9;background:#e0f2fe;padding:2px 8px;border-radius:8px;">weight ${catWeight}</span>
+            ${phaseTag}
           </span>
         </td></tr>`;
       rows.forEach(c => {
@@ -1353,6 +1408,28 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     if (!input) return;
     input.value = text;
     input.focus();
+  }
+
+  // ── Phase 3 placeholder ─────────────────────────────────
+  // Real implementation will trigger an LLM-driven research run per town.
+  function _deepResearch(id) {
+    const m = _markets.find(x => x.id === id) || _shortlistFull.find(x => x.id === id);
+    const name = m ? m.name : id;
+    _openModal('Deep Research (Phase 3) — coming soon', `
+      <p style="font-size:13px;color:#475569;line-height:1.55;">
+        Phase 3 is the per-town research workflow. When triggered on <strong>${_esc(name)}</strong>, Claude will:
+      </p>
+      <ul style="font-size:13px;color:#475569;line-height:1.7;margin:8px 0 14px 18px;">
+        <li>Visit each of the Research Websites in your Dropbox doc (CBRE / JLL / Newmark / Challenger / St Louis Fed / Walker Dunlop / Savills).</li>
+        <li>Score the 4 categories Phase 2 can't reach: <strong>Governance & Barriers</strong>, <strong>Economic Activity</strong>, <strong>Quality of Life</strong>, <strong>Transit</strong>.</li>
+        <li>Pull town-specific signals (Niche.com grade, school rankings, crime stats, voter turnout, commute times).</li>
+        <li>Write back per-criterion scores + a thesis + a head-to-head comparison vs the closest peers.</li>
+      </ul>
+      <p style="font-size:12px;color:#94a3b8;">Estimated cost per run: ~$0.05–0.15. Not yet wired — the button is here so the UI is ready when the workflow lands.</p>
+      <div class="mr-modal-actions">
+        <button class="mr-btn mr-btn-primary" onclick="mrCloseModal()">OK</button>
+      </div>
+    `);
   }
 
   // ── Favorite toggle ─────────────────────────────────────
@@ -1918,6 +1995,7 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   };
   window.mrToggleFavorite = (id)  => _toggleFavorite(id);
   window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
+  window.mrDeepResearch = (id) => _deepResearch(id);
 
   // ── Main init ──────────────────────────────────────────
   window.marketResearchInit = async function () {
