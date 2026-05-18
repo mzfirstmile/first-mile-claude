@@ -981,20 +981,26 @@
 
   async function _loadData() {
     _currentUser = window.currentUser;
-    const [categories, criteria, scores, paged] = await Promise.all([
+    const [categories, criteria, paged] = await Promise.all([
       window.supaFetch('market_research_categories', '?select=*&order=sort_order.asc,name.asc'),
       window.supaFetch('market_research_criteria', '?select=*&order=sort_order.asc,name.asc'),
-      window.supaFetch('market_research_scores', '?select=*'),
       _fetchPage(),
     ]);
     _categories = categories || [];
     _criteria = criteria || [];
-    _scores = scores || [];
+    _scores = []; // populated per-market in _openMarket; bulk-load capped at 1000 rows
     _markets = paged.rows;
     _totalForCurrentFilter = paged.total;
-    // Counts + shortlist background-load (no need to block initial render)
     _loadFilterCounts();
     _loadShortlistForChatbot();
+  }
+
+  // Load scores for a specific market (used by detail view).
+  async function _loadScoresForMarket(marketId) {
+    try {
+      const rows = await window.supaFetch('market_research_scores', `?select=*&market_id=eq.${marketId}&limit=1000`);
+      _scores = rows || [];
+    } catch (e) { _scores = []; }
   }
 
   // Refresh just the grid (filter/search/page changed)
@@ -1225,6 +1231,8 @@
       } catch (e) { /* swallow */ }
     }
     if (!_currentMarket) return;
+    // Load this market's scores (per-market avoids 1000-row PostgREST cap)
+    await _loadScoresForMarket(id);
     document.getElementById('mrListView').classList.add('hidden');
     document.getElementById('mrDetailView').classList.add('show');
     _renderDetail();
@@ -1335,6 +1343,18 @@
         const s = scoreByCriterion[c.id] || {};
         const v = c.value_type === 'text' ? (s.value_text || '') : (s.value_numeric != null ? s.value_numeric : '');
         const target = _fmtTarget(c);
+        // Always cite a source. If no score yet for a Phase 3 criterion, show suggested source.
+        const SOURCE_SUGGESTIONS = {
+          governance: 'Pending Phase 3 — local zoning + Moody\'s/S&P ratings',
+          economic_activity: 'Pending Phase 3 — Fortune 1000, LinkedIn execs, AirNav',
+          quality_of_life: 'Pending Phase 3 — FBI UCR, Niche.com, GreatSchools',
+          transit: 'Pending Phase 3 — Google Maps drive time, transit rail',
+          demographics: 'US Census ACS 2022 5-yr',
+          education: 'US Census ACS 2022 5-yr',
+          company_concentrations: 'Big_Four_and_Wealth_Mgmt_Within_60mi.xlsx',
+        };
+        const placeholder = SOURCE_SUGGESTIONS[c.category] || (c.source_note || 'Source / note');
+        const effectiveSource = s.source || '';
         bodyHtml += `
           <tr>
             <td>
@@ -1353,11 +1373,11 @@
             <td>
               <div style="display:flex;align-items:center;gap:6px;">
                 <input class="mr-cell-input" type="text"
-                       value="${_esc(s.source || '')}"
+                       value="${_esc(effectiveSource)}"
                        onchange="mrSaveSource('${c.id}', this.value)"
-                       placeholder="${_esc(c.source_note || 'Source / note')}"
-                       style="flex:1;min-width:0;">
-                ${s.source && /^https?:\/\//i.test(s.source) ? `<a href="${_esc(s.source)}" target="_blank" rel="noopener" title="Open source" style="color:#0ea5e9;text-decoration:none;font-size:14px;">↗</a>` : ''}
+                       placeholder="${_esc(placeholder)}"
+                       style="flex:1;min-width:0;${!effectiveSource ? 'color:#94a3b8;font-style:italic;' : ''}">
+                ${effectiveSource && /^https?:\/\//i.test(effectiveSource) ? `<a href="${_esc(effectiveSource)}" target="_blank" rel="noopener" title="Open source" style="color:#0ea5e9;text-decoration:none;font-size:14px;">↗</a>` : ''}
               </div>
             </td>
           </tr>`;
