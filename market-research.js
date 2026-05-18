@@ -1351,10 +1351,14 @@
                      placeholder="${c.value_type === 'percent' ? '%' : (c.value_type === 'currency' ? '$' : (c.value_type === 'rating_1_10' ? '1-10' : ''))}">
             </td>
             <td>
-              <input class="mr-cell-input" type="text"
-                     value="${_esc(s.source || '')}"
-                     onchange="mrSaveSource('${c.id}', this.value)"
-                     placeholder="${_esc(c.source_note || 'Source / note')}">
+              <div style="display:flex;align-items:center;gap:6px;">
+                <input class="mr-cell-input" type="text"
+                       value="${_esc(s.source || '')}"
+                       onchange="mrSaveSource('${c.id}', this.value)"
+                       placeholder="${_esc(c.source_note || 'Source / note')}"
+                       style="flex:1;min-width:0;">
+                ${s.source && /^https?:\/\//i.test(s.source) ? `<a href="${_esc(s.source)}" target="_blank" rel="noopener" title="Open source" style="color:#0ea5e9;text-decoration:none;font-size:14px;">↗</a>` : ''}
+              </div>
             </td>
           </tr>`;
       });
@@ -1462,26 +1466,218 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     input.focus();
   }
 
-  // ── Phase 3 placeholder ─────────────────────────────────
-  // Real implementation will trigger an LLM-driven research run per town.
-  function _deepResearch(id) {
+  // ── Phase 3: Deep Research per town ─────────────────────
+  // Calls Claude (sonnet-4-6) to score the 4 Phase 3 categories using its
+  // training knowledge + the Research Websites list as citation sources.
+  // Writes results to market_research_scores + recomputes composite Score/Tier.
+  const _RESEARCH_SOURCES = [
+    { label: 'CBRE Insights', url: 'https://www.cbre.com/insights' },
+    { label: 'JLL Market Outlook (US)', url: 'https://www.jll.com/en-us/insights/market-outlook' },
+    { label: 'JLL Market Dynamics', url: 'https://www.jll.com/en-us/insights/market-dynamics' },
+    { label: 'JLL Cities Insights', url: 'https://www.jll.com/en-us/insights/cities' },
+    { label: 'JLL Capital Flows', url: 'https://www.jll.com/en-us/insights/capital-flows' },
+    { label: 'Newmark Insights', url: 'https://www.nmrk.com/insights' },
+    { label: 'Walker Dunlop Suite', url: 'https://suite.walkerdunlop.com/' },
+    { label: 'Savills Impacts', url: 'https://impacts.savills.com/' },
+    { label: 'Challenger Gray (job cuts / CEO turnover / workplace)', url: 'https://www.challengergray.com/blog/' },
+    { label: 'St Louis Fed — On the Economy', url: 'https://www.stlouisfed.org/on-the-economy' },
+    { label: 'Niche.com town/neighborhood grades', url: 'https://www.niche.com/places-to-live/' },
+    { label: 'GreatSchools.org', url: 'https://www.greatschools.org/' },
+    { label: 'FBI Uniform Crime Reporting', url: 'https://crime-data-explorer.fr.cloud.gov/' },
+    { label: 'US Census ACS', url: 'https://data.census.gov/' },
+  ];
+
+  async function _deepResearch(id) {
+    const apiKey = window.CLAUDE_API_KEY;
+    if (!apiKey) { _toast('Claude API key not configured', true); return; }
     const m = _markets.find(x => x.id === id) || _shortlistFull.find(x => x.id === id);
-    const name = m ? m.name : id;
-    _openModal('Deep Research (Phase 3) — coming soon', `
-      <p style="font-size:13px;color:#475569;line-height:1.55;">
-        Phase 3 is the per-town research workflow. When triggered on <strong>${_esc(name)}</strong>, Claude will:
+    if (!m) {
+      // Fetch the row
+      try {
+        const rows = await window.supaFetch('market_research_markets', `?select=*&id=eq.${id}&limit=1`);
+        if (rows && rows[0]) _currentMarket = rows[0];
+      } catch (e) {}
+    }
+    const market = m || _currentMarket;
+    if (!market) { _toast('Market not found', true); return; }
+
+    // Filter to Phase 3 sub-criteria only — the categories Phase 2 can't reach.
+    const phase3Cats = new Set(['governance', 'economic_activity', 'quality_of_life', 'transit']);
+    const phase3Crits = (_criteria || []).filter(c => phase3Cats.has(c.category) && c.is_active !== false);
+
+    const town = `${market.name}`;
+    const pop = market.population ? market.population.toLocaleString() : '?';
+    const hhi = market.median_household_income ? `$${market.median_household_income.toLocaleString()}` : '?';
+    const home = market.median_home_value ? `$${market.median_home_value.toLocaleString()}` : '?';
+    const metro = market.nearest_top50_city || '?';
+
+    // Build modal w/ loading state
+    _openModal(`🔬 Deep Research — ${town}`, `
+      <p style="font-size:12px;color:#64748b;margin:0 0 8px 0;">
+        Researching <strong>${_esc(town)}</strong> against ${phase3Crits.length} Phase 3 sub-criteria across Governance, Economic Activity, Quality of Life, and Transit.
       </p>
-      <ul style="font-size:13px;color:#475569;line-height:1.7;margin:8px 0 14px 18px;">
-        <li>Visit each of the Research Websites in your Dropbox doc (CBRE / JLL / Newmark / Challenger / St Louis Fed / Walker Dunlop / Savills).</li>
-        <li>Score the 4 categories Phase 2 can't reach: <strong>Governance & Barriers</strong>, <strong>Economic Activity</strong>, <strong>Quality of Life</strong>, <strong>Transit</strong>.</li>
-        <li>Pull town-specific signals (Niche.com grade, school rankings, crime stats, voter turnout, commute times).</li>
-        <li>Write back per-criterion scores + a thesis + a head-to-head comparison vs the closest peers.</li>
-      </ul>
-      <p style="font-size:12px;color:#94a3b8;">Estimated cost per run: ~$0.05–0.15. Not yet wired — the button is here so the UI is ready when the workflow lands.</p>
+      <div id="mrDeepStatus" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;font-size:13px;color:#475569;line-height:1.6;">
+        <span class="mr-chat-loading">Calling Claude (sonnet-4-6)… expect ~15-30s</span>
+      </div>
+      <div id="mrDeepResults" style="display:none;margin-top:14px;"></div>
       <div class="mr-modal-actions">
-        <button class="mr-btn mr-btn-primary" onclick="mrCloseModal()">OK</button>
+        <button class="mr-btn" onclick="mrCloseModal()">Close</button>
       </div>
     `);
+
+    const status = document.getElementById('mrDeepStatus');
+
+    // System prompt — give Claude the criteria + sources + town context.
+    const sourceList = _RESEARCH_SOURCES.map(s => `- ${s.label}: ${s.url}`).join('\n');
+    const critList = phase3Crits.map(c => {
+      const t = c.target_label || (c.target_min != null || c.target_max != null
+        ? `${c.target_min ?? ''}${c.target_max != null ? '–' + c.target_max : ''} ${c.target_unit || ''}`
+        : '');
+      return `- "${c.name}" (${c.category}) — target: ${t || 'qualitative'}. ${c.description || ''}`;
+    }).join('\n');
+
+    const systemPrompt = `You are a real estate market research analyst for First Mile Capital. Your job is to score a specific US town against 4 categories of evaluation criteria that require web/qualitative research (the kind Census data alone can't answer): Governance & Barriers to Entry, Economic Activity, Quality of Life, and Transit & Access.
+
+For each sub-criterion below, return:
+- A 1–10 score (1 = far below target, 10 = meets or exceeds target).
+- A brief value (≤ 60 chars) summarizing the data point (e.g. "Top 5% nationally", "AA+ rating", "Walking distance to Metro-North").
+- A source citation — prefer URLs from the Research Websites list, otherwise cite the authoritative source by name + a URL if you can construct one.
+
+If you genuinely don't have a reliable answer, set score=null and value="insufficient data". Don't invent numbers.
+
+Sub-criteria to score:
+${critList}
+
+Authoritative research sources to cite (use these where possible):
+${sourceList}
+
+Return STRICT JSON in this exact shape, with no commentary outside the JSON:
+{
+  "scores": [
+    {"criterion_name": "<exact name from list>", "score": <0-10 or null>, "value": "<short value>", "source": "<URL or source label>"}
+  ],
+  "thesis": "<2-3 paragraph investment thesis — why this town fits or doesn't fit FM's affluent-town acquisition strategy>",
+  "summary": "<one sentence executive summary, max 200 chars>"
+}`;
+
+    const userPrompt = `Town: ${town}
+Population: ${pop}
+Median Household Income: ${hhi}
+Median Home Value: ${home}
+Nearest Top-50 Metro: ${metro}
+
+Research this town now and produce the scoring JSON.`;
+
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 3000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+      if (!r.ok) throw new Error(`API ${r.status}: ${(await r.text()).slice(0, 400)}`);
+      const data = await r.json();
+      const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+
+      // Extract JSON from the response — Claude may wrap it in markdown
+      let jsonStr = text.trim();
+      const m1 = jsonStr.match(/```json\s*([\s\S]*?)\s*```/i);
+      if (m1) jsonStr = m1[1];
+      else {
+        const m2 = jsonStr.match(/\{[\s\S]*\}/);
+        if (m2) jsonStr = m2[0];
+      }
+      const parsed = JSON.parse(jsonStr);
+
+      // Match criterion names → ids, write scores
+      const byName = new Map(phase3Crits.map(c => [c.name.toLowerCase().trim(), c]));
+      const scoreRows = [];
+      let scoredCount = 0, skippedCount = 0;
+      for (const s of (parsed.scores || [])) {
+        const crit = byName.get((s.criterion_name || '').toLowerCase().trim());
+        if (!crit) continue;
+        if (s.score == null || s.score === '') { skippedCount++; continue; }
+        const sc = Math.max(0, Math.min(10, parseFloat(s.score)));
+        if (!Number.isFinite(sc)) { skippedCount++; continue; }
+        scoreRows.push({
+          market_id: market.id,
+          criterion_id: crit.id,
+          value_numeric: Math.round(sc * 10) / 10,
+          value_text: s.value || null,
+          source: s.source || null,
+          updated_by: 'phase3_claude',
+        });
+        scoredCount++;
+      }
+
+      // Wipe prior phase3 scores for this market + insert
+      const SU = window.SUPABASE_URL;
+      const SK = window.SUPABASE_KEY;
+      const H = { apikey: SK, Authorization: 'Bearer ' + SK, 'Content-Type': 'application/json', Prefer: 'return=minimal' };
+      await fetch(`${SU}/rest/v1/market_research_scores?market_id=eq.${market.id}&updated_by=eq.phase3_claude`, { method: 'DELETE', headers: H });
+      if (scoreRows.length > 0) {
+        const r2 = await fetch(`${SU}/rest/v1/market_research_scores`, { method: 'POST', headers: H, body: JSON.stringify(scoreRows) });
+        if (!r2.ok) throw new Error(`Score insert ${r2.status}: ${(await r2.text()).slice(0, 200)}`);
+      }
+      // Update market thesis + summary
+      if (parsed.thesis || parsed.summary) {
+        await window.supaWrite('market_research_markets', 'PATCH', {
+          thesis: parsed.thesis || null,
+          summary: parsed.summary || null,
+        }, `?id=eq.${market.id}`);
+        if (market.id === (_currentMarket && _currentMarket.id)) {
+          _currentMarket.thesis = parsed.thesis;
+          _currentMarket.summary = parsed.summary;
+        }
+      }
+
+      // Render summary in modal
+      const resEl = document.getElementById('mrDeepResults');
+      status.innerHTML = `<strong style="color:#166534;">✓ Research complete.</strong> Scored <strong>${scoredCount}</strong> sub-criteria${skippedCount ? `, skipped ${skippedCount} (insufficient data)` : ''}.`;
+      resEl.style.display = 'block';
+      resEl.innerHTML = `
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.4px;">Summary</div>
+          <div style="font-size:13px;color:#0f172a;margin-top:4px;">${_esc(parsed.summary || '')}</div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.4px;">Thesis</div>
+          <div style="font-size:13px;color:#1e293b;line-height:1.55;margin-top:4px;white-space:pre-wrap;">${_esc(parsed.thesis || '')}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:0.4px;">Scored criteria</div>
+          <div style="font-size:12px;color:#475569;line-height:1.7;margin-top:4px;">
+            ${(parsed.scores || []).map(s => {
+              const sc = s.score == null ? '—' : (Math.round(s.score * 10) / 10);
+              const src = s.source ? `<span style="color:#94a3b8;">[${_esc(s.source.length > 70 ? s.source.slice(0,70)+'…' : s.source)}]</span>` : '';
+              return `<div><strong>${_esc(s.criterion_name)}</strong>: ${sc}/10 — ${_esc(s.value || '')} ${src}</div>`;
+            }).join('')}
+          </div>
+        </div>`;
+
+      // Refresh data so scorecard re-renders with new scores
+      await _loadData();
+      if (_currentMarket) {
+        _currentMarket = _markets.find(x => x.id === market.id) || (await (async () => {
+          const rows = await window.supaFetch('market_research_markets', `?select=*&id=eq.${market.id}&limit=1`);
+          return rows && rows[0];
+        })());
+        _renderDetail();
+      } else {
+        _renderGrid();
+      }
+    } catch (e) {
+      status.innerHTML = `<strong style="color:#b91c1c;">✗ Research failed.</strong><br>${_esc(String(e).slice(0, 400))}`;
+    }
   }
 
   // ── Favorite toggle ─────────────────────────────────────
