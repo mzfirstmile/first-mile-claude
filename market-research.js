@@ -644,15 +644,29 @@
         color: #94a3b8; font-size: 12px; font-style: italic;
       }
 
-      /* Grouped scorecard */
+      /* Grouped scorecard — bolder category separators */
+      #mrRoot .mr-scorecard table { border-collapse: separate; border-spacing: 0; }
       #mrRoot .mr-cat-header {
-        font-size: 11px; font-weight: 700;
-        color: #475569; text-transform: uppercase;
-        letter-spacing: 0.6px; padding: 14px 12px 6px 12px;
-        background: #f8fafc;
-        border-top: 2px solid #e2e8f0;
+        font-size: 12px; font-weight: 800;
+        color: #0f172a; text-transform: uppercase;
+        letter-spacing: 0.7px;
+        padding: 18px 14px 12px 14px;
+        background: linear-gradient(180deg, #f1f5f9 0%, #e2e8f0 100%);
+        border-top: 4px solid #0ea5e9;
+        border-bottom: 1px solid #cbd5e1;
+        position: relative;
       }
-      #mrRoot .mr-cat-header:first-child { border-top: none; }
+      #mrRoot .mr-cat-header:first-child { border-top: 4px solid #0ea5e9; }
+      /* Different accent color per category */
+      #mrRoot .mr-cat-header[data-cat="demographics"]          { border-top-color: #0ea5e9; }
+      #mrRoot .mr-cat-header[data-cat="company_concentrations"]{ border-top-color: #8b5cf6; }
+      #mrRoot .mr-cat-header[data-cat="governance"]            { border-top-color: #f59e0b; }
+      #mrRoot .mr-cat-header[data-cat="economic_activity"]     { border-top-color: #ec4899; }
+      #mrRoot .mr-cat-header[data-cat="education"]             { border-top-color: #14b8a6; }
+      #mrRoot .mr-cat-header[data-cat="quality_of_life"]       { border-top-color: #22c55e; }
+      #mrRoot .mr-cat-header[data-cat="transit"]               { border-top-color: #f97316; }
+      /* Add extra breathing room after each category's last row */
+      #mrRoot .mr-scorecard tbody > tr:has(.mr-cat-header) { box-shadow: 0 -10px 0 #fff; }
       #mrRoot .mr-target-chip {
         display: inline-block;
         background: #f1f5f9; color: #475569;
@@ -660,6 +674,32 @@
         padding: 2px 8px; border-radius: 4px;
         margin-left: 6px; white-space: nowrap;
       }
+      /* Source cell — clickable link + edit pencil */
+      #mrRoot .mr-source-cell {
+        display: flex; align-items: center; gap: 6px; min-width: 0;
+      }
+      #mrRoot .mr-source-link {
+        color: #0ea5e9; text-decoration: underline;
+        font-size: 12px; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; flex: 1; min-width: 0;
+      }
+      #mrRoot .mr-source-link:hover { color: #0284c7; }
+      #mrRoot .mr-source-text {
+        font-size: 12px; color: #475569;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        flex: 1; min-width: 0;
+      }
+      #mrRoot .mr-source-placeholder {
+        font-size: 12px; color: #94a3b8; font-style: italic;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        flex: 1; min-width: 0;
+      }
+      #mrRoot .mr-source-edit {
+        background: none; border: none; cursor: pointer;
+        color: #94a3b8; padding: 2px 4px; border-radius: 4px;
+        font-size: 12px; flex: none;
+      }
+      #mrRoot .mr-source-edit:hover { background: #f1f5f9; color: #0ea5e9; }
     `;
     document.head.appendChild(style);
   }
@@ -688,6 +728,18 @@
     if (c.target_max != null) return '≤ ' + _fmtVal(c.target_max, c.target_unit);
     return '';
   }
+  // Extract a clickable URL from a source string ("US Census ACS 2022 5-yr (data.census.gov)" → "https://data.census.gov")
+  function _extractSourceUrl(s) {
+    if (!s) return null;
+    const m1 = s.match(/https?:\/\/[^\s)\]"']+/);
+    if (m1) return m1[0].replace(/[.,;]+$/, '');
+    const m2 = s.match(/\(([a-z0-9][\w.-]*\.[a-z]{2,})\)/i);
+    if (m2) return 'https://' + m2[1];
+    const m3 = s.match(/([a-z0-9][\w-]*\.(?:com|org|gov|net|io|co|us|edu))/i);
+    if (m3) return 'https://' + m3[1];
+    return null;
+  }
+
   function _fmtVal(v, unit) {
     const n = Number(v);
     if (unit === '$') {
@@ -1332,7 +1384,7 @@
         ? '<span style="font-size:10px;font-weight:600;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;padding:1px 7px;border-radius:8px;">⚙️ Phase 2 scored</span>'
         : '<span style="font-size:10px;font-weight:600;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;padding:1px 7px;border-radius:8px;">🔬 Phase 3 (deep research)</span>';
       bodyHtml += `
-        <tr><td colspan="3" class="mr-cat-header">
+        <tr><td colspan="3" class="mr-cat-header" data-cat="${_esc(cat)}">
           <span style="display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;">
             ${_esc(_CAT_LABELS[cat] || cat)}
             <span style="font-size:10px;font-weight:600;color:#0ea5e9;background:#e0f2fe;padding:2px 8px;border-radius:8px;">weight ${catWeight}</span>
@@ -1371,14 +1423,25 @@
                      placeholder="${c.value_type === 'percent' ? '%' : (c.value_type === 'currency' ? '$' : (c.value_type === 'rating_1_10' ? '1-10' : ''))}">
             </td>
             <td>
-              <div style="display:flex;align-items:center;gap:6px;">
-                <input class="mr-cell-input" type="text"
-                       value="${_esc(effectiveSource)}"
-                       onchange="mrSaveSource('${c.id}', this.value)"
-                       placeholder="${_esc(placeholder)}"
-                       style="flex:1;min-width:0;${!effectiveSource ? 'color:#94a3b8;font-style:italic;' : ''}">
-                ${effectiveSource && /^https?:\/\//i.test(effectiveSource) ? `<a href="${_esc(effectiveSource)}" target="_blank" rel="noopener" title="Open source" style="color:#0ea5e9;text-decoration:none;font-size:14px;">↗</a>` : ''}
-              </div>
+              ${(() => {
+                const url = _extractSourceUrl(effectiveSource);
+                if (effectiveSource && url) {
+                  return `<div class="mr-source-cell">
+                    <a href="${_esc(url)}" target="_blank" rel="noopener" class="mr-source-link" title="${_esc(effectiveSource)}">${_esc(effectiveSource)}</a>
+                    <button class="mr-source-edit" onclick="mrEditSource('${c.id}')" title="Edit">✏</button>
+                  </div>`;
+                }
+                if (effectiveSource) {
+                  return `<div class="mr-source-cell">
+                    <span class="mr-source-text">${_esc(effectiveSource)}</span>
+                    <button class="mr-source-edit" onclick="mrEditSource('${c.id}')" title="Edit">✏</button>
+                  </div>`;
+                }
+                return `<div class="mr-source-cell">
+                  <span class="mr-source-placeholder">${_esc(placeholder)}</span>
+                  <button class="mr-source-edit" onclick="mrEditSource('${c.id}')" title="Add source">✏</button>
+                </div>`;
+              })()}
             </td>
           </tr>`;
       });
@@ -2273,6 +2336,12 @@ Research this town now and produce the scoring JSON.`;
   window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
   window.mrDeepResearch = (id) => _deepResearch(id);
   window.mrDeepResearchCurrent = () => { if (_currentMarket) _deepResearch(_currentMarket.id); };
+  window.mrEditSource = (criterionId) => {
+    const existing = _scores.find(s => s.criterion_id === criterionId);
+    const newVal = prompt('Source citation (URL or label):', existing ? (existing.source || '') : '');
+    if (newVal == null) return;
+    _saveSource(criterionId, newVal).then(() => _renderScorecard());
+  };
   window.mrToggleTier = (tier, on) => {
     if (on) _activeTiers.add(tier); else _activeTiers.delete(tier);
     // Sync visual state of the pill
