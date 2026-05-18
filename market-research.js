@@ -539,6 +539,25 @@
       #mrRoot .mr-tier-pill.active { background: #0ea5e9; border-color: #0284c7; color: #fff; font-weight: 600; }
       #mrRoot .mr-tier-pill.active:hover { background: #0284c7; }
 
+      /* Split list+map layout */
+      #mrRoot .mr-split {
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
+        gap: 16px; align-items: flex-start;
+      }
+      #mrRoot .mr-split-list { min-width: 0; overflow-x: auto; }
+      #mrRoot .mr-split-map {
+        position: sticky; top: 12px;
+        height: calc(100vh - 80px);
+        min-height: 480px;
+        border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;
+        background: #f0f4f8;
+      }
+      #mrRoot .mr-split-map > #mrMap { width: 100%; height: 100%; }
+      @media (max-width: 1100px) {
+        #mrRoot .mr-split { grid-template-columns: 1fr; }
+        #mrRoot .mr-split-map { position: relative; height: 420px; top: auto; }
+      }
+
       /* Phase coverage banner */
       #mrRoot .mr-phase-banner {
         background: #f8fafc; border: 1px solid #e2e8f0;
@@ -1179,18 +1198,30 @@
       </div>`;
     let body, pager = '';
     if (_viewMode === 'map') {
-      body = _renderMapShell();
+      body = _renderMapShell({ full: true });
     } else {
-      body = _renderListView(visible);
+      // Split view: list on left, map sticky on right
+      const listInner = _renderListView(visible);
       pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
+      body = `
+        <div class="mr-split">
+          <div class="mr-split-list">${listInner}${pager}</div>
+          <div class="mr-split-map">${_renderMapShell({ full: false })}</div>
+        </div>`;
+      pager = '';
     }
     gridEl.innerHTML = header + body + pager;
-    if (_viewMode === 'map') _initMap();
+    // Map is rendered in BOTH the split (default) and full views
+    _initMap();
   }
 
-  function _renderMapShell() {
+  function _renderMapShell(opts) {
+    const full = opts && opts.full;
+    const wrapStyle = full
+      ? 'position:relative;height:640px;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;background:#f0f4f8;'
+      : 'position:relative;width:100%;height:100%;';
     return `
-      <div id="mrMapContainer" style="position:relative;height:640px;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;background:#f0f4f8;">
+      <div id="mrMapContainer" style="${wrapStyle}">
         <div id="mrMap" style="width:100%;height:100%;"></div>
         <div id="mrMapStatus" style="position:absolute;top:12px;left:12px;background:rgba(255,255,255,0.95);padding:8px 12px;border-radius:6px;font-size:12px;color:#475569;box-shadow:0 1px 3px rgba(0,0,0,0.1);z-index:1000;">
           Loading map…
@@ -1199,8 +1230,7 @@
           <div style="font-weight:700;color:#0f172a;margin-bottom:4px;">Tier</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;"></span> Tier 1</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;"></span> Tier 2</div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#fb923c;"></span> Tier 3</div>
-          <div style="display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;"></span> Tier 4</div>
+          <div style="display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;"></span> Tier 3</div>
         </div>
       </div>
     `;
@@ -1276,8 +1306,10 @@
       const withCoords = rows.filter(m => m.latitude != null && m.longitude != null);
       const withoutCoords = rows.filter(m => m.latitude == null || m.longitude == null);
 
-      const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#fb923c', 4: '#ef4444' };
+      // Tier 4 markers are intentionally not drawn (the bottom band isn't useful)
+      const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6' };
       for (const m of withCoords) {
+        if (m.tier === 4 || m.tier == null) continue;
         const color = tierColor[m.tier] || '#94a3b8';
         const icon = L.divIcon({
           className: 'mr-marker',
