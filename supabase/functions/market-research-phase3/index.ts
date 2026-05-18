@@ -88,7 +88,7 @@ function buildSystemPrompt(criteria: Criterion[]): string {
 For each sub-criterion below, return:
 - A 1-10 score (1 = far below target, 10 = meets or exceeds target).
 - A brief value (≤ 60 chars) summarizing the data point (e.g. "Top 5% nationally", "AA+ rating", "Walking distance to Metro-North").
-- A source citation — prefer URLs from the Research Websites list, otherwise cite the authoritative source by name + a URL if you can construct one.
+- A sources array — 1 to 3 authoritative citations. Prefer URLs from the Research Websites list. Multiple sources are encouraged when more than one body of data supports the score (e.g. FBI UCR + Niche.com for crime).
 
 If you genuinely don't have a reliable answer, set score=null and value="insufficient data". Don't invent numbers.
 
@@ -101,7 +101,7 @@ ${RESEARCH_SOURCES}
 Return STRICT JSON in this exact shape, with no commentary outside the JSON:
 {
   "scores": [
-    {"criterion_name": "<exact name from list>", "score": <0-10 or null>, "value": "<short value>", "source": "<URL or source label>"}
+    {"criterion_name": "<exact name from list>", "score": <0-10 or null>, "value": "<short value>", "sources": ["<URL or label>", "<optional 2nd>", "<optional 3rd>"]}
   ],
   "thesis": "<2-3 paragraph investment thesis>",
   "summary": "<one sentence executive summary, max 200 chars>"
@@ -203,12 +203,17 @@ async function processOne(sb: any, apiKey: string, system: string, m: Market, cr
     if (s.score == null || s.score === "") continue;
     const sc = Math.max(0, Math.min(10, parseFloat(s.score)));
     if (!Number.isFinite(sc)) continue;
+    // Accept either sources[] (new) or source (legacy single string)
+    const srcs: string[] = Array.isArray((s as any).sources)
+      ? (s as any).sources.filter((x: any) => !!x)
+      : ((s as any).source ? [(s as any).source] : []);
     scoreRows.push({
       market_id: m.id,
       criterion_id: crit.id,
       value_numeric: Math.round(sc * 10) / 10,
       value_text: s.value || null,
-      source: s.source || null,
+      source: srcs[0] || null,  // back-compat
+      sources: srcs,
       updated_by: "phase3_claude",
     });
     scored++;
