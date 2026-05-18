@@ -2094,6 +2094,9 @@
   // ── Supabase config (injected by deploy or config.js for local) ──
   const SUPABASE_URL = window.SUPABASE_URL || '__SUPABASE_URL__';
   const SUPABASE_KEY = window.SUPABASE_KEY || '__SUPABASE_KEY__';
+  // Expose on window so external modules (market-research.js) can use them.
+  window.SUPABASE_URL = SUPABASE_URL;
+  window.SUPABASE_KEY = SUPABASE_KEY;
 
   // ── Properties Data (shared across modules) ──
   let propertiesData = [];  // Supabase records
