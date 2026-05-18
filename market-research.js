@@ -354,6 +354,63 @@
         background: #fff; border-radius: 12px; max-width: 520px; width: 100%;
         max-height: 90vh; overflow-y: auto; padding: 24px;
       }
+      /* Wide variant for the categories editor — multi-column grid */
+      #mrRoot .mr-modal.mr-modal-wide { max-width: 1200px; }
+      #mrRoot .mr-cat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        gap: 12px;
+      }
+      #mrRoot .mr-cat-card {
+        border: 1px solid #e2e8f0; border-radius: 10px;
+        background: #fff; overflow: hidden; display: flex; flex-direction: column;
+      }
+      #mrRoot .mr-cat-card .mr-cat-card-head {
+        display: grid; grid-template-columns: 1fr auto; gap: 10px;
+        align-items: center; padding: 10px 12px;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+        border-bottom: 1px solid #e2e8f0;
+      }
+      #mrRoot .mr-cat-card .mr-cat-card-title {
+        font-size: 12px; font-weight: 700; color: #0f172a;
+        text-transform: uppercase; letter-spacing: 0.4px;
+        line-height: 1.25;
+      }
+      #mrRoot .mr-cat-card .mr-cat-card-sub {
+        font-size: 10px; color: #94a3b8; margin-top: 2px;
+      }
+      #mrRoot .mr-cat-card .mr-cat-weight-wrap {
+        display: flex; flex-direction: column; align-items: center;
+      }
+      #mrRoot .mr-cat-card .mr-cat-weight-wrap input {
+        width: 70px; padding: 5px 6px; border: 1px solid #cbd5e1;
+        border-radius: 6px; font-size: 14px; text-align: center;
+        color: #0f172a; font-weight: 700; background: #fff;
+      }
+      #mrRoot .mr-cat-card .mr-cat-weight-pct {
+        font-size: 9px; color: #94a3b8; font-weight: 600;
+        margin-top: 2px;
+      }
+      #mrRoot .mr-cat-card .mr-cat-card-body {
+        padding: 6px 12px 10px 12px; flex: 1;
+      }
+      #mrRoot .mr-cat-card .mr-cat-sub-row {
+        padding: 6px 0; border-top: 1px solid #f1f5f9;
+        display: flex; align-items: flex-start; gap: 8px;
+      }
+      #mrRoot .mr-cat-card .mr-cat-sub-row:first-child { border-top: none; }
+      #mrRoot .mr-cat-card .mr-cat-sub-bullet {
+        width: 5px; height: 5px; border-radius: 50%;
+        background: #94a3b8; margin-top: 7px; flex: none;
+      }
+      #mrRoot .mr-cat-card .mr-cat-sub-name {
+        font-size: 12px; font-weight: 500; color: #1e293b;
+        display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+      }
+      #mrRoot .mr-cat-card .mr-cat-sub-desc {
+        font-size: 10px; color: #94a3b8; margin-top: 1px;
+        line-height: 1.4;
+      }
       #mrRoot .mr-modal h3 { margin: 0 0 16px 0; font-size: 17px; font-weight: 700; color: #1e293b; }
       #mrRoot .mr-modal label {
         display: block; font-size: 12px; font-weight: 600; color: #475569;
@@ -1090,14 +1147,19 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   }
 
   // ── Modal helpers ────────────────────────────────────────
-  function _openModal(title, bodyHTML) {
+  function _openModal(title, bodyHTML, opts) {
     const overlay = document.getElementById('mrModalOverlay');
-    document.getElementById('mrModalContent').innerHTML = `<h3>${_esc(title)}</h3>${bodyHTML}`;
+    const content = document.getElementById('mrModalContent');
+    content.innerHTML = `<h3>${_esc(title)}</h3>${bodyHTML}`;
+    // Toggle wide variant per call
+    content.classList.toggle('mr-modal-wide', !!(opts && opts.wide));
     overlay.classList.add('show');
   }
   function _closeModal() {
     const overlay = document.getElementById('mrModalOverlay');
     if (overlay) overlay.classList.remove('show');
+    const content = document.getElementById('mrModalContent');
+    if (content) content.classList.remove('mr-modal-wide');
   }
 
   // ── CRUD: Markets ────────────────────────────────────────
@@ -1340,39 +1402,37 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     const cats = _categories.slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
     const totalWeight = cats.reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
 
-    const sections = cats.map(cat => {
+    const cards = cats.map(cat => {
       const subs = _criteria.filter(c => c.category_id === cat.id)
         .slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name));
       const pct = totalWeight > 0 ? ((parseFloat(cat.weight) || 0) / totalWeight * 100).toFixed(0) : '—';
       return `
-        <div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;background:#fff;overflow:hidden;">
-          <div style="display:grid;grid-template-columns:1fr 110px;gap:12px;align-items:center;padding:12px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+        <div class="mr-cat-card">
+          <div class="mr-cat-card-head">
             <div>
-              <div style="font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.4px;">${_esc(cat.name)}</div>
-              ${cat.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${_esc(cat.description)}</div>` : ''}
-              <div style="font-size:11px;color:#64748b;margin-top:4px;">${subs.length} sub-${subs.length === 1 ? 'criterion' : 'criteria'}</div>
+              <div class="mr-cat-card-title">${_esc(cat.name)}</div>
+              <div class="mr-cat-card-sub">${subs.length} sub-${subs.length === 1 ? 'criterion' : 'criteria'}${cat.description ? ' · ' + _esc(cat.description) : ''}</div>
             </div>
-            <div style="text-align:center;">
+            <div class="mr-cat-weight-wrap">
               <input type="number" min="0" step="0.1" value="${cat.weight != null ? cat.weight : 1}"
-                     onchange="mrSaveCategoryWeight('${cat.id}', this.value)"
-                     style="width:84px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;text-align:center;color:#0f172a;font-weight:700;">
-              <div style="font-size:10px;color:#94a3b8;margin-top:4px;font-weight:600;">${pct === '—' ? '' : pct + '%'} of total</div>
+                     onchange="mrSaveCategoryWeight('${cat.id}', this.value)">
+              <div class="mr-cat-weight-pct">${pct === '—' ? '' : pct + '%'}</div>
             </div>
           </div>
-          <div style="padding:6px 14px 10px 14px;">
+          <div class="mr-cat-card-body">
             ${subs.length === 0
-              ? '<div style="font-size:12px;color:#94a3b8;padding:8px 0;">No sub-criteria.</div>'
+              ? '<div style="font-size:11px;color:#94a3b8;padding:6px 0;">No sub-criteria.</div>'
               : subs.map(c => {
                   const target = _fmtTarget(c);
                   return `
-                    <div style="padding:8px 0;border-top:1px solid #f1f5f9;display:flex;align-items:flex-start;gap:10px;">
-                      <div style="width:6px;height:6px;border-radius:50%;background:#94a3b8;margin-top:8px;flex:none;"></div>
+                    <div class="mr-cat-sub-row">
+                      <div class="mr-cat-sub-bullet"></div>
                       <div style="flex:1;min-width:0;">
-                        <div style="font-size:13px;font-weight:500;color:#1e293b;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <div class="mr-cat-sub-name">
                           ${_esc(c.name)}
                           ${target ? `<span class="mr-target-chip">🎯 ${_esc(target)}</span>` : ''}
                         </div>
-                        ${c.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${_esc(c.description)}</div>` : ''}
+                        ${c.description ? `<div class="mr-cat-sub-desc">${_esc(c.description)}</div>` : ''}
                       </div>
                     </div>`;
                 }).join('')}
@@ -1385,11 +1445,11 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
         Weights live on the 6 high-level categories. Higher weight = more influence on the composite score.
         Weights are relative and normalized when ranking is computed. Total: <strong style="color:#0ea5e9;">${totalWeight.toFixed(1)}</strong>
       </p>
-      ${sections}
+      <div class="mr-cat-grid">${cards}</div>
       <div class="mr-modal-actions">
         <button class="mr-btn mr-btn-primary" onclick="mrCloseModal(); mrRecomputeAndRender()">Done</button>
       </div>
-    `);
+    `, { wide: true });
   }
   async function _saveCategoryWeight(id, rawValue) {
     const weight = Math.max(0, parseFloat(rawValue) || 0);
