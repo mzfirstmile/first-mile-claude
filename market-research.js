@@ -8,10 +8,15 @@
   'use strict';
 
   let _inited = false;
-  let _markets = [];
+  let _markets = [];          // current page only (server-paginated)
+  let _shortlistFull = [];    // full shortlist (≤ 1k) loaded once, used by the chatbot
+  let _filterCounts = { phase_shortlisted: 0, all: 0, favorites: 0 };
+  let _totalForCurrentFilter = 0;
+  let _page = 0;
+  const PAGE_SIZE = 100;
   let _categories = []; // 6 high-level groups carrying weights
   let _criteria = [];   // sub-criteria, linked via category_id
-  let _scores = []; // [{market_id, criterion_id, value_numeric, value_text, ...}]
+  let _scores = []; // shortlist scores only
   let _currentMarket = null; // detail view
   let _currentUser = null;
   let _activeFilter = 'phase_shortlisted'; // default to Phase 1 shortlist
@@ -466,6 +471,34 @@
       #mrRoot .mr-search-clear:hover { background: #f1f5f9; color: #475569; }
       #mrRoot .mr-search-input:not(:placeholder-shown) + .mr-search-clear { display: block; }
 
+      /* Page header + pager */
+      #mrRoot .mr-page-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin: 14px 0 10px 0;
+        font-size: 12px; color: #64748b;
+      }
+      #mrRoot .mr-page-count strong { color: #0f172a; font-weight: 700; }
+      #mrRoot .mr-pager {
+        display: flex; justify-content: center; align-items: center;
+        gap: 16px; margin: 20px 0 8px 0;
+      }
+      #mrRoot .mr-pager-btn {
+        background: #fff; border: 1px solid #e2e8f0;
+        padding: 7px 14px; border-radius: 8px;
+        font-size: 13px; color: #1e293b; cursor: pointer;
+        font-weight: 500;
+      }
+      #mrRoot .mr-pager-btn:hover:not([disabled]) {
+        background: #f1f5f9; border-color: #cbd5e1;
+      }
+      #mrRoot .mr-pager-btn[disabled] {
+        opacity: 0.4; cursor: not-allowed;
+      }
+      #mrRoot .mr-pager-info {
+        font-size: 13px; color: #64748b;
+      }
+      #mrRoot .mr-pager-info strong { color: #0f172a; font-weight: 700; }
+
       /* Heart toggle */
       #mrRoot .mr-heart {
         cursor: pointer; padding: 4px; line-height: 1;
@@ -759,30 +792,127 @@
       <div class="mr-toast" id="mrToast"></div>
     `;
 
-    // Filter button wiring
+    // Filter button wiring — change filter, reset to page 0, re-fetch
     root.querySelectorAll('.mr-filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         root.querySelectorAll('.mr-filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         _activeFilter = btn.dataset.filter;
-        _renderGrid();
+        _page = 0;
+        _refreshPage();
       });
     });
   }
 
-  // ── Data loading ─────────────────────────────────────────
+  // ── Data loading (server-paginated) ─────────────────────
+  // Builds the PostgREST query suffix for the current filter + search.
+  function _buildFilterQuery() {
+    const parts = [];
+    if (_activeFilter === 'phase_shortlisted')   parts.push('phase=eq.shortlisted');
+    else if (_activeFilter === 'favorites')      parts.push('is_favorite=eq.true');
+    // 'all' = no filter
+    const q = (_searchQuery || '').trim();
+    if (q) {
+      const safe = q.replace(/[%*]/g, '');
+      const enc = encodeURIComponent('*' + safe + '*');
+      parts.push(`or=(name.ilike.${enc},state.ilike.${enc})`);
+    }
+    return parts;
+  }
+
+  // Single source-of-truth fetch for the active filter + search + page.
+  // Returns total count via Content-Range header (Prefer: count=exact).
+  async function _fetchPage() {
+    const parts = _buildFilterQuery();
+    parts.push('select=*');
+    parts.push('order=median_household_income.desc.nullslast,name.asc');
+    const offset = _page * PAGE_SIZE;
+    parts.push(`offset=${offset}`);
+    parts.push(`limit=${PAGE_SIZE}`);
+    const url = `${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&');
+    const r = await fetch(url, {
+      headers: {
+        apikey: window.SUPABASE_KEY,
+        Authorization: 'Bearer ' + window.SUPABASE_KEY,
+        Prefer: 'count=exact',
+      },
+    });
+    if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0,200)}`);
+    const rows = await r.json();
+    const cr = r.headers.get('content-range') || '';
+    const total = parseInt((cr.split('/')[1] || '0'), 10) || 0;
+    return { rows, total };
+  }
+
+  // Quick count-only HEAD query for filter-chip badges.
+  async function _fetchCount(filterParts) {
+    const parts = filterParts.slice();
+    parts.push('select=id');
+    parts.push('limit=1');
+    const url = `${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&');
+    const r = await fetch(url, {
+      headers: {
+        apikey: window.SUPABASE_KEY,
+        Authorization: 'Bearer ' + window.SUPABASE_KEY,
+        Prefer: 'count=exact',
+      },
+    });
+    const cr = r.headers.get('content-range') || '';
+    return parseInt((cr.split('/')[1] || '0'), 10) || 0;
+  }
+
+  async function _loadFilterCounts() {
+    const [shortlist, all, favs] = await Promise.all([
+      _fetchCount(['phase=eq.shortlisted']),
+      _fetchCount([]),
+      _fetchCount(['is_favorite=eq.true']),
+    ]);
+    _filterCounts = { phase_shortlisted: shortlist, all, favorites: favs };
+    // Refresh just the count badges (cheap)
+    const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = (n || 0).toLocaleString(); };
+    set('mrCountShortlist', shortlist);
+    set('mrCountAll', all);
+    set('mrCountFavorites', favs);
+  }
+
+  // Load shortlist once for chatbot context. Kept separate from grid pagination.
+  async function _loadShortlistForChatbot() {
+    try {
+      _shortlistFull = await window.supaFetch(
+        'market_research_markets',
+        '?select=id,name,state,population,median_household_income,median_home_value,nearest_top50_city,is_favorite,thesis&phase=eq.shortlisted&order=median_household_income.desc.nullslast,name.asc&limit=1000'
+      ) || [];
+    } catch (e) { _shortlistFull = []; }
+  }
+
   async function _loadData() {
     _currentUser = window.currentUser;
-    const [markets, categories, criteria, scores] = await Promise.all([
-      window.supaFetch('market_research_markets', '?select=*&order=phase.asc,median_household_income.desc.nullslast,name.asc&limit=50000'),
+    const [categories, criteria, scores, paged] = await Promise.all([
       window.supaFetch('market_research_categories', '?select=*&order=sort_order.asc,name.asc'),
       window.supaFetch('market_research_criteria', '?select=*&order=sort_order.asc,name.asc'),
       window.supaFetch('market_research_scores', '?select=*'),
+      _fetchPage(),
     ]);
-    _markets = markets || [];
     _categories = categories || [];
     _criteria = criteria || [];
     _scores = scores || [];
+    _markets = paged.rows;
+    _totalForCurrentFilter = paged.total;
+    // Counts + shortlist background-load (no need to block initial render)
+    _loadFilterCounts();
+    _loadShortlistForChatbot();
+  }
+
+  // Refresh just the grid (filter/search/page changed)
+  async function _refreshPage() {
+    try {
+      const paged = await _fetchPage();
+      _markets = paged.rows;
+      _totalForCurrentFilter = paged.total;
+      _renderGrid();
+    } catch (e) {
+      _toast('Load failed: ' + e.message, true);
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────
@@ -829,35 +959,14 @@
     const gridEl = document.getElementById('mrGrid');
     if (!gridEl) return;
 
-    // Counts for filter chips
-    const counts = {
-      all: _markets.length,
-      phase_shortlisted: _markets.filter(m => m.phase === 'shortlisted').length,
-      phase_universe: _markets.filter(m => m.phase === 'universe').length,
-      favorites: _markets.filter(m => m.is_favorite).length,
-    };
+    // Chip counts come from server (_loadFilterCounts) — independent of current page
     const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = (n || 0).toLocaleString(); };
-    setCount('mrCountAll', counts.all);
-    setCount('mrCountShortlist', counts.phase_shortlisted);
-    setCount('mrCountUniverse', counts.phase_universe);
-    setCount('mrCountFavorites', counts.favorites);
+    setCount('mrCountShortlist', _filterCounts.phase_shortlisted);
+    setCount('mrCountAll',       _filterCounts.all);
+    setCount('mrCountFavorites', _filterCounts.favorites);
 
-    // Filter — phase_* values check pipeline phase, favorites checks is_favorite
-    let visible;
-    if (_activeFilter === 'all')                    visible = _markets.slice();
-    else if (_activeFilter === 'phase_shortlisted') visible = _markets.filter(m => m.phase === 'shortlisted');
-    else if (_activeFilter === 'phase_universe')    visible = _markets.filter(m => m.phase === 'universe');
-    else if (_activeFilter === 'favorites')         visible = _markets.filter(m => m.is_favorite);
-    else                                            visible = _markets.filter(m => m.status === _activeFilter);
-
-    // Apply search query (case-insensitive name + state match)
-    const q = (_searchQuery || '').trim().toLowerCase();
-    if (q) {
-      visible = visible.filter(m =>
-        (m.name || '').toLowerCase().includes(q) ||
-        (m.state || '').toLowerCase().includes(q)
-      );
-    }
+    // _markets IS the current page. No client-side filter/search; that's server-side.
+    const visible = _markets.slice();
 
     // Sort
     const sortSel = document.getElementById('mrSort');
@@ -888,11 +997,30 @@
       return;
     }
 
-    if (_viewMode === 'list') {
-      gridEl.innerHTML = _renderListView(visible);
-    } else {
-      gridEl.innerHTML = _renderGridView(visible);
-    }
+    const total = _totalForCurrentFilter || 0;
+    const firstIdx = total ? (_page * PAGE_SIZE) + 1 : 0;
+    const lastIdx = Math.min(total, (_page + 1) * PAGE_SIZE);
+    const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const header = `
+      <div class="mr-page-header">
+        <div class="mr-page-count">Showing <strong>${firstIdx.toLocaleString()}–${lastIdx.toLocaleString()}</strong> of <strong>${total.toLocaleString()}</strong></div>
+      </div>`;
+    const body = _viewMode === 'list' ? _renderListView(visible) : _renderGridView(visible);
+    const pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
+    gridEl.innerHTML = header + body + pager;
+  }
+
+  // Compact pager: « Prev   Page 3 of 260   Next »
+  function _renderPager(pageCount) {
+    const cur = _page + 1; // 1-indexed for display
+    const canPrev = _page > 0;
+    const canNext = _page < pageCount - 1;
+    return `
+      <div class="mr-pager">
+        <button class="mr-pager-btn" ${canPrev ? '' : 'disabled'} onclick="mrPageGoto(${_page - 1})">‹ Prev</button>
+        <span class="mr-pager-info">Page <strong>${cur.toLocaleString()}</strong> of <strong>${pageCount.toLocaleString()}</strong></span>
+        <button class="mr-pager-btn" ${canNext ? '' : 'disabled'} onclick="mrPageGoto(${_page + 1})">Next ›</button>
+      </div>`;
   }
 
   function _renderGridView(visible) {
@@ -983,8 +1111,16 @@
   }
 
   // ── Detail render ────────────────────────────────────────
-  function _openMarket(id) {
-    _currentMarket = _markets.find(m => m.id === id);
+  async function _openMarket(id) {
+    // Look in current page first; if not present (different page), fetch by id
+    _currentMarket = _markets.find(m => m.id === id) ||
+                     _shortlistFull.find(m => m.id === id);
+    if (!_currentMarket) {
+      try {
+        const rows = await window.supaFetch('market_research_markets', `?select=*&id=eq.${id}&limit=1`);
+        _currentMarket = (rows && rows[0]) || null;
+      } catch (e) { /* swallow */ }
+    }
     if (!_currentMarket) return;
     document.getElementById('mrListView').classList.add('hidden');
     document.getElementById('mrDetailView').classList.add('show');
@@ -1149,9 +1285,16 @@
       (scoresByMarket[s.market_id] = scoresByMarket[s.market_id] || {})[cName] =
         s.value_numeric != null ? s.value_numeric : (s.value_text || null);
     });
-    const marketSummaries = _markets.map(m => ({
-      id: m.id, name: m.name, state: m.state, msa: m.msa,
-      population: m.population, status: m.status, score: m.score, tier: m.tier,
+    // Chatbot context = the shortlist (≤ ~1k towns) rather than the 100-row
+    // visible page or the full 26k universe.
+    const ctxSource = (_shortlistFull && _shortlistFull.length) ? _shortlistFull : _markets;
+    const marketSummaries = ctxSource.map(m => ({
+      id: m.id, name: m.name, state: m.state,
+      population: m.population,
+      median_household_income: m.median_household_income,
+      median_home_value: m.median_home_value,
+      nearest_top50_city: m.nearest_top50_city,
+      is_favorite: m.is_favorite || false,
       thesis: m.thesis || null,
       scores: scoresByMarket[m.id] || null,
     }));
@@ -1764,8 +1907,17 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   window.mrCloseModal     = ()    => _closeModal();
   window.mrChatSubmit     = ()    => _chatSubmit();
   window.mrChatSuggest    = (t)   => _chatSuggest(t);
-  window.mrSearch         = (q)   => { _searchQuery = q || ''; const inp = document.getElementById('mrSearchInput'); if (inp && inp.value !== _searchQuery) inp.value = _searchQuery; _renderGrid(); };
+  // Debounce search so typing doesn't fire a query per keystroke
+  let _searchTimer = null;
+  window.mrSearch = (q) => {
+    _searchQuery = q || '';
+    const inp = document.getElementById('mrSearchInput');
+    if (inp && inp.value !== _searchQuery) inp.value = _searchQuery;
+    clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(() => { _page = 0; _refreshPage(); }, 220);
+  };
   window.mrToggleFavorite = (id)  => _toggleFavorite(id);
+  window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
 
   // ── Main init ──────────────────────────────────────────
   window.marketResearchInit = async function () {
