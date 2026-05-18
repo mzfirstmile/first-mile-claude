@@ -674,6 +674,18 @@
         padding: 2px 8px; border-radius: 4px;
         margin-left: 6px; white-space: nowrap;
       }
+      /* Score chip beside the actual value */
+      #mrRoot .mr-score-chip {
+        display: inline-block;
+        background: #e0f2fe; color: #075985;
+        font-size: 11px; font-weight: 700;
+        padding: 2px 8px; border-radius: 10px;
+        white-space: nowrap;
+      }
+      #mrRoot .mr-score-chip.s8plus  { background: #dcfce7; color: #166534; }
+      #mrRoot .mr-score-chip.s6to8   { background: #fef3c7; color: #92400e; }
+      #mrRoot .mr-score-chip.s4to6   { background: #fed7aa; color: #9a3412; }
+      #mrRoot .mr-score-chip.sUnder4 { background: #fee2e2; color: #991b1b; }
       /* Source cell — clickable link + edit pencil */
       #mrRoot .mr-source-cell {
         display: flex; align-items: center; gap: 6px; min-width: 0;
@@ -718,6 +730,14 @@
   // Which categories Phase 2 can score programmatically. Others require Phase 3.
   const _PHASE2_CATEGORIES = new Set(['demographics', 'education', 'company_concentrations']);
   const _PHASE3_CATEGORIES = new Set(['governance', 'economic_activity', 'quality_of_life', 'transit']);
+
+  // For Phase 2 criteria we can derive the actual measured value from the
+  // market row at render time. Phase 3 criteria pull value from value_text.
+  const _PHASE2_VALUE_FROM_MARKET = {
+    'Median Household Income':         (m) => m.median_household_income ? '$' + Number(m.median_household_income).toLocaleString() : null,
+    'Median Single-Family Home Price': (m) => m.median_home_value ? '$' + Number(m.median_home_value).toLocaleString() : null,
+    'Town Population':                 (m) => m.population ? Number(m.population).toLocaleString() : null,
+  };
 
   function _fmtTarget(c) {
     if (c.target_label) return c.target_label;
@@ -1406,7 +1426,16 @@
         </td></tr>`;
       rows.forEach(c => {
         const s = scoreByCriterion[c.id] || {};
-        const v = c.value_type === 'text' ? (s.value_text || '') : (s.value_numeric != null ? s.value_numeric : '');
+        // Display value priority:
+        //   1. value_text (Phase 3 stores actual data here, e.g. "Aaa/AAA Moody's")
+        //   2. derived from market columns for the 3 Phase 2 criteria where we have raw data
+        //   3. nothing (placeholder)
+        // The 0-10 score (value_numeric) is always shown as a small chip beside the value.
+        let displayValue = s.value_text || '';
+        if (!displayValue && _PHASE2_VALUE_FROM_MARKET[c.name]) {
+          displayValue = _PHASE2_VALUE_FROM_MARKET[c.name](m) || '';
+        }
+        const scoreNum = (s.value_numeric != null && s.value_numeric !== '') ? Number(s.value_numeric).toFixed(1) : null;
         const target = _fmtTarget(c);
         // Always cite a source. If no score yet for a Phase 3 criterion, show suggested source.
         const SOURCE_SUGGESTIONS = {
@@ -1430,10 +1459,14 @@
               ${c.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${_esc(c.description)}</div>` : ''}
             </td>
             <td>
-              <input class="mr-cell-input" type="${c.value_type === 'text' ? 'text' : 'number'}" step="0.01"
-                     value="${_esc(v)}"
-                     onchange="mrSaveScore('${c.id}', '${c.value_type}', this.value)"
-                     placeholder="${c.value_type === 'percent' ? '%' : (c.value_type === 'currency' ? '$' : (c.value_type === 'rating_1_10' ? '1-10' : ''))}">
+              ${displayValue
+                ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                     <span style="font-size:13px;font-weight:600;color:#0f172a;">${_esc(displayValue)}</span>
+                     ${scoreNum != null ? `<span class="mr-score-chip ${_scoreClass(parseFloat(scoreNum))}">${scoreNum}/10</span>` : ''}
+                   </div>`
+                : (scoreNum != null
+                    ? `<span class="mr-score-chip ${_scoreClass(parseFloat(scoreNum))}">${scoreNum}/10</span>`
+                    : `<span style="color:#cbd5e1;font-size:12px;">—</span>`)}
             </td>
             <td>
               ${(() => {
