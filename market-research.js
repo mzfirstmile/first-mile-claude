@@ -145,8 +145,11 @@
         border-bottom: 1px solid #e2e8f0; white-space: nowrap;
       }
       #mrRoot .mr-table tbody td {
-        padding: 12px 14px; font-size: 13px; color: #1e293b;
+        padding: 8px 10px; font-size: 13px; color: #1e293b;
         border-bottom: 1px solid #f1f5f9; vertical-align: top;
+      }
+      #mrRoot .mr-table thead th {
+        padding: 10px 10px !important;
       }
       #mrRoot .mr-table tbody tr {
         cursor: pointer; transition: background .12s;
@@ -1247,15 +1250,15 @@
         <table class="mr-table">
           <thead>
             <tr>
-              <th style="width:36px;"></th>
-              <th style="width:22%;">Market</th>
-              <th style="width:7%;">State</th>
-              <th style="width:9%;text-align:right;">Population</th>
-              <th style="width:10%;text-align:right;">Median HHI</th>
-              <th style="width:12%;">Nearby Metro</th>
-              <th style="width:7%;text-align:center;">Score</th>
-              <th style="width:6%;text-align:center;">Tier</th>
-              <th style="width:11%;text-align:center;">Deep Research</th>
+              <th style="width:30px;"></th>
+              <th style="width:14%;">Market</th>
+              <th style="width:5%;">State</th>
+              <th style="width:8%;text-align:right;">Population</th>
+              <th style="width:9%;text-align:right;">Median HHI</th>
+              <th style="width:10%;">Nearby Metro</th>
+              <th style="width:6%;text-align:center;">Score</th>
+              <th style="width:5%;text-align:center;">Tier</th>
+              <th style="width:9%;text-align:center;">Deep Research</th>
               <th>Thesis</th>
             </tr>
           </thead>
