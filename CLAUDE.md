@@ -98,6 +98,47 @@ The embedded Claude chat has access to these tools:
 - **Debits:** CSV shows debit amounts as positive — the upload code negates them (amount = -Math.abs(rawAmount) for Debits)
 - **Account mapping:** ACCOUNT_NAME_MAP in exec.html maps account numbers to names (includes Pref Fund I: 483103381654, etc.)
 
+## Market Research Module (Town-Level Acquisition Universe)
+- **What:** A research workbench for picking small affluent towns as long-term real-estate acquisition markets. Lives at `market-research.js` (external IIFE module, view container `#mrRoot`). Loaded by index.html, opened via `window.marketResearchInit()`.
+- **Universe:** 25,961 US incorporated places + CDPs (all rows tagged `phase='universe'` or `phase='shortlisted'`).
+- **Shortlist (Phase 1):** 715 towns that pass the demographic pre-screen (pop 5k–75k AND median HHI ≥ $130k). Tagged `phase='shortlisted'` in `market_research_markets`.
+- **Tables (Supabase):**
+  - `market_research_markets` — candidate towns. Columns: id, name, state, msa, population, status, score, tier, thesis, summary, notes, latitude, longitude, median_household_income, median_home_value, nearest_top50_city, miles_to_top50, phase, census_place_geoid, is_favorite, external_links, cover_image_url, created_by, created_at, updated_at.
+  - `market_research_categories` — 7 high-level groups carrying weights (Demographics, Governance & Barriers, Economic Activity, Education, Quality of Life, Transit & Access, Company Concentrations). Weights live ONLY on this table.
+  - `market_research_criteria` — sub-criteria linked via `category_id` FK. Targets stored in `target_min/max/unit/label`. Existing `weight` column on criteria is ignored — weights are at the category level.
+  - `market_research_scores` — one row per (market_id, criterion_id) with value_numeric/value_text + source + updated_by.
+  - `market_research_sources` — Dropbox file inventory pulled by the `dropbox-sync-market-research` edge function (registers each new doc with status='pending').
+
+- **Sourcing pipeline — Phase 1 (DONE 2026-05-18):**
+  - Run from the Claude in Chrome browser tools (sandbox can't reach api.census.gov directly even with whitelist hints). Census API key required (free, 40-char hex, must be activated via email).
+  - JS executed in a CSP-permissive tab (example.com works; admin.firstmilecap.com and api.census.gov have CSPs that block the cross-origin fetches).
+  - For each of 52 state FIPS (51 states + DC + PR): `GET api.census.gov/data/2022/acs/acs5?get=NAME,B01003_001E,B19013_001E,B25077_001E&for=place:*&in=state:{FIPS}&key={KEY}`.
+  - Names cleaned ("Greenwich CDP, Connecticut" → "Greenwich, CT").
+  - Universe filter applied: pop ≥ 200 (drops 6,225 hamlets). 25,961 places kept; 715 of those also pass HHI ≥ $130k → tagged `phase='shortlisted'`.
+  - `nearest_top50_city` populated via state→primary-metro hardcoded map (approximate; Phase 2 will compute exact great-circle distance using lat/lng from Census Gazetteer).
+  - Python equivalent at `scripts/phase1_seed_us_towns.py` (NOT used because sandbox can't hit Census). Browser-driven version is the actual implementation.
+
+- **Pipeline phases (overall design):**
+  1. **Phase 1 — Demographic pre-screen (DONE).** Census ACS only. Cheap, broad. 25,961 → 715.
+  2. **Phase 2 — Enrichment + ranking (TO BE BUILT).** Programmatic enrichment of the 715 with additional data points (lat/lng + commute proxy, % bachelor's/grad degrees, % HH > $200k, Company Concentrations from the Big Four / Wealth Mgmt Excel within 60mi, etc.). Compute scores against each sub-criterion and apply category-weighted rollup. Re-rank the 715 into a tighter top-100. Triggered by the "Update Rankings" button.
+  3. **Phase 3 — Deep research per town (TO BE BUILT; user-prompted only).** A "Deep Research" button per row launches an LLM-driven research pass on a single town: pulls web data from the Research Websites list (CBRE/JLL/Newmark/Challenger/St Louis Fed/Walker Dunlop/Savills), scrapes town-specific signals (Niche.com grade, school rankings, crime rates), writes scores + a full thesis + a side-by-side comparison vs peer towns. Output saved to `market_research_scores` + the market's `thesis`/`summary`/`notes` fields.
+
+- **UI (market-research.js):**
+  - Chatbot input at the very top — Claude (sonnet-4-6) with the shortlist (≤1k rows) as context. Suggested-question chips.
+  - Search input under the page header. Server-side ilike on name + state, 220ms debounce.
+  - Filter chips: 🎯 Shortlist (default) · All · ❤ Favorites. Badges populated via cheap count-only PostgREST queries (`Prefer: count=exact`, read total from Content-Range).
+  - Server-side pagination, 100 rows/page. PostgREST `offset + limit + Prefer: count=exact`. "Showing X–Y of Z" + "« Prev / Page N of M / Next »" controls.
+  - List columns: Heart · Market · State · Population · Median HHI · Nearby Metro · Score · Thesis. Click heart → optimistic PATCH `is_favorite`.
+  - Manage Categories modal: responsive grid (auto-fit minmax 340px). 6 (now 7) category cards, each with a weight input + sub-criteria list + target chips.
+  - Detail view scorecard groups by category with weight chip on the section header.
+
+- **Browser pipeline notes / gotchas:**
+  - api.census.gov returns `Invalid Key` page even after success — the page TITLE updates from the redirect but the actual JSON is in body. Just check rows count.
+  - Census places use `-666666666` as null sentinel for HHI/home-value. Filter with `value > 0`.
+  - HHI top-codes at `$250,001` — all Census places above $250k median get that exact value. Can't distinguish them at this granularity.
+  - Wikipedia article "List of highest-income places in the United States" was deleted/redirected. Don't fall back to it.
+  - Supabase anon REST caps at 1000 rows per page even with `&limit=50000`. Must paginate via Range header or `offset + limit`.
+
 ## Active Initiatives Module
 - **What:** Project tracking module for special projects, deal activity, and communications. Built 2026-04-15.
 - **Module name:** "Active Initiatives" (sidebar + home card)
