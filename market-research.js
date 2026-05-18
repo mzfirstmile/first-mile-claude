@@ -806,6 +806,20 @@
         </div>
       </div>
 
+      <!-- Bulk Phase 3 CTA — runs the cloud edge function across all Tier-1 towns -->
+      <div class="mr-rerank-cta" id="mrBulkP3Cta" style="background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%);border-color:#fed7aa;">
+        <div class="mr-rerank-icon" style="background:#fed7aa;color:#9a3412;">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M11 8v6M8 11h6"/></svg>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="mr-rerank-title">🔬 Bulk Phase 3 on Tier 1</div>
+          <div class="mr-rerank-desc">Run Claude deep-research on every Tier-1 town (skipping ones already done). Runs in the cloud via edge function — your laptop can sleep. ~$14 total, ~20-25 min.</div>
+        </div>
+        <button class="mr-btn mr-btn-primary mr-rerank-btn" id="mrBulkP3Btn" onclick="mrBulkPhase3()" style="background:#ea580c;">
+          <span id="mrBulkP3BtnLabel">Run on Tier 1</span>
+        </button>
+      </div>
+
       <!-- Update Rankings CTA — server-side Dropbox pull + weighted re-rank -->
       <div class="mr-rerank-cta" id="mrRerankCta">
         <div class="mr-rerank-icon">
@@ -1541,6 +1555,112 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     if (!input) return;
     input.value = text;
     input.focus();
+  }
+
+  // ── Phase 3 bulk runner (cloud edge function, batched) ──
+  let _bulkP3Cancel = false;
+  async function _bulkPhase3() {
+    const btn = document.getElementById('mrBulkP3Btn');
+    const label = document.getElementById('mrBulkP3BtnLabel');
+    const HARD_CAP_USD = 20;
+    const WARN_AT_USD = 8;
+    const BATCH = 20;
+    const CONCURRENCY = 8;
+
+    // Confirm
+    if (!confirm('Run Phase 3 deep research on every Tier-1 town (~484, skipping done).\n\nExpected cost: ~$14.\nHard stop: $20. Continue?')) return;
+
+    _bulkP3Cancel = false;
+    btn.disabled = true;
+    label.textContent = 'Starting…';
+
+    // Open a status modal that updates in place
+    _openModal('🔬 Bulk Phase 3 — Tier 1', `
+      <div id="mrBulkP3Status" style="font-size:13px;color:#475569;line-height:1.55;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px;">
+        Initialising…
+      </div>
+      <div id="mrBulkP3Log" style="margin-top:10px;max-height:280px;overflow-y:auto;font-size:11px;color:#475569;font-family:'SF Mono',monospace;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:8px 10px;"></div>
+      <div class="mr-modal-actions">
+        <button class="mr-btn" onclick="mrBulkPhase3Cancel()" style="color:#b91c1c;">Cancel</button>
+        <button class="mr-btn" onclick="mrCloseModal()">Close window (run continues server-side)</button>
+      </div>
+    `, { wide: true });
+    const statusEl = document.getElementById('mrBulkP3Status');
+    const logEl = document.getElementById('mrBulkP3Log');
+    const log = (msg) => { if (logEl) { logEl.innerHTML += `<div>${_esc(msg)}</div>`; logEl.scrollTop = logEl.scrollHeight; } };
+
+    let totalProcessed = 0;
+    let totalRows = 0;
+    let totalCost = 0;
+    let batches = 0;
+    const t0 = Date.now();
+
+    while (!_bulkP3Cancel) {
+      batches++;
+      const startBatch = Date.now();
+      if (statusEl) statusEl.innerHTML = `Batch ${batches} — processed <strong>${totalProcessed}</strong> towns · scores written <strong>${totalRows}</strong> · spent <strong>$${totalCost.toFixed(3)}</strong>`;
+      log(`▶ Batch ${batches} starting…`);
+      try {
+        const r = await fetch(`${window.SUPABASE_URL}/functions/v1/market-research-phase3`, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tier_filter: [1],
+            limit: BATCH,
+            concurrency: CONCURRENCY,
+            skip_already_done: true,
+            max_cost_usd: 25,
+          }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) {
+          log(`✗ Batch ${batches} failed: ${data.error || r.status}`);
+          break;
+        }
+        totalProcessed += data.processed || 0;
+        totalRows += data.score_rows_written || 0;
+        totalCost += data.cost_usd || 0;
+        const elapsed = ((Date.now() - startBatch) / 1000).toFixed(1);
+        log(`✓ Batch ${batches}: +${data.processed} towns, +${data.score_rows_written} rows, +$${(data.cost_usd || 0).toFixed(3)}, ${elapsed}s · remaining: ${data.remaining_in_filter}`);
+        if (data.errors && data.errors.length > 0) {
+          for (const e of data.errors.slice(0, 3)) log(`  ⚠ ${e.name || e.market_id}: ${e.error}`);
+          if (data.errors.length > 3) log(`  ⚠ …and ${data.errors.length - 3} more errors`);
+        }
+        // Budget check — warn at $8, hard stop at $20
+        if (totalCost >= HARD_CAP_USD) {
+          log(`🛑 Hard cap reached ($${totalCost.toFixed(2)} ≥ $${HARD_CAP_USD}). Stopping.`);
+          alert(`Bulk Phase 3 stopped: cost reached $${totalCost.toFixed(2)}, exceeding the $${HARD_CAP_USD} hard cap. ${totalProcessed} towns processed.`);
+          break;
+        }
+        if (totalCost >= WARN_AT_USD) {
+          const proj = data.remaining_in_filter > 0 ? totalCost * (1 + data.remaining_in_filter / Math.max(1, totalProcessed)) : totalCost;
+          if (proj > 25) {
+            const ok = confirm(`Mid-run check: spent $${totalCost.toFixed(2)} so far on ${totalProcessed} towns. Projecting ~$${proj.toFixed(2)} total if we finish all ${data.remaining_in_filter} remaining. Continue?`);
+            if (!ok) { log('User stopped at mid-run check.'); break; }
+          }
+        }
+        // Stop if no more
+        if ((data.processed || 0) === 0 || (data.remaining_in_filter ?? 0) <= 0) {
+          log(`✓ Done. No more towns to process in this filter.`);
+          break;
+        }
+      } catch (e) {
+        log(`✗ Batch ${batches} error: ${String(e).slice(0, 200)}`);
+        break;
+      }
+    }
+
+    const wall = ((Date.now() - t0) / 60000).toFixed(1);
+    if (statusEl) {
+      statusEl.innerHTML = `<strong style="color:${_bulkP3Cancel ? '#b91c1c' : '#166534'};">${_bulkP3Cancel ? 'Cancelled' : '✓ Complete'}.</strong> ${totalProcessed} towns, ${totalRows} score rows, $${totalCost.toFixed(3)} spent, ${wall} min.`;
+    }
+    btn.disabled = false;
+    label.textContent = 'Run on Tier 1';
+    // Refresh data so the grid + counts reflect new scores
+    try { await _loadData(); _renderGrid(); } catch {}
+  }
+  function _bulkPhase3Cancel() {
+    _bulkP3Cancel = true;
   }
 
   // ── Phase 3: Deep Research per town ─────────────────────
@@ -2326,6 +2446,8 @@ Research this town now and produce the scoring JSON.`;
   window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
   window.mrDeepResearch = (id) => _deepResearch(id);
   window.mrDeepResearchCurrent = () => { if (_currentMarket) _deepResearch(_currentMarket.id); };
+  window.mrBulkPhase3 = () => _bulkPhase3();
+  window.mrBulkPhase3Cancel = () => _bulkPhase3Cancel();
   window.mrEditSource = (criterionId) => {
     const existing = _scores.find(s => s.criterion_id === criterionId);
     const newVal = prompt('Source citation (URL or label):', existing ? (existing.source || '') : '');
