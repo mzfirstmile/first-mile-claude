@@ -1562,13 +1562,13 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   async function _bulkPhase3() {
     const btn = document.getElementById('mrBulkP3Btn');
     const label = document.getElementById('mrBulkP3BtnLabel');
-    const HARD_CAP_USD = 20;
-    const WARN_AT_USD = 8;
+    const HARD_CAP_USD = 25;
+    const WARN_AT_USD = 12;
     const BATCH = 20;
     const CONCURRENCY = 8;
 
     // Confirm
-    if (!confirm('Run Phase 3 deep research on every Tier-1 town (~484, skipping done).\n\nExpected cost: ~$14.\nHard stop: $20. Continue?')) return;
+    if (!confirm('Run Phase 3 deep research on every Tier-1 town (~484, skipping done).\n\nProjected cost: ~$19 at ~$0.04/town.\nHard stop: $25. Continue?')) return;
 
     _bulkP3Cancel = false;
     btn.disabled = true;
