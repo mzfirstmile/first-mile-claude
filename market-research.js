@@ -25,7 +25,9 @@
   let _mapInstance = null;
   let _markerCluster = null;
   let _mapLeafletLoaded = false;
-  let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'grid' | 'list'
+  let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'list' | 'map'
+  // Migrate legacy 'grid' to 'list'
+  if (_viewMode === 'grid') _viewMode = 'list';
 
   // ── CSS ──────────────────────────────────────────────────
   function _injectCSS() {
@@ -878,10 +880,6 @@
               <option value="updated_desc">Sort: Recently updated</option>
             </select>
             <div class="mr-view-toggle" id="mrViewToggle">
-              <button data-mode="grid" onclick="mrSetViewMode('grid')" title="Grid view">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
-                Grid
-              </button>
               <button data-mode="map" onclick="mrSetViewMode('map')" title="Map view">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
                 Map
@@ -1182,11 +1180,8 @@
     let body, pager = '';
     if (_viewMode === 'map') {
       body = _renderMapShell();
-    } else if (_viewMode === 'list') {
-      body = _renderListView(visible);
-      pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
     } else {
-      body = _renderGridView(visible);
+      body = _renderListView(visible);
       pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
     }
     gridEl.innerHTML = header + body + pager;
@@ -1426,7 +1421,7 @@
   }
 
   function _setViewMode(mode) {
-    _viewMode = (mode === 'list' || mode === 'map') ? mode : 'grid';
+    _viewMode = (mode === 'map') ? 'map' : 'list';
     try { localStorage.setItem('mr_view_mode', _viewMode); } catch(_) {}
     _renderGrid();
   }
