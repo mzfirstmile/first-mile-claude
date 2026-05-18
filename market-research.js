@@ -864,7 +864,7 @@
             </div>
           </div>
           <div class="mr-shortlist-criteria" id="mrShortlistCriteria">
-            Shortlist criteria: Town population <strong>5,000–75,000</strong> · Median Household Income <strong id="mrHHIThresholdLabel">≥ $120,000</strong>
+            Shortlist criteria: Town population <strong>4,000–75,000</strong> · Median Household Income <strong id="mrHHIThresholdLabel">≥ $130,000</strong>
           </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
