@@ -38,3 +38,10 @@ SELECT * FROM (VALUES
    'company_concentrations', (SELECT id FROM cat), 760, 1.00, 'text',
    NULL::numeric, NULL::numeric, NULL::text, 'Both sectors', TRUE)
 ) AS v(name, description, category, category_id, sort_order, weight, value_type, target_min, target_max, target_unit, target_label, is_active);
+
+-- Clean up: 'Company Concentrations' was originally a sub-criterion under
+-- Economic Activity. Now that it's its own top-level category, remove the
+-- duplicate row to avoid double-counting.
+DELETE FROM market_research_criteria
+ WHERE name = 'Company Concentrations'
+   AND category = 'economic_activity';
