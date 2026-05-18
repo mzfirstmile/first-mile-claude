@@ -1289,6 +1289,19 @@
         <div class="module-card-status live"><span class="dot"></span> Live</div>
       </div>
 
+      <!-- Market Research -->
+      <div class="module-card" data-module="marketresearch" onclick="switchView('marketresearch')" style="cursor:pointer">
+        <div class="module-card-icon" style="background:linear-gradient(135deg,#0ea5e9 0%,#0369a1 100%);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5 8 12 8 12s8-7 8-12a8 8 0 0 0-8-8z"/></svg>
+        </div>
+        <div class="module-card-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <h3>Market Research</h3>
+        <p>Score and rank US markets/cities by your investment criteria. Tier &amp; rating each target.</p>
+        <div class="module-card-status live"><span class="dot"></span> Live</div>
+      </div>
+
       <!-- Strategic Forecasting -->
       <div class="module-card" data-module="forecasting" onclick="switchView('forecasting')" style="cursor:pointer">
         <div class="module-card-icon forecasting">
@@ -2467,6 +2480,7 @@ $$;</pre></div>`;
     { key: 'exec', label: 'Exec' },
     { key: 'forecasting', label: 'Forecasting' },
     { key: 'properties', label: 'Properties' },
+    { key: 'market_research', label: 'Market Rsrch' },
     { key: 'users', label: 'Users' },
   ];
 
@@ -2488,6 +2502,7 @@ $$;</pre></div>`;
         access_forecasting: u.access_forecasting !== false,
         access_exec: u.access_exec === true,
         access_properties: u.access_properties !== false,
+        access_market_research: u.access_market_research === true,
         access_users: u.access_users === true,
       }));
       renderUsers();
