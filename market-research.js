@@ -14,6 +14,7 @@
   let _currentMarket = null; // detail view
   let _currentUser = null;
   let _activeFilter = 'all';
+  let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'grid'; // 'grid' | 'list'
 
   // ── CSS ──────────────────────────────────────────────────
   function _injectCSS() {
@@ -75,6 +76,66 @@
         font-size: 12px; padding: 6px 10px; border: 1px solid #e2e8f0;
         background: #fff; color: #64748b; border-radius: 6px; cursor: pointer;
       }
+
+      /* View toggle (grid / list) */
+      #mrRoot .mr-view-toggle {
+        display: inline-flex; border: 1px solid #e2e8f0; border-radius: 6px;
+        overflow: hidden; background: #fff;
+      }
+      #mrRoot .mr-view-toggle button {
+        background: #fff; border: none; padding: 6px 10px; cursor: pointer;
+        color: #94a3b8; display: flex; align-items: center; gap: 4px;
+        font-size: 11px; font-weight: 500; transition: background .15s;
+      }
+      #mrRoot .mr-view-toggle button:hover { background: #f8fafc; color: #1e293b; }
+      #mrRoot .mr-view-toggle button.active {
+        background: #0ea5e9; color: #fff;
+      }
+      #mrRoot .mr-view-toggle button + button { border-left: 1px solid #e2e8f0; }
+      #mrRoot .mr-view-toggle button.active + button,
+      #mrRoot .mr-view-toggle button + button.active { border-left-color: #0ea5e9; }
+
+      /* ── List view (table) ────────────────────────── */
+      #mrRoot .mr-table-wrap {
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        margin-top: 18px; overflow: hidden;
+      }
+      #mrRoot .mr-table {
+        width: 100%; border-collapse: collapse;
+      }
+      #mrRoot .mr-table thead th {
+        padding: 12px 14px; text-align: left; font-size: 11px;
+        font-weight: 600; color: #64748b; text-transform: uppercase;
+        letter-spacing: .5px; background: #fafbfc;
+        border-bottom: 1px solid #e2e8f0; white-space: nowrap;
+      }
+      #mrRoot .mr-table tbody td {
+        padding: 12px 14px; font-size: 13px; color: #1e293b;
+        border-bottom: 1px solid #f1f5f9; vertical-align: top;
+      }
+      #mrRoot .mr-table tbody tr {
+        cursor: pointer; transition: background .12s;
+      }
+      #mrRoot .mr-table tbody tr:hover { background: #f8fafc; }
+      #mrRoot .mr-table tbody tr:last-child td { border-bottom: none; }
+      #mrRoot .mr-table .mr-table-name {
+        font-weight: 600; color: #1e293b;
+      }
+      #mrRoot .mr-table .mr-table-state {
+        font-size: 11px; color: #94a3b8; font-weight: 500; margin-top: 2px;
+      }
+      #mrRoot .mr-table .mr-table-thesis {
+        font-size: 12px; color: #64748b; line-height: 1.4;
+        display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      #mrRoot .mr-table .mr-table-score {
+        font-weight: 700; font-size: 16px;
+      }
+      #mrRoot .mr-table .mr-table-score.s8plus  { color: #15803d; }
+      #mrRoot .mr-table .mr-table-score.s6to8   { color: #65a30d; }
+      #mrRoot .mr-table .mr-table-score.s4to6   { color: #ca8a04; }
+      #mrRoot .mr-table .mr-table-score.sUnder4 { color: #b91c1c; }
 
       /* ── Card Grid (list view) ─────────────────────── */
       #mrRoot .mr-grid {
@@ -333,12 +394,24 @@
             <button class="mr-filter-btn" data-filter="on_hold">On Hold <span class="mr-filter-count" id="mrCountHold"></span></button>
             <button class="mr-filter-btn" data-filter="passed">Passed <span class="mr-filter-count" id="mrCountPassed"></span></button>
           </div>
-          <select class="mr-sort" id="mrSort" onchange="mrChangeSort(this.value)">
-            <option value="score_desc">Sort: Score (high → low)</option>
-            <option value="tier_asc">Sort: Tier (1 → 4)</option>
-            <option value="name_asc">Sort: Name (A → Z)</option>
-            <option value="updated_desc">Sort: Recently updated</option>
-          </select>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select class="mr-sort" id="mrSort" onchange="mrChangeSort(this.value)">
+              <option value="score_desc">Sort: Score (high → low)</option>
+              <option value="tier_asc">Sort: Tier (1 → 4)</option>
+              <option value="name_asc">Sort: Name (A → Z)</option>
+              <option value="updated_desc">Sort: Recently updated</option>
+            </select>
+            <div class="mr-view-toggle" id="mrViewToggle">
+              <button data-mode="grid" onclick="mrSetViewMode('grid')" title="Grid view">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                Grid
+              </button>
+              <button data-mode="list" onclick="mrSetViewMode('list')" title="List view">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                List
+              </button>
+            </div>
+          </div>
         </div>
 
         <div id="mrGrid"></div>
@@ -490,6 +563,11 @@
       return 0;
     });
 
+    // Sync view-toggle button active state
+    document.querySelectorAll('#mrViewToggle button').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === _viewMode);
+    });
+
     if (visible.length === 0) {
       gridEl.innerHTML = `
         <div class="mr-empty">
@@ -503,7 +581,15 @@
       return;
     }
 
-    gridEl.innerHTML = `<div class="mr-grid">` + visible.map(m => {
+    if (_viewMode === 'list') {
+      gridEl.innerHTML = _renderListView(visible);
+    } else {
+      gridEl.innerHTML = _renderGridView(visible);
+    }
+  }
+
+  function _renderGridView(visible) {
+    return `<div class="mr-grid">` + visible.map(m => {
       const tierLabel = m.tier != null ? `Tier ${m.tier}` : 'Untiered';
       const scoreNum = m.score != null ? m.score.toFixed(1) : '—';
       const stateBits = [m.state, m.msa].filter(Boolean).join(' · ');
@@ -528,6 +614,59 @@
           ${m.thesis ? `<div class="mr-card-thesis">${_esc(m.thesis)}</div>` : ''}
         </div>`;
     }).join('') + `</div>`;
+  }
+
+  function _renderListView(visible) {
+    return `
+      <div class="mr-table-wrap">
+        <table class="mr-table">
+          <thead>
+            <tr>
+              <th style="width:24%;">Market</th>
+              <th style="width:10%;">State / MSA</th>
+              <th style="width:10%;text-align:right;">Population</th>
+              <th style="width:7%;text-align:center;">Score</th>
+              <th style="width:8%;text-align:center;">Tier</th>
+              <th style="width:11%;">Status</th>
+              <th>Thesis</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${visible.map(m => {
+              const tierLabel = m.tier != null ? `Tier ${m.tier}` : '—';
+              const scoreNum = m.score != null ? m.score.toFixed(1) : '—';
+              const stateBits = [m.state, m.msa].filter(Boolean).join(' · ');
+              const pop = m.population ? parseInt(m.population).toLocaleString() : '—';
+              return `
+                <tr onclick="mrOpenMarket('${m.id}')">
+                  <td>
+                    <div class="mr-table-name">${_esc(m.name)}</div>
+                  </td>
+                  <td style="font-size:12px;color:#64748b;">${_esc(stateBits) || '—'}</td>
+                  <td style="text-align:right;font-variant-numeric:tabular-nums;color:#475569;">${pop}</td>
+                  <td style="text-align:center;">
+                    <span class="mr-table-score ${_scoreClass(m.score)}">${scoreNum}</span>
+                  </td>
+                  <td style="text-align:center;">
+                    <span class="mr-tier ${_tierClass(m.tier)}">${tierLabel}</span>
+                  </td>
+                  <td>
+                    <span class="mr-status ${m.status}">${_statusLabel(m.status)}</span>
+                  </td>
+                  <td>
+                    ${m.thesis ? `<div class="mr-table-thesis">${_esc(m.thesis)}</div>` : '<span style="color:#cbd5e1;">—</span>'}
+                  </td>
+                </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  function _setViewMode(mode) {
+    _viewMode = mode === 'list' ? 'list' : 'grid';
+    try { localStorage.setItem('mr_view_mode', _viewMode); } catch(_) {}
+    _renderGrid();
   }
 
   // ── Detail render ────────────────────────────────────────
@@ -980,6 +1119,7 @@
   window.mrAddCriterion   = ()    => _addCriterion();
   window.mrDeleteCriterion= (id, name) => _deleteCriterion(id, name);
   window.mrChangeSort     = ()    => _changeSort();
+  window.mrSetViewMode    = (m)   => _setViewMode(m);
   window.mrCloseModal     = ()    => _closeModal();
 
   // ── Main init ──────────────────────────────────────────
