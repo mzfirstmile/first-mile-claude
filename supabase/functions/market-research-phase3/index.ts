@@ -187,8 +187,9 @@ async function recomputeMarketComposite(sb: any, marketId: string) {
   }
   if (totalWeight === 0) return null;
   const composite = weightedSum / totalWeight;
-  const tier = composite >= 8 ? 1 : composite >= 6 ? 2 : composite >= 4 ? 3 : 4;
   const score = Math.round(composite * 10) / 10;
+  // Derive tier from the DISPLAYED (rounded) score so 8.0 always = Tier 1
+  const tier = score >= 8 ? 1 : score >= 6 ? 2 : score >= 4 ? 3 : 4;
   await sb.from("market_research_markets").update({ score, tier }).eq("id", marketId);
   return { score, tier, categories_with_data: byCat.size };
 }
