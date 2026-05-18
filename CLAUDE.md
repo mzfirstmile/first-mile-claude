@@ -309,6 +309,16 @@ The embedded Claude chat has access to these tools:
 - Property photos stored in `assets/Property Photos/` — mapped by `PROP_PHOTOS` in exec-v2.js/exec.html (partial name match via `includes()`) and `FB_PHOTOS` in index.html (exact name match). Shown as thumbnails on investment cards when expanded and as card header images in Property Financials. Photos: 132-40 Metro Ave, 60-18 Metro, 61 South, 340 MK, Paramus Plaza, 1700 East Putnam, 575 Broadway. **IMPORTANT:** Photo paths with spaces must be URL-encoded (`Property%20Photos/132-40%20Metro%20Ave%20corner%20view.png`). When renaming a property, update FB_PHOTOS key to match (it uses exact match, not partial).
 - RET (Real Estate Tax Recovery) is a pass-through — tenants reimburse RE tax, so it offsets the expense. Exclude from NOI calculations (GL 4120). Same principle for Insurance Recovery (4130) and W/S Recovery (4140) if material.
 - SQL migrations should be run via the admin website (admin.firstmilecap.com → SQL Console), NOT via Supabase dashboard directly. Claude CAN and SHOULD run SQL itself using the browser (Chrome MCP tools) — navigate to localhost:8000/#sql or admin.firstmilecap.com/#sql, paste into textarea, click Run. Do NOT ask Morris to run SQL manually.
+- **Direct Supabase REST access from sandbox (2026-05-18):** Morris whitelisted `qrtleqasnhbnruodlgpt.supabase.co` in the sandbox proxy, so Claude can hit Supabase REST directly via `curl` against `$SUPABASE_URL/rest/v1/rpc/exec_sql` using the anon key from `config.js`. **STOP asking Morris to paste SQL into the Console — just run it yourself.** Pattern:
+  ```bash
+  SUPABASE_URL="https://qrtleqasnhbnruodlgpt.supabase.co"
+  SUPABASE_KEY="<anon key from config.js>"
+  curl -s -X POST "$SUPABASE_URL/rest/v1/rpc/exec_sql" \
+    -H "apikey: $SUPABASE_KEY" -H "Authorization: Bearer $SUPABASE_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{"query":"SELECT ... NO trailing semicolon — the wrapper appends ) t"}'
+  ```
+  Same constraints as the in-app SQL Console: one SELECT per query, no trailing `;`. Multi-statement DDL/DML works via the fallback `EXECUTE` path (returns `{"success":true}` instead of rows). For multiline INSERTs and the like, build the JSON body with `python3 -c "import json,sys; print(json.dumps({'query': sys.argv[1]}))" "$SQL"` to avoid shell-quoting headaches.
 - Category dropdown in drilldowns is grouped into sections: 💰 Income, 📋 Expenses, 📊 Balance Sheet, 🔄 Other — uses `<optgroup>` with `buildCategoryOptions()` helper
 - "Investor Contribution (Pass-Through)" removed from dropdown — everything merged into "Investment Contributions"
 - Loan Out / Deposit drilldown rows have inline editable name field (persists to `category_name` column) + category dropdown
