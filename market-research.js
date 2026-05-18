@@ -14,7 +14,8 @@
   let _scores = []; // [{market_id, criterion_id, value_numeric, value_text, ...}]
   let _currentMarket = null; // detail view
   let _currentUser = null;
-  let _activeFilter = 'all';
+  let _activeFilter = 'phase_shortlisted'; // default to Phase 1 shortlist
+  let _searchQuery = '';
   let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'grid' | 'list'
 
   // ── CSS ──────────────────────────────────────────────────
@@ -439,6 +440,42 @@
       #mrRoot .mr-toast.show { opacity: 1; }
       #mrRoot .mr-toast.error { background: #b91c1c; }
 
+      /* Search bar */
+      #mrRoot .mr-search-wrap {
+        position: relative; margin: 12px 0 14px 0;
+        max-width: 540px;
+      }
+      #mrRoot .mr-search-input {
+        width: 100%; padding: 9px 36px 9px 36px;
+        border: 1px solid #e2e8f0; border-radius: 10px;
+        font-size: 14px; color: #1e293b; background: #fff;
+        font-family: inherit; outline: none;
+      }
+      #mrRoot .mr-search-input:focus { border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,0.12); }
+      #mrRoot .mr-search-icon {
+        position: absolute; top: 50%; left: 12px;
+        transform: translateY(-50%); color: #94a3b8; pointer-events: none;
+      }
+      #mrRoot .mr-search-clear {
+        position: absolute; top: 50%; right: 12px;
+        transform: translateY(-50%); font-size: 18px;
+        color: #94a3b8; cursor: pointer; display: none;
+        width: 20px; height: 20px; line-height: 18px; text-align: center;
+        border-radius: 50%;
+      }
+      #mrRoot .mr-search-clear:hover { background: #f1f5f9; color: #475569; }
+      #mrRoot .mr-search-input:not(:placeholder-shown) + .mr-search-clear { display: block; }
+
+      /* Heart toggle */
+      #mrRoot .mr-heart {
+        cursor: pointer; padding: 4px; line-height: 1;
+        border-radius: 4px; transition: transform .12s;
+        color: #cbd5e1; font-size: 18px;
+        background: none; border: none;
+      }
+      #mrRoot .mr-heart:hover { color: #ef4444; transform: scale(1.15); }
+      #mrRoot .mr-heart.active { color: #ef4444; }
+
       /* Chatbot at the top */
       #mrRoot .mr-chat {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
@@ -631,14 +668,20 @@
           </div>
         </div>
 
+        <!-- Search bar -->
+        <div class="mr-search-wrap">
+          <svg class="mr-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="mr-search-input" id="mrSearchInput" type="text"
+                 placeholder="Search by town name or state…"
+                 oninput="mrSearch(this.value)">
+          <span class="mr-search-clear" id="mrSearchClear" onclick="mrSearch('')" title="Clear">×</span>
+        </div>
+
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
           <div class="mr-filters" id="mrFilters">
-            <button class="mr-filter-btn active" data-filter="all">All <span class="mr-filter-count" id="mrCountAll"></span></button>
-            <button class="mr-filter-btn" data-filter="researching">Researching <span class="mr-filter-count" id="mrCountResearching"></span></button>
-            <button class="mr-filter-btn" data-filter="shortlisted">Shortlisted <span class="mr-filter-count" id="mrCountShortlisted"></span></button>
-            <button class="mr-filter-btn" data-filter="active_sourcing">Active Sourcing <span class="mr-filter-count" id="mrCountActive"></span></button>
-            <button class="mr-filter-btn" data-filter="on_hold">On Hold <span class="mr-filter-count" id="mrCountHold"></span></button>
-            <button class="mr-filter-btn" data-filter="passed">Passed <span class="mr-filter-count" id="mrCountPassed"></span></button>
+            <button class="mr-filter-btn active" data-filter="phase_shortlisted">🎯 Shortlist <span class="mr-filter-count" id="mrCountShortlist"></span></button>
+            <button class="mr-filter-btn" data-filter="all">All <span class="mr-filter-count" id="mrCountAll"></span></button>
+            <button class="mr-filter-btn" data-filter="favorites">❤ Favorites <span class="mr-filter-count" id="mrCountFavorites"></span></button>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select class="mr-sort" id="mrSort" onchange="mrChangeSort(this.value)">
@@ -731,7 +774,7 @@
   async function _loadData() {
     _currentUser = window.currentUser;
     const [markets, categories, criteria, scores] = await Promise.all([
-      window.supaFetch('market_research_markets', '?select=*&order=tier.asc.nullslast,score.desc.nullslast,name.asc'),
+      window.supaFetch('market_research_markets', '?select=*&order=phase.asc,median_household_income.desc.nullslast,name.asc&limit=50000'),
       window.supaFetch('market_research_categories', '?select=*&order=sort_order.asc,name.asc'),
       window.supaFetch('market_research_criteria', '?select=*&order=sort_order.asc,name.asc'),
       window.supaFetch('market_research_scores', '?select=*'),
@@ -787,18 +830,34 @@
     if (!gridEl) return;
 
     // Counts for filter chips
-    const counts = { all: _markets.length, researching: 0, shortlisted: 0, active_sourcing: 0, on_hold: 0, passed: 0 };
-    _markets.forEach(m => { if (counts[m.status] != null) counts[m.status]++; });
-    const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = n; };
+    const counts = {
+      all: _markets.length,
+      phase_shortlisted: _markets.filter(m => m.phase === 'shortlisted').length,
+      phase_universe: _markets.filter(m => m.phase === 'universe').length,
+      favorites: _markets.filter(m => m.is_favorite).length,
+    };
+    const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = (n || 0).toLocaleString(); };
     setCount('mrCountAll', counts.all);
-    setCount('mrCountResearching', counts.researching);
-    setCount('mrCountShortlisted', counts.shortlisted);
-    setCount('mrCountActive', counts.active_sourcing);
-    setCount('mrCountHold', counts.on_hold);
-    setCount('mrCountPassed', counts.passed);
+    setCount('mrCountShortlist', counts.phase_shortlisted);
+    setCount('mrCountUniverse', counts.phase_universe);
+    setCount('mrCountFavorites', counts.favorites);
 
-    // Filter
-    let visible = _activeFilter === 'all' ? _markets.slice() : _markets.filter(m => m.status === _activeFilter);
+    // Filter — phase_* values check pipeline phase, favorites checks is_favorite
+    let visible;
+    if (_activeFilter === 'all')                    visible = _markets.slice();
+    else if (_activeFilter === 'phase_shortlisted') visible = _markets.filter(m => m.phase === 'shortlisted');
+    else if (_activeFilter === 'phase_universe')    visible = _markets.filter(m => m.phase === 'universe');
+    else if (_activeFilter === 'favorites')         visible = _markets.filter(m => m.is_favorite);
+    else                                            visible = _markets.filter(m => m.status === _activeFilter);
+
+    // Apply search query (case-insensitive name + state match)
+    const q = (_searchQuery || '').trim().toLowerCase();
+    if (q) {
+      visible = visible.filter(m =>
+        (m.name || '').toLowerCase().includes(q) ||
+        (m.state || '').toLowerCase().includes(q)
+      );
+    }
 
     // Sort
     const sortSel = document.getElementById('mrSort');
@@ -840,9 +899,10 @@
     return `<div class="mr-grid">` + visible.map(m => {
       const tierLabel = m.tier != null ? `Tier ${m.tier}` : 'Untiered';
       const scoreNum = m.score != null ? m.score.toFixed(1) : '—';
-      const stateBits = [m.state, m.msa].filter(Boolean).join(' · ');
-      const pop = m.population ? `Pop: ${parseInt(m.population).toLocaleString()}` : '';
-      const stateLine = [stateBits, pop].filter(Boolean).join(' · ');
+      const popLine = m.population ? `Pop ${parseInt(m.population).toLocaleString()}` : '';
+      const hhiLine = m.median_household_income ? `HHI $${parseInt(m.median_household_income).toLocaleString()}` : '';
+      const metro = m.nearest_top50_city ? `Metro: ${m.nearest_top50_city}` : '';
+      const stateLine = [popLine, hhiLine, metro].filter(Boolean).join(' · ');
       return `
         <div class="mr-card" onclick="mrOpenMarket('${m.id}')">
           <div class="mr-card-row">
@@ -850,14 +910,18 @@
               <h3 class="mr-card-title">${_esc(m.name)}</h3>
               ${stateLine ? `<div class="mr-card-state">${_esc(stateLine)}</div>` : ''}
             </div>
-            <div class="mr-score ${_scoreClass(m.score)}">
-              <div class="mr-score-num">${scoreNum}</div>
-              <div class="mr-score-label">Score</div>
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
+              <button class="mr-heart ${m.is_favorite ? 'active' : ''}" title="Favorite"
+                      onclick="event.stopPropagation(); mrToggleFavorite('${m.id}')">${m.is_favorite ? '❤' : '♡'}</button>
+              <div class="mr-score ${_scoreClass(m.score)}">
+                <div class="mr-score-num">${scoreNum}</div>
+                <div class="mr-score-label">Score</div>
+              </div>
             </div>
           </div>
           <div class="mr-card-row">
             <span class="mr-tier ${_tierClass(m.tier)}">${tierLabel}</span>
-            <span class="mr-status ${m.status}">${_statusLabel(m.status)}</span>
+            ${m.phase === 'shortlisted' ? '<span class="mr-status shortlisted">🎯 Shortlist</span>' : ''}
           </div>
           ${m.thesis ? `<div class="mr-card-thesis">${_esc(m.thesis)}</div>` : ''}
         </div>`;
@@ -870,36 +934,37 @@
         <table class="mr-table">
           <thead>
             <tr>
+              <th style="width:36px;"></th>
               <th style="width:24%;">Market</th>
-              <th style="width:10%;">State / MSA</th>
-              <th style="width:10%;text-align:right;">Population</th>
+              <th style="width:8%;">State</th>
+              <th style="width:9%;text-align:right;">Population</th>
+              <th style="width:11%;text-align:right;">Median HHI</th>
+              <th style="width:14%;">Nearby Metro</th>
               <th style="width:7%;text-align:center;">Score</th>
-              <th style="width:8%;text-align:center;">Tier</th>
-              <th style="width:11%;">Status</th>
               <th>Thesis</th>
             </tr>
           </thead>
           <tbody>
             ${visible.map(m => {
-              const tierLabel = m.tier != null ? `Tier ${m.tier}` : '—';
               const scoreNum = m.score != null ? m.score.toFixed(1) : '—';
-              const stateBits = [m.state, m.msa].filter(Boolean).join(' · ');
               const pop = m.population ? parseInt(m.population).toLocaleString() : '—';
+              const hhi = m.median_household_income ? '$' + parseInt(m.median_household_income).toLocaleString() : '—';
+              const metro = m.nearest_top50_city || '—';
               return `
                 <tr onclick="mrOpenMarket('${m.id}')">
+                  <td style="text-align:center;">
+                    <button class="mr-heart ${m.is_favorite ? 'active' : ''}" title="Favorite"
+                            onclick="event.stopPropagation(); mrToggleFavorite('${m.id}')">${m.is_favorite ? '❤' : '♡'}</button>
+                  </td>
                   <td>
                     <div class="mr-table-name">${_esc(m.name)}</div>
                   </td>
-                  <td style="font-size:12px;color:#64748b;">${_esc(stateBits) || '—'}</td>
+                  <td style="font-size:12px;color:#64748b;">${_esc(m.state || '—')}</td>
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#475569;">${pop}</td>
+                  <td style="text-align:right;font-variant-numeric:tabular-nums;color:#0f172a;font-weight:600;">${hhi}</td>
+                  <td style="font-size:12px;color:#475569;">${_esc(metro)}</td>
                   <td style="text-align:center;">
                     <span class="mr-table-score ${_scoreClass(m.score)}">${scoreNum}</span>
-                  </td>
-                  <td style="text-align:center;">
-                    <span class="mr-tier ${_tierClass(m.tier)}">${tierLabel}</span>
-                  </td>
-                  <td>
-                    <span class="mr-status ${m.status}">${_statusLabel(m.status)}</span>
                   </td>
                   <td>
                     ${m.thesis ? `<div class="mr-table-thesis">${_esc(m.thesis)}</div>` : '<span style="color:#cbd5e1;">—</span>'}
@@ -1145,6 +1210,24 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     if (!input) return;
     input.value = text;
     input.focus();
+  }
+
+  // ── Favorite toggle ─────────────────────────────────────
+  async function _toggleFavorite(id) {
+    const m = _markets.find(x => x.id === id);
+    if (!m) return;
+    const newVal = !m.is_favorite;
+    // Optimistic update
+    m.is_favorite = newVal;
+    _renderGrid();
+    try {
+      await window.supaWrite('market_research_markets', 'PATCH', { is_favorite: newVal }, `?id=eq.${id}`);
+    } catch (e) {
+      // Revert on failure
+      m.is_favorite = !newVal;
+      _renderGrid();
+      _toast('Save failed: ' + e.message, true);
+    }
   }
 
   // ── Modal helpers ────────────────────────────────────────
@@ -1681,6 +1764,8 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   window.mrCloseModal     = ()    => _closeModal();
   window.mrChatSubmit     = ()    => _chatSubmit();
   window.mrChatSuggest    = (t)   => _chatSuggest(t);
+  window.mrSearch         = (q)   => { _searchQuery = q || ''; const inp = document.getElementById('mrSearchInput'); if (inp && inp.value !== _searchQuery) inp.value = _searchQuery; _renderGrid(); };
+  window.mrToggleFavorite = (id)  => _toggleFavorite(id);
 
   // ── Main init ──────────────────────────────────────────
   window.marketResearchInit = async function () {
