@@ -843,7 +843,7 @@
 
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
           <div class="mr-filters" id="mrFilters">
-            <button class="mr-filter-btn active" data-filter="phase_shortlisted">🎯 Shortlist <span class="mr-filter-count" id="mrCountShortlist"></span></button>
+            <button class="mr-filter-btn active" data-filter="phase_shortlisted" title="Pop 5,000–75,000 + median HHI ≥ $130,000">🎯 Shortlist <span class="mr-filter-count" id="mrCountShortlist"></span></button>
             <button class="mr-filter-btn" data-filter="all">All <span class="mr-filter-count" id="mrCountAll"></span></button>
             <button class="mr-filter-btn" data-filter="favorites">❤ Favorites <span class="mr-filter-count" id="mrCountFavorites"></span></button>
             <div class="mr-tier-filter">
@@ -1207,32 +1207,34 @@
   }
 
   function _renderListView(visible) {
+    const startIdx = (_page || 0) * PAGE_SIZE; // for rank numbers across pages
     return `
       <div class="mr-table-wrap">
         <table class="mr-table">
           <thead>
             <tr>
+              <th style="width:42px;text-align:center;">#</th>
               <th style="width:30px;"></th>
-              <th style="width:14%;">Market</th>
-              <th style="width:5%;">State</th>
-              <th style="width:8%;text-align:right;">Population</th>
-              <th style="width:9%;text-align:right;">Median HHI</th>
-              <th style="width:10%;">Nearby Metro</th>
-              <th style="width:6%;text-align:center;">Score</th>
-              <th style="width:5%;text-align:center;">Tier</th>
-              <th style="width:9%;text-align:center;">Deep Research</th>
+              <th style="width:16%;">Market</th>
+              <th style="width:9%;text-align:right;">Population</th>
+              <th style="width:10%;text-align:right;">Median HHI</th>
+              <th style="width:11%;">Nearby Metro</th>
+              <th style="width:7%;text-align:center;">Score</th>
+              <th style="width:6%;text-align:center;">Tier</th>
               <th>Thesis</th>
             </tr>
           </thead>
           <tbody>
-            ${visible.map(m => {
+            ${visible.map((m, idx) => {
               const scoreNum = m.score != null ? m.score.toFixed(1) : '—';
               const tierLabel = m.tier != null ? `T${m.tier}` : '—';
               const pop = m.population ? parseInt(m.population).toLocaleString() : '—';
               const hhi = m.median_household_income ? '$' + parseInt(m.median_household_income).toLocaleString() : '—';
               const metro = m.nearest_top50_city || '—';
+              const rank = startIdx + idx + 1;
               return `
                 <tr onclick="mrOpenMarket('${m.id}')">
+                  <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:#64748b;font-size:12px;">${rank}</td>
                   <td style="text-align:center;">
                     <button class="mr-heart ${m.is_favorite ? 'active' : ''}" title="Favorite"
                             onclick="event.stopPropagation(); mrToggleFavorite('${m.id}')">${m.is_favorite ? '❤' : '♡'}</button>
@@ -1240,7 +1242,6 @@
                   <td>
                     <div class="mr-table-name">${_esc(m.name)}</div>
                   </td>
-                  <td style="font-size:12px;color:#64748b;">${_esc(m.state || '—')}</td>
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#475569;">${pop}</td>
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#0f172a;font-weight:600;">${hhi}</td>
                   <td style="font-size:12px;color:#475569;">${_esc(metro)}</td>
@@ -1249,9 +1250,6 @@
                   </td>
                   <td style="text-align:center;">
                     <span class="mr-tier ${_tierClass(m.tier)}">${tierLabel}</span>
-                  </td>
-                  <td style="text-align:center;">
-                    <button class="mr-deep-btn" onclick="event.stopPropagation(); mrDeepResearch('${m.id}')">🔬 Research</button>
                   </td>
                   <td>
                     ${m.thesis ? `<div class="mr-table-thesis">${_esc(m.thesis)}</div>` : '<span style="color:#cbd5e1;">—</span>'}
@@ -1665,6 +1663,34 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   }
   function _bulkPhase3Cancel() {
     _bulkP3Cancel = true;
+  }
+
+  // ── Auto-recompute all scores (debounced) ───────────────
+  // Triggered when category weights change OR criteria are added/edited/removed.
+  // Calls the edge function in recompute_only mode — pure DB math, no Claude.
+  let _recomputeTimer = null;
+  function _scheduleRecomputeAll() {
+    clearTimeout(_recomputeTimer);
+    _recomputeTimer = setTimeout(async () => {
+      try {
+        _toast('Recomputing scores…');
+        const r = await fetch(`${window.SUPABASE_URL}/functions/v1/market-research-phase3`, {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recompute_only: true, limit: 1000 }),
+        });
+        const data = await r.json();
+        if (!r.ok || !data.ok) throw new Error(data.error || ('status ' + r.status));
+        _toast(`✓ Recomputed ${data.recomputed} markets`);
+        // Refresh data so the list view picks up new scores
+        try { await _loadData(); _renderGrid(); } catch {}
+        if (_currentMarket) {
+          try { await _loadScoresForMarket(_currentMarket.id); _renderDetail(); } catch {}
+        }
+      } catch (e) {
+        _toast('Recompute failed: ' + e.message, true);
+      }
+    }, 1500); // debounce: coalesce rapid edits
   }
 
   // Pull every score for a market, recompute weighted composite + tier,
@@ -2265,6 +2291,7 @@ Research this town now and produce the scoring JSON.`;
       _toast(`${cat ? cat.name : 'Category'} weight → ${weight}`);
       _manageCriteria(); // refresh % chips
       if (_currentMarket) _renderScorecard();
+      _scheduleRecomputeAll();
     } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
   // Legacy criterion-level weight setter kept for back-compat — no-op for now.
@@ -2286,6 +2313,7 @@ Research this town now and produce the scoring JSON.`;
       if (_currentMarket) _renderScorecard();
       else _renderGrid();
       _toast('Criterion added');
+      _scheduleRecomputeAll();
     } catch(e) { _toast('Error: ' + e.message, true); }
   }
   async function _deleteCriterion(id, name) {
@@ -2297,6 +2325,7 @@ Research this town now and produce the scoring JSON.`;
       if (_currentMarket) _renderScorecard();
       else _renderGrid();
       _toast('Criterion deleted');
+      _scheduleRecomputeAll();
     } catch(e) { _toast('Error: ' + e.message, true); }
   }
 
