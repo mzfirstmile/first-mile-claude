@@ -4638,7 +4638,7 @@ const _exposeFns = {
   onPropertyLinkChange, reviewChangeCategory, reviewLinkInvestment,
   reviewLinkLiability, reviewLinkLoan, reviewLinkPropOrInv,
   updateLoanName, uploadApproveItem, uploadApproveAll, uploadChangeCategory, uploadLinkInvestment,
-  uploadLinkLiability, uploadLinkProperty, uploadSetPayrollSplit,
+  uploadLinkLiability, uploadLinkProperty, uploadSetPayrollSplit, setPayrollSplit,
   saveAssetValue, editAssetValue, editCapRate, editDistributed,
   openEditInvestment, openEditLiability
 };
