@@ -22,6 +22,9 @@
   let _currentUser = null;
   let _activeFilter = 'phase_shortlisted'; // default to Phase 1 shortlist
   let _searchQuery = '';
+  let _mapInstance = null;
+  let _markerCluster = null;
+  let _mapLeafletLoaded = false;
   let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'grid' | 'list'
 
   // ── CSS ──────────────────────────────────────────────────
@@ -879,6 +882,10 @@
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
                 Grid
               </button>
+              <button data-mode="map" onclick="mrSetViewMode('map')" title="Map view">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+                Map
+              </button>
               <button data-mode="list" onclick="mrSetViewMode('list')" title="List view">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
                 List
@@ -1172,9 +1179,149 @@
       <div class="mr-page-header">
         <div class="mr-page-count">Showing <strong>${firstIdx.toLocaleString()}–${lastIdx.toLocaleString()}</strong> of <strong>${total.toLocaleString()}</strong></div>
       </div>`;
-    const body = _viewMode === 'list' ? _renderListView(visible) : _renderGridView(visible);
-    const pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
+    let body, pager = '';
+    if (_viewMode === 'map') {
+      body = _renderMapShell();
+    } else if (_viewMode === 'list') {
+      body = _renderListView(visible);
+      pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
+    } else {
+      body = _renderGridView(visible);
+      pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
+    }
     gridEl.innerHTML = header + body + pager;
+    if (_viewMode === 'map') _initMap();
+  }
+
+  function _renderMapShell() {
+    return `
+      <div id="mrMapContainer" style="position:relative;height:640px;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;background:#f0f4f8;">
+        <div id="mrMap" style="width:100%;height:100%;"></div>
+        <div id="mrMapStatus" style="position:absolute;top:12px;left:12px;background:rgba(255,255,255,0.95);padding:8px 12px;border-radius:6px;font-size:12px;color:#475569;box-shadow:0 1px 3px rgba(0,0,0,0.1);z-index:1000;">
+          Loading map…
+        </div>
+        <div id="mrMapLegend" style="position:absolute;bottom:12px;right:12px;background:rgba(255,255,255,0.95);padding:10px 14px;border-radius:8px;font-size:11px;color:#475569;box-shadow:0 1px 3px rgba(0,0,0,0.1);z-index:1000;">
+          <div style="font-weight:700;color:#0f172a;margin-bottom:4px;">Tier</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;"></span> Tier 1</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;"></span> Tier 2</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#fb923c;"></span> Tier 3</div>
+          <div style="display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#ef4444;"></span> Tier 4</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Lazy-load Leaflet from CDN
+  async function _ensureLeaflet() {
+    if (_mapLeafletLoaded && window.L) return;
+    if (!document.querySelector('link[data-leaflet]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+      link.setAttribute('data-leaflet', '1');
+      document.head.appendChild(link);
+      const clusterCss = document.createElement('link');
+      clusterCss.rel = 'stylesheet';
+      clusterCss.href = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css';
+      clusterCss.setAttribute('data-leaflet', '1');
+      document.head.appendChild(clusterCss);
+      const clusterCssDefault = document.createElement('link');
+      clusterCssDefault.rel = 'stylesheet';
+      clusterCssDefault.href = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css';
+      clusterCssDefault.setAttribute('data-leaflet', '1');
+      document.head.appendChild(clusterCssDefault);
+    }
+    if (!window.L) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('Leaflet failed to load'));
+        document.head.appendChild(s);
+      });
+    }
+    if (!window.L.markerClusterGroup) {
+      await new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js';
+        s.onload = resolve;
+        s.onerror = () => reject(new Error('MarkerCluster failed to load'));
+        document.head.appendChild(s);
+      });
+    }
+    _mapLeafletLoaded = true;
+  }
+
+  async function _initMap() {
+    const status = document.getElementById('mrMapStatus');
+    try {
+      await _ensureLeaflet();
+      const L = window.L;
+      const mapEl = document.getElementById('mrMap');
+      if (!mapEl) return;
+      // Always rebuild — _renderGrid replaces innerHTML
+      if (_mapInstance) { try { _mapInstance.remove(); } catch {} _mapInstance = null; }
+      _mapInstance = L.map(mapEl).setView([39.5, -98.35], 4); // US center
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '© OpenStreetMap contributors'
+      }).addTo(_mapInstance);
+      _markerCluster = L.markerClusterGroup({ maxClusterRadius: 50, disableClusteringAtZoom: 10 });
+      _mapInstance.addLayer(_markerCluster);
+
+      // Fetch the full filtered set (not just current page) — capped at 1000 for now.
+      const parts = _buildFilterQuery();
+      parts.push('select=id,name,state,population,median_household_income,latitude,longitude,score,tier');
+      parts.push('limit=1000');
+      const url = `${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&');
+      const r = await fetch(url, {
+        headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY }
+      });
+      const rows = await r.json();
+      const withCoords = rows.filter(m => m.latitude != null && m.longitude != null);
+      const withoutCoords = rows.filter(m => m.latitude == null || m.longitude == null);
+
+      const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#fb923c', 4: '#ef4444' };
+      for (const m of withCoords) {
+        const color = tierColor[m.tier] || '#94a3b8';
+        const icon = L.divIcon({
+          className: 'mr-marker',
+          html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.2);"></div>`,
+          iconSize: [14, 14],
+          iconAnchor: [7, 7],
+        });
+        const marker = L.marker([m.latitude, m.longitude], { icon, title: m.name });
+        const tierLabel = m.tier ? `Tier ${m.tier}` : '';
+        const scoreLabel = m.score != null ? `Score ${m.score}` : '';
+        marker.bindPopup(
+          `<div style="font-size:13px;min-width:160px;">
+            <div style="font-weight:700;color:#0f172a;font-size:14px;">${_esc(m.name)}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px;">Pop ${m.population ? Number(m.population).toLocaleString() : '?'} · HHI ${m.median_household_income ? '$' + Number(m.median_household_income).toLocaleString() : '?'}</div>
+            <div style="margin-top:6px;color:#475569;">${scoreLabel} · ${tierLabel}</div>
+            <button onclick="mrOpenMarket('${m.id}'); return false;" style="margin-top:8px;background:#0ea5e9;color:#fff;border:none;padding:4px 10px;border-radius:5px;font-size:12px;cursor:pointer;">Open detail →</button>
+          </div>`
+        );
+        _markerCluster.addLayer(marker);
+      }
+      // Fit to data
+      if (withCoords.length > 0) {
+        const bounds = L.latLngBounds(withCoords.map(m => [m.latitude, m.longitude]));
+        _mapInstance.fitBounds(bounds, { padding: [30, 30] });
+      }
+      if (status) {
+        if (rows.length === 0) {
+          status.innerHTML = `No markets in current filter.`;
+        } else if (withCoords.length === 0) {
+          status.innerHTML = `0 of ${rows.length} towns mapped. <strong>Coordinates not populated yet.</strong>`;
+        } else if (withoutCoords.length > 0) {
+          status.innerHTML = `${withCoords.length} of ${rows.length} towns mapped. ${withoutCoords.length} missing coords.`;
+        } else {
+          status.innerHTML = `<strong>${withCoords.length}</strong> towns mapped.`;
+        }
+      }
+    } catch (e) {
+      if (status) status.innerHTML = `<span style="color:#b91c1c;">Map failed: ${_esc(String(e).slice(0, 200))}</span>`;
+    }
   }
 
   // Compact pager: « Prev   Page 3 of 260   Next »
