@@ -319,6 +319,20 @@ The embedded Claude chat has access to these tools:
     -d '{"query":"SELECT ... NO trailing semicolon — the wrapper appends ) t"}'
   ```
   Same constraints as the in-app SQL Console: one SELECT per query, no trailing `;`. Multi-statement DDL/DML works via the fallback `EXECUTE` path (returns `{"success":true}` instead of rows). For multiline INSERTs and the like, build the JSON body with `python3 -c "import json,sys; print(json.dumps({'query': sys.argv[1]}))" "$SQL"` to avoid shell-quoting headaches.
+- **Direct Dropbox access from sandbox (2026-05-18):** Morris whitelisted `api.dropboxapi.com` + `content.dropboxapi.com` in the sandbox proxy. Claude calls Dropbox via the `dropbox-proxy` edge function (`supabase/functions/dropbox-proxy/index.ts`) — never with a raw bearer token. The function:
+  - **Auth:** uses `DROPBOX_REFRESH_TOKEN` + `DROPBOX_APP_KEY` + `DROPBOX_APP_SECRET` (Supabase secrets) to mint short-lived access tokens. Cache is fingerprinted on the refresh token's first 16 chars so rotating the secret busts the cache automatically. Falls back to `DROPBOX_ACCESS_TOKEN` if set.
+  - **Allowlist:** `DROPBOX_ALLOWED_PATHS` (pipe-separated). Default: `/1.4 Special Projects`. Read ops (`download`, `get_metadata`, `list_revisions`, `get_temporary_link`) require path inside an allowed prefix. `list_folder` on an ancestor of an allowed path passes through with filtered entries; recursive listings on non-allowed paths are denied. `search` requires `options.path` to be allowed. To add a folder, set the secret pipe-separated, e.g. `supabase secrets set DROPBOX_ALLOWED_PATHS="/1.4 Special Projects|/2.1 FMC Property Management"` — no redeploy needed.
+  - **Team namespace:** `Dropbox-API-Path-Root` header sent on every call with `root = 2581504355` (First Mile Prop team root). Without it, paths resolve at Morris's personal Dropbox home and team folders 404. Override via `DROPBOX_TEAM_ROOT_NAMESPACE_ID` secret (set to "0" to disable).
+  - **Dropbox app:** "First Mile Claude Assistant" (Full Dropbox scoped). App ID 7179331. Scopes: `account_info.read`, `files.metadata.read`, `files.content.read`. App key in App Console; secret + refresh token only in Supabase secrets. Old "First Mile AI Assistant" app (App Folder scoped, `euhtaqpxu0xsgyy`) is still around but unused by the proxy.
+  - **Actions supported:** `list_folder`, `list_folder_continue`, `get_metadata`, `search`, `search_continue`, `get_temporary_link`, `list_revisions`, `get_current_account`, `download` (returns base64), `download_text` (UTF-8), `raw` (escape hatch — requires `args.path` for allowlist check).
+  - **Call pattern from sandbox:**
+    ```bash
+    curl -sS -X POST "$SUPABASE_URL/functions/v1/dropbox-proxy" \
+      -H "Authorization: Bearer $SUPABASE_KEY" \
+      -H "Content-Type: application/json" \
+      -d '{"action":"list_folder","args":{"path":"/1.4 Special Projects","recursive":false}}'
+    ```
+  - **Lesson learned (don't repeat):** when scopes change on a Dropbox app, existing refresh tokens DON'T pick them up automatically. After editing scopes in the Permissions tab, re-run the OAuth `authorize` flow (with `scope=` in the URL to be safe) to mint a new refresh token, then `supabase secrets set DROPBOX_REFRESH_TOKEN=...`. Verify by checking the `scope` field of the OAuth token response.
 - Category dropdown in drilldowns is grouped into sections: 💰 Income, 📋 Expenses, 📊 Balance Sheet, 🔄 Other — uses `<optgroup>` with `buildCategoryOptions()` helper
 - "Investor Contribution (Pass-Through)" removed from dropdown — everything merged into "Investment Contributions"
 - Loan Out / Deposit drilldown rows have inline editable name field (persists to `category_name` column) + category dropdown
