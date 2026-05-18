@@ -518,6 +518,18 @@ function _injectHTML() {
 
   <!-- RIGHT: Cash Flow & Period Details -->
   <div class="dashboard-right">
+  <!-- Net Position Chart -->
+  <div class="cf-section">
+    <div class="cf-header">
+      <h2>Net Position</h2>
+      <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-dim);">
+        <span>Assets snapshot (monthly cron) + live cash overlay</span>
+        <button onclick="snapshotCurrentMonth(true)" title="Re-snapshot current month using live dashboard values" style="font-size:11px;padding:3px 10px;border:1px solid var(--border);background:var(--surface2);color:var(--text);border-radius:6px;cursor:pointer;">📸 Snapshot Now</button>
+      </div>
+    </div>
+    <div class="cf-chart" id="npChart"></div>
+  </div>
+
   <!-- Net Income Chart -->
   <div class="cf-section">
     <div class="cf-header">
@@ -1352,6 +1364,7 @@ function computePeriod(records, period) {
 function renderAll() {
   closeDrilldown();
   renderChart();
+  renderNetPositionChart();
   renderPeriodDashboard();
 }
 
@@ -1493,6 +1506,218 @@ function renderChart() {
 
   svg += '</svg>';
   container.innerHTML = svg;
+}
+
+// ── Net Position Chart ──
+// Reads exec_monthly_snapshots (assets/liabilities as of each month-end, populated
+// by pg_cron job `exec-monthly-snapshot` and by frontend auto-PATCH on dashboard load)
+// and overlays month-end cash computed live from ledger_balance history.
+let npSnapshotsCache = null; // [{year, month, snapshot_date, investments_total, ...}]
+
+async function fetchNetPositionSnapshots() {
+  try {
+    const rows = await window.supaFetch('exec_monthly_snapshots', '?order=year.asc,month.asc');
+    npSnapshotsCache = rows || [];
+    return npSnapshotsCache;
+  } catch(e) {
+    console.warn('Could not fetch net position snapshots:', e);
+    npSnapshotsCache = [];
+    return [];
+  }
+}
+
+// Compute month-end cash by walking allRecords and finding the latest ledger_balance
+// per account where date <= month_end. Sums to give total cash at that point in time.
+function computeMonthEndCash(year, month) {
+  const lastDay = new Date(year, month, 0); // month is 1-indexed, day 0 = last day of prior month → JS quirk
+  const monthEnd = new Date(year, month - 1, new Date(year, month, 0).getDate());
+  const monthEndStr = monthEnd.toISOString().slice(0, 10);
+  // Group records by account, find max(date) with non-null ledger_balance ≤ month_end
+  const byAccount = {};
+  allRecords.forEach(r => {
+    const acct = getAccountName(r) || r.account_number || '__unk';
+    const d = getDate(r);
+    if (!d || d > monthEndStr) return;
+    const bal = r.ledger_balance;
+    if (bal == null || bal === '' || isNaN(parseFloat(bal))) return;
+    if (!byAccount[acct] || d > byAccount[acct].date) {
+      byAccount[acct] = { date: d, balance: parseFloat(bal) };
+    }
+  });
+  // Sum only the accounts the dashboard counts as cash (mirrors loadBalanceSheet's CASH_ACCOUNTS filter)
+  // For simplicity here we sum all accounts with a known balance — the same set the dashboard sees.
+  return Object.values(byAccount).reduce((sum, a) => sum + a.balance, 0);
+}
+
+async function renderNetPositionChart() {
+  const container = document.getElementById('npChart');
+  if (!container) return;
+  if (!npSnapshotsCache) await fetchNetPositionSnapshots();
+  const snaps = npSnapshotsCache || [];
+  if (snaps.length === 0) {
+    container.innerHTML = '<p style="color:var(--text-dim);text-align:center;padding:40px;font-size:13px;">No snapshots yet. Click 📸 Snapshot Now to seed the current month.</p>';
+    return;
+  }
+
+  // Build chart data: one point per snapshot. y = net_assets_ex_cash + month_end_cash
+  const points = snaps.map(s => {
+    const cash = computeMonthEndCash(s.year, s.month);
+    const net = parseFloat(s.net_assets_ex_cash || 0) + cash;
+    return {
+      year: s.year,
+      month: s.month,
+      label: new Date(s.year, s.month - 1, 1).toLocaleDateString('en-US', { month: 'short' }),
+      cash,
+      assetsExCash: parseFloat(s.net_assets_ex_cash || 0),
+      investments: parseFloat(s.investments_total || 0),
+      liabilities: parseFloat(s.liabilities_total || 0),
+      loansOut: parseFloat(s.loans_out_total || 0),
+      net,
+    };
+  });
+
+  const containerWidth = container.clientWidth || 900;
+  const W = Math.max(containerWidth, 400);
+  const H = 220;
+  const padL = 65, padR = 25, padT = 30, padB = 40;
+  const chartW = W - padL - padR;
+  const chartH = H - padT - padB;
+
+  const allVals = points.flatMap(p => [p.net, p.cash, p.assetsExCash]);
+  const maxY = Math.max(...allVals, 0) * 1.10;
+  const minY = Math.min(...allVals, 0) * 1.10;
+  const rangeY = (maxY - minY) || 1;
+  const y = v => padT + chartH - ((v - minY) / rangeY * chartH);
+  const gap = points.length > 1 ? chartW / (points.length - 1) : chartW / 2;
+
+  let svg = `<svg width="100%" height="${H}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="xMidYMid meet">`;
+
+  // Zero line
+  const zeroY = y(0);
+  svg += `<line x1="${padL}" y1="${zeroY}" x2="${W-padR}" y2="${zeroY}" stroke="#ccc" stroke-width="1"/>`;
+
+  // Y axis grid + labels
+  const steps = 4;
+  for (let i = 0; i <= steps; i++) {
+    const val = minY + (rangeY / steps) * i;
+    const yp = y(val);
+    const label = Math.abs(val) >= 1000000 ? `${val < 0 ? '-' : ''}$${(Math.abs(val)/1000000).toFixed(1)}M` : (Math.abs(val) >= 1000 ? `${val < 0 ? '-' : ''}$${Math.round(Math.abs(val)/1000)}K` : `$${Math.round(val)}`);
+    svg += `<text x="${padL-8}" y="${yp+4}" font-size="10" fill="#999" text-anchor="end" font-family="sans-serif">${label}</text>`;
+    if (i > 0 && i < steps) svg += `<line x1="${padL}" y1="${yp}" x2="${W-padR}" y2="${yp}" stroke="#f0f0f0" stroke-width="1"/>`;
+  }
+
+  // Year separators
+  let lastYear = null;
+  points.forEach((p, i) => {
+    if (p.year !== lastYear) {
+      const x = padL + i * gap;
+      if (lastYear !== null) svg += `<line x1="${x}" y1="${padT}" x2="${x}" y2="${H-padB}" stroke="#ddd" stroke-width="1" stroke-dasharray="4,3"/>`;
+      svg += `<text x="${padL + (i + 0.5) * gap}" y="${padT-8}" font-size="11" fill="#999" font-family="sans-serif" font-weight="600">${p.year}</text>`;
+      lastYear = p.year;
+    }
+  });
+
+  // Cash overlay area (subtle fill)
+  if (points.length > 1) {
+    let cashArea = '';
+    points.forEach((p, i) => { const cx = padL + i * gap; cashArea += (i === 0 ? 'M' : 'L') + `${cx},${y(p.cash)}`; });
+    cashArea += `L${padL + (points.length-1) * gap},${zeroY}L${padL},${zeroY}Z`;
+    svg += `<path d="${cashArea}" fill="rgba(0,176,212,0.10)" stroke="none"/>`;
+  }
+
+  // Cash line (dashed cyan)
+  let cashLine = '';
+  points.forEach((p, i) => { const cx = padL + i * gap; cashLine += (i === 0 ? 'M' : 'L') + `${cx},${y(p.cash)}`; });
+  svg += `<path d="${cashLine}" fill="none" stroke="#00b0d4" stroke-width="1.5" stroke-dasharray="4,3" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  // Net position line (solid dark)
+  let netLine = '';
+  points.forEach((p, i) => { const cx = padL + i * gap; netLine += (i === 0 ? 'M' : 'L') + `${cx},${y(p.net)}`; });
+  svg += `<path d="${netLine}" fill="none" stroke="#1a1a1a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+
+  // Dots + hover tooltips
+  points.forEach((p, i) => {
+    const cx = padL + i * gap;
+    const cyNet = y(p.net);
+    svg += `<circle cx="${cx}" cy="${cyNet}" r="3.5" fill="#1a1a1a"/>`;
+    svg += `<circle cx="${cx}" cy="${y(p.cash)}" r="2.5" fill="#00b0d4"/>`;
+
+    const tipId = `np-tip-${i}`;
+    const tipY = Math.max(padT + 10, cyNet - 78);
+    const fmtK = v => (v < 0 ? '-' : '') + '$' + (Math.abs(v) >= 1000000 ? (Math.abs(v)/1000000).toFixed(2) + 'M' : Math.round(Math.abs(v)/1000).toLocaleString() + 'K');
+    svg += `<g id="${tipId}" style="display:none;pointer-events:none;">`;
+    svg += `<rect x="${cx - 78}" y="${tipY}" width="156" height="76" rx="6" fill="rgba(30,30,30,0.94)"/>`;
+    svg += `<text x="${cx}" y="${tipY + 14}" font-size="10" fill="#aaa" text-anchor="middle" font-family="sans-serif">${p.label} ${p.year}</text>`;
+    svg += `<text x="${cx - 70}" y="${tipY + 28}" font-size="10" fill="#fff" font-family="sans-serif">Net Position:</text>`;
+    svg += `<text x="${cx + 70}" y="${tipY + 28}" font-size="10" fill="#fff" text-anchor="end" font-family="sans-serif" font-weight="700">${fmtK(p.net)}</text>`;
+    svg += `<text x="${cx - 70}" y="${tipY + 42}" font-size="10" fill="#00b0d4" font-family="sans-serif">Cash:</text>`;
+    svg += `<text x="${cx + 70}" y="${tipY + 42}" font-size="10" fill="#00b0d4" text-anchor="end" font-family="sans-serif">${fmtK(p.cash)}</text>`;
+    svg += `<text x="${cx - 70}" y="${tipY + 55}" font-size="10" fill="#aaa" font-family="sans-serif">Investments:</text>`;
+    svg += `<text x="${cx + 70}" y="${tipY + 55}" font-size="10" fill="#aaa" text-anchor="end" font-family="sans-serif">${fmtK(p.investments)}</text>`;
+    svg += `<text x="${cx - 70}" y="${tipY + 68}" font-size="10" fill="#e74c3c" font-family="sans-serif">Liabilities:</text>`;
+    svg += `<text x="${cx + 70}" y="${tipY + 68}" font-size="10" fill="#e74c3c" text-anchor="end" font-family="sans-serif">${fmtK(p.liabilities)}</text>`;
+    svg += `</g>`;
+    // Hover trigger
+    svg += `<rect x="${cx - gap/2}" y="${padT}" width="${gap}" height="${chartH}" fill="transparent" style="cursor:pointer" onmouseenter="document.getElementById('${tipId}').style.display=''" onmouseleave="document.getElementById('${tipId}').style.display='none'"/>`;
+  });
+
+  // X axis labels
+  points.forEach((p, i) => {
+    const cx = padL + i * gap;
+    svg += `<text x="${cx}" y="${H - padB + 16}" font-size="10" fill="#999" text-anchor="middle" font-family="sans-serif">${p.label}</text>`;
+  });
+
+  // Legend (compact, in chart area)
+  svg += `<g transform="translate(${padL + 4}, ${padT + 4})">`;
+  svg += `<line x1="0" y1="6" x2="16" y2="6" stroke="#1a1a1a" stroke-width="2.5"/><text x="20" y="10" font-size="10" fill="#666" font-family="sans-serif">Net Position</text>`;
+  svg += `<line x1="100" y1="6" x2="116" y2="6" stroke="#00b0d4" stroke-width="1.5" stroke-dasharray="4,3"/><text x="120" y="10" font-size="10" fill="#666" font-family="sans-serif">Cash</text>`;
+  svg += `</g>`;
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+// PATCH current month's snapshot with live dashboard totals.
+// Called from loadBalanceSheet after the dashboard's authoritative numbers
+// are computed (investments_total includes cap-rate-derived valuations).
+async function snapshotCurrentMonth(showToastOnSuccess) {
+  try {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+    // Use the dashboard's own (already-computed) globals
+    if (typeof investmentsTotal !== 'number') return;
+
+    // Compute fresh loans/deposits totals via the SQL function (server has the historical view)
+    const fnRes = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+      method: 'POST',
+      headers: {
+        'apikey': window.SUPABASE_KEY,
+        'Authorization': `Bearer ${window.SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query: `SELECT * FROM exec_create_monthly_snapshot(${year}, ${month})` }),
+    });
+    if (!fnRes.ok) throw new Error('snapshot function call failed: ' + (await fnRes.text()));
+
+    // Now PATCH with the dashboard's richer investments_total + liabilities_total
+    const lastDay = new Date(year, month, 0);
+    const snapshotDate = lastDay.toISOString().slice(0, 10);
+    await window.supaWrite('exec_monthly_snapshots', 'PATCH', {
+      investments_total: investmentsTotal,
+      liabilities_total: liabilitiesTotal,
+      snapshot_date: snapshotDate,
+      notes: 'frontend live overwrite ' + new Date().toISOString().slice(0, 16),
+    }, `?year=eq.${year}&month=eq.${month}`);
+
+    // Refresh cache + re-render chart
+    await fetchNetPositionSnapshots();
+    renderNetPositionChart();
+    if (showToastOnSuccess) showToast(`Snapshot updated for ${lastDay.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`);
+  } catch(e) {
+    console.error('snapshotCurrentMonth failed:', e);
+    if (showToastOnSuccess) showToast('⚠️ Snapshot failed: ' + e.message, 'error');
+  }
 }
 
 function selectPeriod(idx) {
@@ -4152,6 +4377,13 @@ function renderBalanceSheet() {
       </div>
     `).join('');
   }
+
+  // Auto-snapshot current month using the dashboard's authoritative totals.
+  // This overwrites whatever the cron / SQL function wrote for the current
+  // month with the live cap-rate-derived investments_total. Fire-and-forget.
+  if (!awaitingNOI) snapshotCurrentMonth(false);
+  // Refresh the Net Position chart now that snapshots may have changed
+  fetchNetPositionSnapshots().then(renderNetPositionChart).catch(() => {});
 }
 
 // ── Modal helpers ──
@@ -4687,6 +4919,7 @@ const _exposeFns = {
   reviewLinkLiability, reviewLinkLoan, reviewLinkPropOrInv,
   updateLoanName, uploadApproveItem, uploadApproveAll, uploadChangeCategory, uploadLinkInvestment,
   uploadLinkLiability, uploadLinkLoan, uploadLinkProperty, uploadSetPayrollSplit, setPayrollSplit,
+  snapshotCurrentMonth, renderNetPositionChart,
   saveAssetValue, editAssetValue, editCapRate, editDistributed,
   openEditInvestment, openEditLiability
 };
