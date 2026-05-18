@@ -157,6 +157,42 @@ async function callClaudeForTown(apiKey: string, system: string, m: Market) {
   return { parsed, costUsd, inputTok, outputTok };
 }
 
+async function recomputeMarketComposite(sb: any, marketId: string) {
+  // Pull all scores for this market joined with criterion -> category
+  const { data: rows, error } = await sb
+    .from("market_research_scores")
+    .select("value_numeric, criterion:market_research_criteria(category_id)")
+    .eq("market_id", marketId)
+    .not("value_numeric", "is", null);
+  if (error || !rows) return null;
+  // Get category weights
+  const { data: cats } = await sb.from("market_research_categories").select("id,weight");
+  const weightMap = new Map<string, number>((cats || []).map((c: any) => [c.id, parseFloat(c.weight || 1)]));
+  // Group scores by category
+  const byCat = new Map<string, number[]>();
+  for (const r of rows as any[]) {
+    const catId = r.criterion?.category_id;
+    if (!catId) continue;
+    if (!byCat.has(catId)) byCat.set(catId, []);
+    byCat.get(catId)!.push(parseFloat(r.value_numeric));
+  }
+  // Weighted mean across categories
+  let weightedSum = 0, totalWeight = 0;
+  for (const [catId, subs] of byCat) {
+    if (subs.length === 0) continue;
+    const mean = subs.reduce((a, b) => a + b, 0) / subs.length;
+    const w = weightMap.get(catId) ?? 1;
+    weightedSum += mean * w;
+    totalWeight += w;
+  }
+  if (totalWeight === 0) return null;
+  const composite = weightedSum / totalWeight;
+  const tier = composite >= 8 ? 1 : composite >= 6 ? 2 : composite >= 4 ? 3 : 4;
+  const score = Math.round(composite * 10) / 10;
+  await sb.from("market_research_markets").update({ score, tier }).eq("id", marketId);
+  return { score, tier, categories_with_data: byCat.size };
+}
+
 async function processOne(sb: any, apiKey: string, system: string, m: Market, critByName: Map<string, Criterion>) {
   const { parsed, costUsd } = await callClaudeForTown(apiKey, system, m);
   const scoreRows: any[] = [];
@@ -183,12 +219,14 @@ async function processOne(sb: any, apiKey: string, system: string, m: Market, cr
     const { error } = await sb.from("market_research_scores").insert(scoreRows);
     if (error) throw new Error(`scores insert: ${error.message}`);
   }
-  // Update market
+  // Update market thesis/summary + ran timestamp
   await sb.from("market_research_markets").update({
     thesis: parsed.thesis || null,
     summary: parsed.summary || null,
     phase3_ran_at: new Date().toISOString(),
   }).eq("id", m.id);
+  // Recompute composite Score/Tier using ALL scores (Phase 2 + Phase 3)
+  await recomputeMarketComposite(sb, m.id);
   return { scored, costUsd };
 }
 
@@ -208,10 +246,31 @@ serve(async (req: Request) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sb = createClient(supabaseUrl, serviceKey);
 
-    const limit = Math.max(1, Math.min(50, body.limit ?? 20));
+    const limit = Math.max(1, Math.min(500, body.limit ?? 20));
     const concurrency = Math.max(1, Math.min(15, body.concurrency ?? 8));
     const skipDone = body.skip_already_done !== false;
     const maxCostUsd = body.max_cost_usd ?? 25;
+    const recomputeOnly = body.recompute_only === true;
+
+    // Recompute-only mode: refresh Score/Tier from existing stored scores, no Claude calls.
+    if (recomputeOnly) {
+      let q = sb.from("market_research_markets").select("id").eq("phase", "shortlisted");
+      if (body.market_ids && Array.isArray(body.market_ids) && body.market_ids.length > 0) {
+        q = q.in("id", body.market_ids);
+      } else if (body.tier_filter && Array.isArray(body.tier_filter) && body.tier_filter.length > 0) {
+        q = q.in("tier", body.tier_filter);
+      }
+      q = q.limit(limit);
+      const { data: ids, error: idErr } = await q;
+      if (idErr) throw idErr;
+      let count = 0;
+      for (const row of (ids || []) as any[]) {
+        try { await recomputeMarketComposite(sb, row.id); count++; } catch {}
+      }
+      return new Response(JSON.stringify({
+        ok: true, mode: "recompute_only", recomputed: count, duration_ms: Date.now() - t0,
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     // 1. Load criteria
     const { data: criteria, error: critErr } = await sb
