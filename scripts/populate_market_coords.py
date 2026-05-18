@@ -26,10 +26,14 @@ import sys
 import urllib.request
 import zipfile
 
-GAZETTEER_URL = (
-    "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/"
-    "2022_Gazetteer/2022_gaz_place_national.zip"
-)
+GAZETTEER_URLS = [
+    # Census file naming changed across years + uses capital "Gaz" in 2022+.
+    # Try recent first, fall back to older.
+    "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2024_Gazetteer/2024_Gaz_place_national.zip",
+    "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteer/2023_Gaz_place_national.zip",
+    "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2022_Gazetteer/2022_Gaz_place_national.zip",
+    "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2021_Gazetteer/2021_Gaz_place_national.zip",
+]
 
 
 FALLBACK_SUPA_URL = "https://qrtleqasnhbnruodlgpt.supabase.co"
@@ -70,9 +74,19 @@ def supa_request(method, base, path, body=None, supa_key=""):
 
 
 def fetch_gazetteer():
-    print("[gazetteer] downloading Census 2022 place file (~5MB)...", file=sys.stderr)
-    blob = http_bytes(GAZETTEER_URL)
-    print(f"[gazetteer] {len(blob)//1024} KB", file=sys.stderr)
+    blob = None
+    last_err = None
+    for url in GAZETTEER_URLS:
+        try:
+            print(f"[gazetteer] trying {url.split('/')[-1]} ...", file=sys.stderr)
+            blob = http_bytes(url)
+            print(f"[gazetteer] got {len(blob)//1024} KB", file=sys.stderr)
+            break
+        except Exception as e:
+            last_err = e
+            continue
+    if not blob:
+        sys.exit(f"[gazetteer] every URL failed: {last_err}")
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         name = [n for n in z.namelist() if "place_national" in n.lower()][0]
         text = z.read(name).decode("utf-8", errors="replace")
