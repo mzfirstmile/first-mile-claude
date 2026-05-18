@@ -914,7 +914,6 @@
         <div class="mr-scorecard">
           <div class="mr-scorecard-header">
             <h3>Criteria Scorecard</h3>
-            <button class="mr-btn-ghost" onclick="mrManageCriteria()">Edit criteria definitions</button>
           </div>
           <div id="mrScorecardBody"></div>
         </div>
@@ -1426,21 +1425,12 @@
               ${(() => {
                 const url = _extractSourceUrl(effectiveSource);
                 if (effectiveSource && url) {
-                  return `<div class="mr-source-cell">
-                    <a href="${_esc(url)}" target="_blank" rel="noopener" class="mr-source-link" title="${_esc(effectiveSource)}">${_esc(effectiveSource)}</a>
-                    <button class="mr-source-edit" onclick="mrEditSource('${c.id}')" title="Edit">✏</button>
-                  </div>`;
+                  return `<a href="${_esc(url)}" target="_blank" rel="noopener" class="mr-source-link" title="${_esc(effectiveSource)}">${_esc(effectiveSource)}</a>`;
                 }
                 if (effectiveSource) {
-                  return `<div class="mr-source-cell">
-                    <span class="mr-source-text">${_esc(effectiveSource)}</span>
-                    <button class="mr-source-edit" onclick="mrEditSource('${c.id}')" title="Edit">✏</button>
-                  </div>`;
+                  return `<span class="mr-source-text">${_esc(effectiveSource)}</span>`;
                 }
-                return `<div class="mr-source-cell">
-                  <span class="mr-source-placeholder">${_esc(placeholder)}</span>
-                  <button class="mr-source-edit" onclick="mrEditSource('${c.id}')" title="Add source">✏</button>
-                </div>`;
+                return `<span class="mr-source-placeholder">${_esc(placeholder)}</span>`;
               })()}
             </td>
           </tr>`;
