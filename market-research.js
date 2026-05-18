@@ -961,15 +961,19 @@
   // Builds the PostgREST query suffix for the current filter + search.
   function _buildFilterQuery() {
     const parts = [];
-    if (_activeFilter === 'phase_shortlisted')   parts.push('phase=eq.shortlisted');
-    else if (_activeFilter === 'favorites')      parts.push('is_favorite=eq.true');
-    // 'all' = no filter
-    if (_activeTiers && _activeTiers.size > 0) {
-      const tiers = Array.from(_activeTiers).sort().join(',');
-      parts.push(`tier=in.(${tiers})`);
-    }
     const q = (_searchQuery || '').trim();
-    if (q) {
+    const isSearching = q.length > 0;
+    // Search always spans All markets — ignore active filter + tier pills.
+    if (!isSearching) {
+      if (_activeFilter === 'phase_shortlisted')   parts.push('phase=eq.shortlisted');
+      else if (_activeFilter === 'favorites')      parts.push('is_favorite=eq.true');
+      // 'all' = no filter
+      if (_activeTiers && _activeTiers.size > 0) {
+        const tiers = Array.from(_activeTiers).sort().join(',');
+        parts.push(`tier=in.(${tiers})`);
+      }
+    }
+    if (isSearching) {
       const safe = q.replace(/[%*]/g, '');
       const enc = encodeURIComponent('*' + safe + '*');
       parts.push(`or=(name.ilike.${enc},state.ilike.${enc})`);
