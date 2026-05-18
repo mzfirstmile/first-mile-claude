@@ -26,7 +26,8 @@
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const DEFAULT_FOLDER = "/1.4 Special Projects/Market Research-Claude";
+const DEFAULT_FOLDER = "/1.4 Special Projects/Market Research - Claude";
+const TEAM_ROOT_NAMESPACE_ID = "2581504355"; // First Mile Prop team root
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -46,6 +47,38 @@ interface DropboxFileEntry {
   content_hash?: string;
 }
 
+// Mint a short-lived access token using the refresh-token + app creds set on the
+// dropbox-proxy function. Falls back to DROPBOX_ACCESS_TOKEN if those aren't set.
+async function getDropboxAccessToken(): Promise<string> {
+  const refresh = Deno.env.get("DROPBOX_REFRESH_TOKEN");
+  const appKey = Deno.env.get("DROPBOX_APP_KEY");
+  const appSecret = Deno.env.get("DROPBOX_APP_SECRET");
+  if (refresh && appKey && appSecret) {
+    const r = await fetch("https://api.dropboxapi.com/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: refresh,
+        client_id: appKey,
+        client_secret: appSecret,
+      }).toString(),
+    });
+    if (!r.ok) throw new Error(`Dropbox refresh failed ${r.status}: ${await r.text()}`);
+    const j = await r.json();
+    return j.access_token as string;
+  }
+  const flat = Deno.env.get("DROPBOX_ACCESS_TOKEN");
+  if (!flat) throw new Error("No Dropbox credentials configured (need DROPBOX_REFRESH_TOKEN+APP_KEY+APP_SECRET or DROPBOX_ACCESS_TOKEN).");
+  return flat;
+}
+
+function pathRootHeader(): Record<string, string> {
+  const ns = (Deno.env.get("DROPBOX_TEAM_ROOT_NAMESPACE_ID") ?? TEAM_ROOT_NAMESPACE_ID).trim();
+  if (!ns || ns === "0") return {};
+  return { "Dropbox-API-Path-Root": JSON.stringify({ ".tag": "root", "root": ns }) };
+}
+
 async function listDropboxFolder(token: string, folderPath: string): Promise<DropboxFileEntry[]> {
   const entries: DropboxFileEntry[] = [];
   let cursor: string | null = null;
@@ -58,7 +91,11 @@ async function listDropboxFolder(token: string, folderPath: string): Promise<Dro
 
     const r = await fetch(url, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        ...pathRootHeader(),
+      },
       body: JSON.stringify(body),
     });
     if (!r.ok) {
@@ -78,13 +115,15 @@ serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const token = Deno.env.get("DROPBOX_ACCESS_TOKEN");
-    if (!token) {
+    let token: string;
+    try {
+      token = await getDropboxAccessToken();
+    } catch (e) {
       return new Response(
         JSON.stringify({
           ok: false,
           error: "Dropbox not configured",
-          detail: "Set DROPBOX_ACCESS_TOKEN secret on this function: supabase secrets set DROPBOX_ACCESS_TOKEN=<token>",
+          detail: String(e),
           synced: 0,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
