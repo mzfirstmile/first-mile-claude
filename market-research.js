@@ -13,7 +13,8 @@
   let _filterCounts = { phase_shortlisted: 0, all: 0, favorites: 0 };
   let _totalForCurrentFilter = 0;
   let _page = 0;
-  const PAGE_SIZE = 100;
+  const PAGE_SIZE = 1000;  // Supabase anon REST caps here
+  let _activeTiers = new Set(); // empty = all tiers
   let _categories = []; // 6 high-level groups carrying weights
   let _criteria = [];   // sub-criteria, linked via category_id
   let _scores = []; // shortlist scores only
@@ -499,6 +500,29 @@
       }
       #mrRoot .mr-pager-info strong { color: #0f172a; font-weight: 700; }
 
+      /* Tier filter pills */
+      #mrRoot .mr-tier-filter {
+        display: inline-flex; align-items: center; gap: 6px;
+        margin-left: 8px; padding-left: 12px;
+        border-left: 1px solid #e2e8f0;
+      }
+      #mrRoot .mr-tier-label {
+        font-size: 11px; color: #94a3b8; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px;
+        margin-right: 2px;
+      }
+      #mrRoot .mr-tier-pill {
+        display: inline-flex; align-items: center; gap: 4px;
+        padding: 4px 10px; border-radius: 14px;
+        background: #fff; border: 1px solid #e2e8f0;
+        font-size: 12px; color: #475569; cursor: pointer;
+        user-select: none; font-weight: 500;
+      }
+      #mrRoot .mr-tier-pill:hover { background: #f8fafc; border-color: #cbd5e1; }
+      #mrRoot .mr-tier-pill input { margin: 0; cursor: pointer; }
+      #mrRoot .mr-tier-pill.active { background: #0ea5e9; border-color: #0284c7; color: #fff; font-weight: 600; }
+      #mrRoot .mr-tier-pill.active:hover { background: #0284c7; }
+
       /* Phase coverage banner */
       #mrRoot .mr-phase-banner {
         background: #f8fafc; border: 1px solid #e2e8f0;
@@ -757,6 +781,13 @@
             <button class="mr-filter-btn active" data-filter="phase_shortlisted">🎯 Shortlist <span class="mr-filter-count" id="mrCountShortlist"></span></button>
             <button class="mr-filter-btn" data-filter="all">All <span class="mr-filter-count" id="mrCountAll"></span></button>
             <button class="mr-filter-btn" data-filter="favorites">❤ Favorites <span class="mr-filter-count" id="mrCountFavorites"></span></button>
+            <div class="mr-tier-filter">
+              <span class="mr-tier-label">Tier:</span>
+              <label class="mr-tier-pill" data-tier="1"><input type="checkbox" onchange="mrToggleTier(1, this.checked)"> Tier 1</label>
+              <label class="mr-tier-pill" data-tier="2"><input type="checkbox" onchange="mrToggleTier(2, this.checked)"> Tier 2</label>
+              <label class="mr-tier-pill" data-tier="3"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
+              <label class="mr-tier-pill" data-tier="4"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</label>
+            </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select class="mr-sort" id="mrSort" onchange="mrChangeSort(this.value)">
@@ -853,6 +884,10 @@
     if (_activeFilter === 'phase_shortlisted')   parts.push('phase=eq.shortlisted');
     else if (_activeFilter === 'favorites')      parts.push('is_favorite=eq.true');
     // 'all' = no filter
+    if (_activeTiers && _activeTiers.size > 0) {
+      const tiers = Array.from(_activeTiers).sort().join(',');
+      parts.push(`tier=in.(${tiers})`);
+    }
     const q = (_searchQuery || '').trim();
     if (q) {
       const safe = q.replace(/[%*]/g, '');
@@ -1996,6 +2031,13 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   window.mrToggleFavorite = (id)  => _toggleFavorite(id);
   window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
   window.mrDeepResearch = (id) => _deepResearch(id);
+  window.mrToggleTier = (tier, on) => {
+    if (on) _activeTiers.add(tier); else _activeTiers.delete(tier);
+    // Sync visual state of the pill
+    const lbl = document.querySelector(`.mr-tier-pill[data-tier="${tier}"]`);
+    if (lbl) lbl.classList.toggle('active', on);
+    _page = 0; _refreshPage();
+  };
 
   // ── Main init ──────────────────────────────────────────
   window.marketResearchInit = async function () {
