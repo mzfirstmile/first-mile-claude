@@ -9,7 +9,8 @@
 
   let _inited = false;
   let _markets = [];
-  let _criteria = [];
+  let _categories = []; // 6 high-level groups carrying weights
+  let _criteria = [];   // sub-criteria, linked via category_id
   let _scores = []; // [{market_id, criterion_id, value_numeric, value_text, ...}]
   let _currentMarket = null; // detail view
   let _currentUser = null;
@@ -380,8 +381,133 @@
       }
       #mrRoot .mr-toast.show { opacity: 1; }
       #mrRoot .mr-toast.error { background: #b91c1c; }
+
+      /* Chatbot at the top */
+      #mrRoot .mr-chat {
+        background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        border-radius: 12px;
+        padding: 16px 18px;
+        margin-bottom: 16px;
+        color: #e2e8f0;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      }
+      #mrRoot .mr-chat-header {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 13px; font-weight: 600;
+        color: #cbd5e1; margin-bottom: 10px;
+      }
+      #mrRoot .mr-chat-header .mr-chat-dot {
+        width: 8px; height: 8px; border-radius: 50%;
+        background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2);
+      }
+      #mrRoot .mr-chat-row {
+        display: flex; gap: 8px;
+      }
+      #mrRoot .mr-chat-input {
+        flex: 1;
+        background: #0f172a;
+        border: 1px solid #334155;
+        color: #e2e8f0;
+        padding: 10px 14px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        outline: none;
+      }
+      #mrRoot .mr-chat-input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56,189,248,0.15); }
+      #mrRoot .mr-chat-input::placeholder { color: #64748b; }
+      #mrRoot .mr-chat-send {
+        background: #0ea5e9; color: #fff;
+        border: none; padding: 0 18px;
+        border-radius: 8px; font-weight: 600;
+        font-size: 13px; cursor: pointer;
+      }
+      #mrRoot .mr-chat-send:hover { background: #0284c7; }
+      #mrRoot .mr-chat-send:disabled { background: #475569; cursor: not-allowed; }
+      #mrRoot .mr-chat-suggestions {
+        display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px;
+      }
+      #mrRoot .mr-chat-chip {
+        background: rgba(255,255,255,0.08); color: #cbd5e1;
+        border: 1px solid #334155; padding: 4px 10px;
+        border-radius: 16px; font-size: 11px; cursor: pointer;
+      }
+      #mrRoot .mr-chat-chip:hover { background: rgba(56,189,248,0.15); border-color: #38bdf8; color: #e0f2fe; }
+      #mrRoot .mr-chat-output {
+        margin-top: 14px; background: rgba(255,255,255,0.04);
+        border: 1px solid #1e293b; border-radius: 8px;
+        padding: 14px 16px; font-size: 13px; line-height: 1.55;
+        color: #e2e8f0; max-height: 420px; overflow-y: auto;
+        white-space: pre-wrap; display: none;
+      }
+      #mrRoot .mr-chat-output.show { display: block; }
+      #mrRoot .mr-chat-output .mr-chat-q {
+        font-size: 11px; color: #38bdf8; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.3px;
+        margin-bottom: 6px;
+      }
+      #mrRoot .mr-chat-output .mr-chat-a {
+        color: #e2e8f0;
+      }
+      #mrRoot .mr-chat-loading {
+        display: inline-flex; gap: 4px; align-items: center;
+        color: #94a3b8; font-size: 12px; font-style: italic;
+      }
+
+      /* Grouped scorecard */
+      #mrRoot .mr-cat-header {
+        font-size: 11px; font-weight: 700;
+        color: #475569; text-transform: uppercase;
+        letter-spacing: 0.6px; padding: 14px 12px 6px 12px;
+        background: #f8fafc;
+        border-top: 2px solid #e2e8f0;
+      }
+      #mrRoot .mr-cat-header:first-child { border-top: none; }
+      #mrRoot .mr-target-chip {
+        display: inline-block;
+        background: #f1f5f9; color: #475569;
+        font-size: 10px; font-weight: 600;
+        padding: 2px 8px; border-radius: 4px;
+        margin-left: 6px; white-space: nowrap;
+      }
     `;
     document.head.appendChild(style);
+  }
+
+  // ── Category labels ──────────────────────────────────────
+  const _CAT_LABELS = {
+    demographics: 'Demographics',
+    governance: 'Governance & Barriers to Entry',
+    economic_activity: 'Economic Activity',
+    education: 'Education',
+    quality_of_life: 'Quality of Life',
+    transit: 'Transit & Access',
+  };
+  const _CAT_ORDER = ['demographics', 'governance', 'economic_activity', 'education', 'quality_of_life', 'transit'];
+
+  function _fmtTarget(c) {
+    if (c.target_label) return c.target_label;
+    if (c.target_min != null && c.target_max != null) {
+      return _fmtVal(c.target_min, c.target_unit) + '–' + _fmtVal(c.target_max, c.target_unit);
+    }
+    if (c.target_min != null) return '≥ ' + _fmtVal(c.target_min, c.target_unit);
+    if (c.target_max != null) return '≤ ' + _fmtVal(c.target_max, c.target_unit);
+    return '';
+  }
+  function _fmtVal(v, unit) {
+    const n = Number(v);
+    if (unit === '$') {
+      if (n >= 1e6) return '$' + (n/1e6).toFixed(n % 1e6 === 0 ? 0 : 1) + 'M';
+      if (n >= 1e3) return '$' + (n/1e3).toFixed(0) + 'k';
+      return '$' + n.toLocaleString();
+    }
+    if (unit === '%') return n + '%';
+    if (unit === 'count') return n.toLocaleString();
+    if (unit === 'miles') return n + ' mi';
+    if (unit === 'minutes') return n + ' min';
+    if (unit === 'years') return n + ' yrs';
+    if (unit === 'parks/10k') return n + ' parks/10k';
+    return n.toString();
   }
 
   // ── HTML scaffold ────────────────────────────────────────
@@ -389,6 +515,27 @@
     const root = document.getElementById('mrRoot');
     if (!root) return;
     root.innerHTML = `
+      <!-- Chatbot at the top — ask questions about rankings -->
+      <div class="mr-chat">
+        <div class="mr-chat-header">
+          <span class="mr-chat-dot"></span>
+          Ask about the rankings
+        </div>
+        <div class="mr-chat-row">
+          <input class="mr-chat-input" id="mrChatInput" type="text"
+                 placeholder="e.g. Which towns score highest on schools and commute? Why is Greenwich ranked above Westport?"
+                 onkeydown="if(event.key==='Enter'){mrChatSubmit();}">
+          <button class="mr-chat-send" id="mrChatSend" onclick="mrChatSubmit()">Ask</button>
+        </div>
+        <div class="mr-chat-suggestions">
+          <span class="mr-chat-chip" onclick="mrChatSuggest('Which 5 towns rank highest overall and why?')">Top 5 towns</span>
+          <span class="mr-chat-chip" onclick="mrChatSuggest('Compare Greenwich, Scarsdale and Short Hills across all criteria.')">Compare 3 towns</span>
+          <span class="mr-chat-chip" onclick="mrChatSuggest('Which towns best satisfy the Economic Activity criteria?')">Economic Activity leaders</span>
+          <span class="mr-chat-chip" onclick="mrChatSuggest('Which criteria do most towns fail on?')">Common gaps</span>
+        </div>
+        <div class="mr-chat-output" id="mrChatOutput"></div>
+      </div>
+
       <!-- Dropbox source banner — shown across both list and detail views -->
       <div class="mr-dropbox-banner">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -525,12 +672,14 @@
   // ── Data loading ─────────────────────────────────────────
   async function _loadData() {
     _currentUser = window.currentUser;
-    const [markets, criteria, scores] = await Promise.all([
+    const [markets, categories, criteria, scores] = await Promise.all([
       window.supaFetch('market_research_markets', '?select=*&order=tier.asc.nullslast,score.desc.nullslast,name.asc'),
-      window.supaFetch('market_research_criteria', '?select=*&order=weight.desc.nullslast,sort_order.asc,name.asc'),
+      window.supaFetch('market_research_categories', '?select=*&order=sort_order.asc,name.asc'),
+      window.supaFetch('market_research_criteria', '?select=*&order=sort_order.asc,name.asc'),
       window.supaFetch('market_research_scores', '?select=*'),
     ]);
     _markets = markets || [];
+    _categories = categories || [];
     _criteria = criteria || [];
     _scores = scores || [];
   }
@@ -784,48 +933,160 @@
     const scoreByCriterion = {};
     _scores.filter(s => s.market_id === m.id).forEach(s => { scoreByCriterion[s.criterion_id] = s; });
 
-    bodyEl.innerHTML = `
+    // Group criteria by category, render section headers between groups
+    const active = _criteria.filter(c => c.is_active !== false);
+    const byCat = {};
+    active.forEach(c => {
+      const cat = c.category || 'uncategorized';
+      if (!byCat[cat]) byCat[cat] = [];
+      byCat[cat].push(c);
+    });
+    const orderedCats = _CAT_ORDER.filter(c => byCat[c]).concat(
+      Object.keys(byCat).filter(c => !_CAT_ORDER.includes(c))
+    );
+    let bodyHtml = `
       <table>
         <thead>
           <tr>
-            <th style="width:35%;">Criterion</th>
-            <th style="width:35%;">Value</th>
+            <th style="width:38%;">Criterion</th>
+            <th style="width:30%;">Value</th>
             <th>Source</th>
           </tr>
         </thead>
-        <tbody>
-          ${_criteria.filter(c => c.is_active !== false)
-            .slice()
-            .sort((a, b) => (b.weight || 0) - (a.weight || 0) || a.name.localeCompare(b.name))
-            .map(c => {
-            const s = scoreByCriterion[c.id] || {};
-            const v = c.value_type === 'text' ? (s.value_text || '') : (s.value_numeric != null ? s.value_numeric : '');
-            return `
-              <tr>
-                <td>
-                  <div style="font-weight:500;display:flex;align-items:center;gap:6px;">
-                    ${_esc(c.name)}
-                    <span style="font-size:10px;font-weight:600;color:#0ea5e9;background:#e0f2fe;padding:1px 6px;border-radius:8px;">w ${c.weight != null ? c.weight : 1}</span>
-                  </div>
-                  ${c.description ? `<div style="font-size:11px;color:#94a3b8;">${_esc(c.description)}</div>` : ''}
-                </td>
-                <td>
-                  <input class="mr-cell-input" type="${c.value_type === 'text' ? 'text' : 'number'}" step="0.01"
-                         value="${_esc(v)}"
-                         onchange="mrSaveScore('${c.id}', '${c.value_type}', this.value)"
-                         placeholder="${c.value_type === 'percent' ? '%' : (c.value_type === 'currency' ? '$' : (c.value_type === 'rating_1_10' ? '1-10' : ''))}">
-                </td>
-                <td>
-                  <input class="mr-cell-input" type="text"
-                         value="${_esc(s.source || '')}"
-                         onchange="mrSaveSource('${c.id}', this.value)"
-                         placeholder="${_esc(c.source_note || 'Source / note')}">
-                </td>
-              </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    `;
+        <tbody>`;
+    orderedCats.forEach(cat => {
+      const rows = byCat[cat].slice().sort((a,b) => (a.sort_order||0) - (b.sort_order||0) || a.name.localeCompare(b.name));
+      const catObj = _categories.find(c => c.slug === cat) || {};
+      const catWeight = catObj.weight != null ? catObj.weight : 1;
+      bodyHtml += `
+        <tr><td colspan="3" class="mr-cat-header">
+          <span style="display:inline-flex;align-items:center;gap:8px;">
+            ${_esc(_CAT_LABELS[cat] || cat)}
+            <span style="font-size:10px;font-weight:600;color:#0ea5e9;background:#e0f2fe;padding:2px 8px;border-radius:8px;">weight ${catWeight}</span>
+          </span>
+        </td></tr>`;
+      rows.forEach(c => {
+        const s = scoreByCriterion[c.id] || {};
+        const v = c.value_type === 'text' ? (s.value_text || '') : (s.value_numeric != null ? s.value_numeric : '');
+        const target = _fmtTarget(c);
+        bodyHtml += `
+          <tr>
+            <td>
+              <div style="font-weight:500;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                ${_esc(c.name)}
+                ${target ? `<span class="mr-target-chip" title="Target">🎯 ${_esc(target)}</span>` : ''}
+              </div>
+              ${c.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${_esc(c.description)}</div>` : ''}
+            </td>
+            <td>
+              <input class="mr-cell-input" type="${c.value_type === 'text' ? 'text' : 'number'}" step="0.01"
+                     value="${_esc(v)}"
+                     onchange="mrSaveScore('${c.id}', '${c.value_type}', this.value)"
+                     placeholder="${c.value_type === 'percent' ? '%' : (c.value_type === 'currency' ? '$' : (c.value_type === 'rating_1_10' ? '1-10' : ''))}">
+            </td>
+            <td>
+              <input class="mr-cell-input" type="text"
+                     value="${_esc(s.source || '')}"
+                     onchange="mrSaveSource('${c.id}', this.value)"
+                     placeholder="${_esc(c.source_note || 'Source / note')}">
+            </td>
+          </tr>`;
+      });
+    });
+    bodyHtml += `</tbody></table>`;
+    bodyEl.innerHTML = bodyHtml;
+  }
+
+  // ── Chatbot — Claude API call with markets/criteria/scores context ──
+  async function _chatSubmit() {
+    const input = document.getElementById('mrChatInput');
+    const out = document.getElementById('mrChatOutput');
+    const btn = document.getElementById('mrChatSend');
+    if (!input || !out || !btn) return;
+    const q = (input.value || '').trim();
+    if (!q) return;
+    const apiKey = window.CLAUDE_API_KEY;
+    if (!apiKey) { out.classList.add('show'); out.innerHTML = '<div class="mr-chat-q">Error</div><div class="mr-chat-a">Claude API key not configured.</div>'; return; }
+
+    // Build context for Claude — current markets, criteria (grouped), and any scores
+    const criteriaByCat = {};
+    _criteria.filter(c => c.is_active !== false).forEach(c => {
+      const cat = c.category || 'uncategorized';
+      (criteriaByCat[cat] = criteriaByCat[cat] || []).push({
+        name: c.name,
+        description: c.description || null,
+        target: _fmtTarget(c) || null,
+        weight: c.weight != null ? c.weight : 1,
+      });
+    });
+    const scoresByMarket = {};
+    _scores.forEach(s => {
+      const cName = (_criteria.find(c => c.id === s.criterion_id) || {}).name;
+      if (!cName) return;
+      (scoresByMarket[s.market_id] = scoresByMarket[s.market_id] || {})[cName] =
+        s.value_numeric != null ? s.value_numeric : (s.value_text || null);
+    });
+    const marketSummaries = _markets.map(m => ({
+      id: m.id, name: m.name, state: m.state, msa: m.msa,
+      population: m.population, status: m.status, score: m.score, tier: m.tier,
+      thesis: m.thesis || null,
+      scores: scoresByMarket[m.id] || null,
+    }));
+
+    const systemPrompt = `You are a research analyst helping First Mile Capital evaluate small affluent towns as real-estate acquisition markets.
+
+You have access to:
+1. CRITERIA — 6 categories of evaluation criteria (Demographics, Governance/Barriers, Economic Activity, Education, Quality of Life, Transit). Each criterion has a target threshold.
+2. MARKETS — a list of candidate towns with their state, MSA, population, status, thesis, and any scored values.
+
+Answer the user's question concisely (under 250 words unless the question is broad). When you reference specific towns or criteria, name them exactly. If the data doesn't contain enough info to answer, say so plainly and suggest what would need to be filled in.
+
+CRITERIA (grouped by category):
+${JSON.stringify(criteriaByCat, null, 2)}
+
+MARKETS:
+${JSON.stringify(marketSummaries, null, 2)}`;
+
+    out.classList.add('show');
+    out.innerHTML = `<div class="mr-chat-q">You asked</div><div class="mr-chat-a" style="margin-bottom:12px;">${_esc(q)}</div><div class="mr-chat-loading">Thinking…</div>`;
+    btn.disabled = true; btn.textContent = '…';
+
+    try {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1500,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: q }],
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        throw new Error(`API ${r.status}: ${err.slice(0, 200)}`);
+      }
+      const data = await r.json();
+      const answer = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('\n');
+      out.innerHTML = `<div class="mr-chat-q">You asked</div><div class="mr-chat-a" style="margin-bottom:12px;">${_esc(q)}</div><div class="mr-chat-q">Claude says</div><div class="mr-chat-a">${_esc(answer || '(no response)')}</div>`;
+    } catch (e) {
+      out.innerHTML = `<div class="mr-chat-q">Error</div><div class="mr-chat-a">${_esc(String(e))}</div>`;
+    } finally {
+      btn.disabled = false; btn.textContent = 'Ask';
+      input.value = '';
+    }
+  }
+
+  function _chatSuggest(text) {
+    const input = document.getElementById('mrChatInput');
+    if (!input) return;
+    input.value = text;
+    input.focus();
   }
 
   // ── Modal helpers ────────────────────────────────────────
@@ -1073,82 +1334,77 @@
   }
 
   // ── Criteria management ────────────────────────────────
+  // Weights live on the 6 categories; criteria are read-only definitions
+  // surfaced beneath each category panel.
   function _manageCriteria() {
-    // Always render sorted by weight DESC (heaviest at top)
-    const sorted = _criteria.slice().sort((a, b) => (b.weight || 0) - (a.weight || 0) || a.name.localeCompare(b.name));
-    const totalWeight = sorted.reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
+    const cats = _categories.slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const totalWeight = cats.reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
 
-    _openModal('Manage Criteria & Weights', `
-      <p style="font-size:12px;color:#64748b;margin:0 0 12px 0;">
-        Higher weight = more influence on the composite Score (1-10) and Tier (1-4).
-        Weights are relative — they're normalized when ranking is computed. Total below: <strong style="color:#0ea5e9;">${totalWeight.toFixed(1)}</strong>
+    const sections = cats.map(cat => {
+      const subs = _criteria.filter(c => c.category_id === cat.id)
+        .slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name));
+      const pct = totalWeight > 0 ? ((parseFloat(cat.weight) || 0) / totalWeight * 100).toFixed(0) : '—';
+      return `
+        <div style="border:1px solid #e2e8f0;border-radius:10px;margin-bottom:12px;background:#fff;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:1fr 110px;gap:12px;align-items:center;padding:12px 14px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.4px;">${_esc(cat.name)}</div>
+              ${cat.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${_esc(cat.description)}</div>` : ''}
+              <div style="font-size:11px;color:#64748b;margin-top:4px;">${subs.length} sub-${subs.length === 1 ? 'criterion' : 'criteria'}</div>
+            </div>
+            <div style="text-align:center;">
+              <input type="number" min="0" step="0.1" value="${cat.weight != null ? cat.weight : 1}"
+                     onchange="mrSaveCategoryWeight('${cat.id}', this.value)"
+                     style="width:84px;padding:6px 8px;border:1px solid #cbd5e1;border-radius:6px;font-size:14px;text-align:center;color:#0f172a;font-weight:700;">
+              <div style="font-size:10px;color:#94a3b8;margin-top:4px;font-weight:600;">${pct === '—' ? '' : pct + '%'} of total</div>
+            </div>
+          </div>
+          <div style="padding:6px 14px 10px 14px;">
+            ${subs.length === 0
+              ? '<div style="font-size:12px;color:#94a3b8;padding:8px 0;">No sub-criteria.</div>'
+              : subs.map(c => {
+                  const target = _fmtTarget(c);
+                  return `
+                    <div style="padding:8px 0;border-top:1px solid #f1f5f9;display:flex;align-items:flex-start;gap:10px;">
+                      <div style="width:6px;height:6px;border-radius:50%;background:#94a3b8;margin-top:8px;flex:none;"></div>
+                      <div style="flex:1;min-width:0;">
+                        <div style="font-size:13px;font-weight:500;color:#1e293b;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                          ${_esc(c.name)}
+                          ${target ? `<span class="mr-target-chip">🎯 ${_esc(target)}</span>` : ''}
+                        </div>
+                        ${c.description ? `<div style="font-size:11px;color:#94a3b8;margin-top:2px;">${_esc(c.description)}</div>` : ''}
+                      </div>
+                    </div>`;
+                }).join('')}
+          </div>
+        </div>`;
+    }).join('');
+
+    _openModal('Manage Categories & Weights', `
+      <p style="font-size:12px;color:#64748b;margin:0 0 14px 0;">
+        Weights live on the 6 high-level categories. Higher weight = more influence on the composite score.
+        Weights are relative and normalized when ranking is computed. Total: <strong style="color:#0ea5e9;">${totalWeight.toFixed(1)}</strong>
       </p>
-      <div id="mrCriteriaList" style="margin-bottom:18px;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-        ${sorted.length === 0
-          ? '<p style="font-size:13px;color:#94a3b8;text-align:center;padding:20px;margin:0;">No criteria yet. Add your first below.</p>'
-          : `<div style="display:grid;grid-template-columns:1fr 90px 30px;gap:8px;padding:8px 12px;background:#f8fafc;font-size:10px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #e2e8f0;">
-              <div>Criterion (sorted by weight)</div>
-              <div style="text-align:center;">Weight</div>
-              <div></div>
-            </div>` + sorted.map(c => {
-              const pct = totalWeight > 0 ? ((parseFloat(c.weight) || 0) / totalWeight * 100).toFixed(0) : '—';
-              return `
-                <div style="display:grid;grid-template-columns:1fr 90px 30px;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid #f1f5f9;">
-                  <div style="min-width:0;">
-                    <div style="font-size:13px;font-weight:500;color:#1e293b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(c.name)}</div>
-                    <div style="font-size:11px;color:#94a3b8;">${_esc(c.value_type)}${c.description ? ' · ' + _esc(c.description) : ''}</div>
-                  </div>
-                  <div style="text-align:center;display:flex;flex-direction:column;align-items:center;">
-                    <input type="number" min="0" step="0.1" value="${c.weight != null ? c.weight : 1}"
-                           onchange="mrSaveCriterionWeight('${c.id}', this.value)"
-                           style="width:64px;padding:4px 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:12px;text-align:center;color:#1e293b;font-weight:600;">
-                    <div style="font-size:9px;color:#94a3b8;margin-top:2px;">${pct === '—' ? '' : pct + '%'}</div>
-                  </div>
-                  <button class="mr-btn-ghost" onclick="mrDeleteCriterion('${c.id}', '${_esc(c.name).replace(/'/g, "\\'")}')" title="Delete" style="color:#b91c1c;font-size:18px;line-height:1;">×</button>
-                </div>`;
-            }).join('')}
-      </div>
-      <h4 style="font-size:13px;color:#1e293b;margin:18px 0 8px 0;">Add new criterion</h4>
-      <label>Name *</label>
-      <input id="mrNewCriterionName" placeholder="e.g. Population Growth 5-yr">
-      <label>Description (optional)</label>
-      <input id="mrNewCriterionDesc" placeholder="Short description of what this measures">
-      <div class="mr-modal-row">
-        <div>
-          <label>Value type</label>
-          <select id="mrNewCriterionType">
-            <option value="rating_1_10">Rating 1-10</option>
-            <option value="rating_1_5">Rating 1-5</option>
-            <option value="percent">Percent (%)</option>
-            <option value="number">Number</option>
-            <option value="currency">Currency ($)</option>
-            <option value="text">Text</option>
-            <option value="boolean">Yes / No</option>
-          </select>
-        </div>
-        <div>
-          <label>Weight</label>
-          <input id="mrNewCriterionWeight" type="number" min="0" step="0.1" value="1" placeholder="1.0">
-        </div>
-      </div>
-      <label>Typical source</label>
-      <input id="mrNewCriterionSource" placeholder="BLS, Census, CoStar…">
+      ${sections}
       <div class="mr-modal-actions">
-        <button class="mr-btn" onclick="mrCloseModal(); mrRecomputeAndRender()">Done</button>
-        <button class="mr-btn mr-btn-primary" onclick="mrAddCriterion()">+ Add Criterion</button>
+        <button class="mr-btn mr-btn-primary" onclick="mrCloseModal(); mrRecomputeAndRender()">Done</button>
       </div>
     `);
   }
-  async function _saveCriterionWeight(id, rawValue) {
+  async function _saveCategoryWeight(id, rawValue) {
     const weight = Math.max(0, parseFloat(rawValue) || 0);
     try {
-      await window.supaWrite('market_research_criteria', 'PATCH', { weight }, `?id=eq.${id}`);
-      const c = _criteria.find(x => x.id === id);
-      if (c) c.weight = weight;
-      _toast(`Weight → ${weight}`);
-      // Re-render the modal so order + percentages update live
-      _manageCriteria();
+      await window.supaWrite('market_research_categories', 'PATCH', { weight }, `?id=eq.${id}`);
+      const cat = _categories.find(c => c.id === id);
+      if (cat) cat.weight = weight;
+      _toast(`${cat ? cat.name : 'Category'} weight → ${weight}`);
+      _manageCriteria(); // refresh % chips
+      if (_currentMarket) _renderScorecard();
     } catch(e) { _toast('Save failed: ' + e.message, true); }
+  }
+  // Legacy criterion-level weight setter kept for back-compat — no-op for now.
+  async function _saveCriterionWeight(id, rawValue) {
+    return _saveCategoryWeight(id, rawValue);
   }
   async function _addCriterion() {
     const name = document.getElementById('mrNewCriterionName').value.trim();
@@ -1358,9 +1614,12 @@
   window.mrChangeSort     = ()    => _changeSort();
   window.mrSetViewMode    = (m)   => _setViewMode(m);
   window.mrSaveCriterionWeight = (id, v) => _saveCriterionWeight(id, v);
+  window.mrSaveCategoryWeight  = (id, v) => _saveCategoryWeight(id, v);
   window.mrRecomputeAndRender  = ()  => _recomputeAndRender();
   window.mrUpdateRankings = ()    => _updateRankings();
   window.mrCloseModal     = ()    => _closeModal();
+  window.mrChatSubmit     = ()    => _chatSubmit();
+  window.mrChatSuggest    = (t)   => _chatSuggest(t);
 
   // ── Main init ──────────────────────────────────────────
   window.marketResearchInit = async function () {
