@@ -118,26 +118,43 @@ The embedded Claude chat has access to these tools:
   - `nearest_top50_city` populated via state→primary-metro hardcoded map (approximate; Phase 2 will compute exact great-circle distance using lat/lng from Census Gazetteer).
   - Python equivalent at `scripts/phase1_seed_us_towns.py` (NOT used because sandbox can't hit Census). Browser-driven version is the actual implementation.
 
-- **Pipeline phases (overall design):**
-  1. **Phase 1 — Demographic pre-screen (DONE).** Census ACS only. Cheap, broad. 25,961 → 715.
-  2. **Phase 2 — Enrichment + ranking (TO BE BUILT).** Programmatic enrichment of the 715 with additional data points (lat/lng + commute proxy, % bachelor's/grad degrees, % HH > $200k, Company Concentrations from the Big Four / Wealth Mgmt Excel within 60mi, etc.). Compute scores against each sub-criterion and apply category-weighted rollup. Re-rank the 715 into a tighter top-100. Triggered by the "Update Rankings" button.
-  3. **Phase 3 — Deep research per town (TO BE BUILT; user-prompted only).** A "Deep Research" button per row launches an LLM-driven research pass on a single town: pulls web data from the Research Websites list (CBRE/JLL/Newmark/Challenger/St Louis Fed/Walker Dunlop/Savills), scrapes town-specific signals (Niche.com grade, school rankings, crime rates), writes scores + a full thesis + a side-by-side comparison vs peer towns. Output saved to `market_research_scores` + the market's `thesis`/`summary`/`notes` fields.
+- **Pipeline phases (all DONE end-to-end as of 2026-05-18):**
+  1. **Phase 1 — Demographic pre-screen (DONE).** Census ACS only. Cheap, broad. 25,961 places ingested, 715 tagged `shortlisted` (pop 5k-75k + median HHI ≥ $130k). Free.
+  2. **Phase 2 — Programmatic scoring on the shortlist (DONE).** Re-queries Census ACS per state for B19001 (HHI brackets) + B15003 (education attainment) on top of Phase 1's B01003/B19013/B25077. Parses the Big Four / Wealth Mgmt 60mi Excel from Dropbox and groups offices by Nearest-Top-50-City. For each shortlist town, scores ~13 sub-criteria 0-10 across **Demographics**, **Education**, and **Company Concentrations** (the 3 categories Census + Excel data can reach without web research). Rolls up to category-weighted composite Score (1-10) + Tier (1=8+, 2=6-8, 3=4-6, 4=<4). Writes 8,399 score rows + PATCHes every shortlist market with score/tier/phase2_ran_at. Runs from Chrome MCP (`example.com` is the CSP-permissive workspace; admin.firstmilecap.com blocks cross-origin fetches). Free.
+  3. **Phase 3 — Deep research per town (DONE, user-prompted).** Per-row 🔬 Deep Research button + prominent gradient CTA in the market detail header. Click triggers a Claude API call (sonnet-4-6, browser-side, no tool use yet) with: (a) the 22 Phase 3 sub-criteria for Governance / Economic Activity / Quality of Life / Transit, each with their target threshold, (b) a baked-in Research Websites list (CBRE / JLL / Newmark / Walker Dunlop / Savills / Challenger / St Louis Fed / Niche / GreatSchools / FBI / Census), and (c) the town's Phase 1+2 metadata. Claude returns strict JSON: `{scores: [{criterion_name, score, value, source}], thesis, summary}`. Frontend wipes prior `updated_by='phase3_claude'` rows for that market, inserts the new scores with citations, PATCHes market.thesis + market.summary, and re-renders the scorecard. **Cost: ~$0.03/town** (1.8k input @ $3/M + ~1.8k output @ $15/M). 484 Tier-1 towns ≈ $14 total. **Validated on Summit, NJ:** 22/22 criteria scored with specific data + URL citations (e.g. "Aaa/AAA Moody's" → summitnjgov.com finance dept, "Niche A+" → niche.com/places-to-live/summit-union-nj, "20+ F1000 HQs within 25mi: J&J/Merck/Prudential/Cognizant" → cbre.com/insights/reports/new-jersey-market-outlook). The model also pushed back honestly (Moderate Tax Policies scored 5/10: "NJ top income tax rate 10.75%; property taxes ~$20K+/yr; high burden").
 
 - **UI (market-research.js):**
   - Chatbot input at the very top — Claude (sonnet-4-6) with the shortlist (≤1k rows) as context. Suggested-question chips.
   - Search input under the page header. Server-side ilike on name + state, 220ms debounce.
-  - Filter chips: 🎯 Shortlist (default) · All · ❤ Favorites. Badges populated via cheap count-only PostgREST queries (`Prefer: count=exact`, read total from Content-Range).
-  - Server-side pagination, 100 rows/page. PostgREST `offset + limit + Prefer: count=exact`. "Showing X–Y of Z" + "« Prev / Page N of M / Next »" controls.
-  - List columns: Heart · Market · State · Population · Median HHI · Nearby Metro · Score · Thesis. Click heart → optimistic PATCH `is_favorite`.
-  - Manage Categories modal: responsive grid (auto-fit minmax 340px). 6 (now 7) category cards, each with a weight input + sub-criteria list + target chips.
-  - Detail view scorecard groups by category with weight chip on the section header.
+  - Filter chips: 🎯 Shortlist (default) · All · ❤ Favorites. Plus a Tier multi-select pill row (Tier 1/2/3/4 independently toggleable). Badges populated via count-only PostgREST queries (`Prefer: count=exact`, read total from Content-Range).
+  - Server-side pagination, **1,000 rows/page** (Supabase anon cap). PostgREST `offset + limit + Prefer: count=exact`. "Showing X-Y of Z" + "« Prev / Page N of M / Next »" controls.
+  - List columns: Heart · Market · State · Population · Median HHI · Nearby Metro · Score · Tier · 🔬 Deep Research · Thesis. Click heart → optimistic PATCH `is_favorite`.
+  - Pipeline coverage banner shows three chips (📊 Phase 1 · ⚙️ Phase 2 · 🔬 Phase 3) so users see at a glance which categories are scored programmatically vs need on-demand research.
+  - Manage Categories modal: responsive CSS grid (auto-fit minmax 340px). 7 category cards, each with a weight input + read-only sub-criteria list with target chips. Weight slider only at category level — sub-criteria don't carry their own weights.
+  - Detail view scorecard groups by category with weight + phase chip on each section header (Phase 2 = green "⚙️ Phase 2 scored", Phase 3 = orange "🔬 Phase 3 (deep research)"). 4px colored top border per category (cyan/violet/amber/pink/teal/green/orange) for strong visual separation.
+  - Source column is a **clickable hyperlink** when the citation contains a URL or domain. `_extractSourceUrl` parses 3 cases: direct http(s) URLs, domains in parens like `(data.census.gov)`, and bare domains like `niche.com`. Non-URL sources render as text; empty cells show italic placeholder hinting the intended source for that category. Click ↗ opens in new tab.
+
+- **API key handling — deployed admin site:**
+  - Build-time substitution: `__CLAUDE_API_KEY__`, `__SUPABASE_URL__`, `__SUPABASE_KEY__`, `__MSAL_*__` placeholders are sed-replaced from GitHub Action secrets at deploy time. The sed line in `.github/workflows/deploy.yml` MUST include every file that needs a key. Currently includes `index.html`, `exec.html`, AND `market-research.js` (added 2026-05-18).
+  - Phase 3 and the chatbot read the key via `BUILD_INJECTED_KEY = '__CLAUDE_API_KEY__'` first, fall back to `window.CLAUDE_API_KEY` (from gitignored local `config.js`) for dev.
+  - **401 Unauthorized** from Anthropic = stale/revoked API key. Not a credits issue (those return 429 or `insufficient_quota`). When this happens: regenerate key in console.anthropic.com, update GitHub secret `CLAUDE_API_KEY` + local `config.js`, push to trigger redeploy.
+
+- **PostgREST 1000-row cap gotchas:**
+  - Supabase anon REST caps SELECTs at 1000 rows even with `&limit=50000`. List view paginates server-side (1k/page). Scores are loaded **per-market on detail open** (`_loadScoresForMarket(id)`) — not bulk at startup — to avoid the cap silently truncating Summit's scores (rows past 1k get clipped).
+  - For the chatbot's full-shortlist context, `_loadShortlistForChatbot` does its own filtered query for `phase=eq.shortlisted&limit=1000` since the shortlist is ≤1k rows.
 
 - **Browser pipeline notes / gotchas:**
   - api.census.gov returns `Invalid Key` page even after success — the page TITLE updates from the redirect but the actual JSON is in body. Just check rows count.
   - Census places use `-666666666` as null sentinel for HHI/home-value. Filter with `value > 0`.
-  - HHI top-codes at `$250,001` — all Census places above $250k median get that exact value. Can't distinguish them at this granularity.
+  - HHI top-codes at `$250,001` — all Census places above $250k median get that exact value. Can't distinguish them at this granularity. Phase 2's home-value criterion ($1.5M target) provides the primary discriminator for top-coded HHI clusters.
   - Wikipedia article "List of highest-income places in the United States" was deleted/redirected. Don't fall back to it.
-  - Supabase anon REST caps at 1000 rows per page even with `&limit=50000`. Must paginate via Range header or `offset + limit`.
+  - Census Gazetteer ZIP download was abandoned (too big to parse in Chrome MCP under the 45-sec timeout). `nearest_top50_city` therefore uses a state→primary-metro hardcoded map; accurate enough for Company Concentrations grouping. Switch to lat/lng-based distance when miles_to_top50 becomes a meaningful scoring lever.
+
+- **Open improvements / TODO:**
+  - **Multi-source citations per criterion.** Today each `market_research_scores` row has a single `source` TEXT column. When Phase 3 has multiple authoritative sources for one criterion (e.g. crime stats from FBI + Niche), Claude is forced to pick one. Next iteration: change `source` to a TEXT[] array OR add a `sources` JSONB column, then render the cell as a list of links.
+  - **Phase 2 value column** currently shows the 0-10 score, not the underlying measurement (e.g. shows "6.4" for Median Home Value instead of "$962,700"). Fix by re-running Phase 2 and writing `value_text` alongside `value_numeric`, or have the scorecard render `s.value_text || (s.value_numeric + '/10')`.
+  - **Phase 3 with live web fetch** (Claude's `web_search_20250305` tool) for authoritative real-time data instead of training-data lookups. ~5-10x cost (~$0.15-0.30/town).
+  - **Tier-1 bulk Phase 3 run** — queue all 484 Tier-1 towns and process serially or with concurrency limit. Background-run via edge function rather than browser-driven so it survives laptop sleep.
 
 ## Active Initiatives Module
 - **What:** Project tracking module for special projects, deal activity, and communications. Built 2026-04-15.
