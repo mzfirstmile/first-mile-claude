@@ -32,17 +32,22 @@ GAZETTEER_URL = (
 )
 
 
+FALLBACK_SUPA_URL = "https://qrtleqasnhbnruodlgpt.supabase.co"
+
+
 def read_supabase_config():
+    """Pull the URL + anon key. URL falls back to the known project URL
+    (public anyway); KEY can come from config.js OR a SUPABASE_KEY env var."""
     here = os.path.dirname(os.path.abspath(__file__))
     cfg = os.path.join(here, "..", "config.js")
-    if not os.path.exists(cfg):
-        sys.exit(f"Missing {cfg}. Run from the repo root.")
-    text = open(cfg).read()
-    url = re.search(r"SUPABASE_URL\s*=\s*['\"]([^'\"]+)['\"]", text)
-    key = re.search(r"SUPABASE_KEY\s*=\s*['\"]([^'\"]+)['\"]", text)
-    if not url or not key:
-        sys.exit("Couldn't read SUPABASE_URL / SUPABASE_KEY from config.js")
-    return url.group(1), key.group(1)
+    text = open(cfg).read() if os.path.exists(cfg) else ""
+    url_m = re.search(r"SUPABASE_URL\s*=\s*['\"]([^'\"]+)['\"]", text)
+    key_m = re.search(r"SUPABASE_KEY\s*=\s*['\"]([^'\"]+)['\"]", text)
+    url = url_m.group(1) if url_m else FALLBACK_SUPA_URL
+    key = key_m.group(1) if key_m else os.environ.get("SUPABASE_KEY", "")
+    if not key:
+        sys.exit("No SUPABASE_KEY — set window.SUPABASE_KEY in config.js or `export SUPABASE_KEY=…`")
+    return url, key
 
 
 def http_bytes(url):
@@ -114,7 +119,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--commit", action="store_true")
     ap.add_argument("--limit", type=int, default=None, help="Cap how many rows to update (testing)")
-    args = ap.parse_args()
+    # parse_known_args so stray shell-comment fragments like '# dry-run' don't blow up
+    args, _ignore = ap.parse_known_args()
 
     base, key = read_supabase_config()
 
