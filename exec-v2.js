@@ -2708,6 +2708,8 @@ function renderUploadTxnRow(t) {
   const isInvestmentIncome = t.type === 'Investment Income';
   const isInterestExpense = t.type === 'Interest Expense';
   const isInvestmentContrib = t.type === 'Investment Contributions';
+  const isLoanOut = t.type === 'Loan Out';
+  const isLoanPayback = t.type === 'Loan Payback';
 
   // Build linking dropdown HTML
   let linkDropdownHtml = '';
@@ -2741,6 +2743,19 @@ function renderUploadTxnRow(t) {
     });
     linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkLiability(${t.idx}, this.value)">
       ${liabOptions.join('')}
+    </select>`;
+  } else if (isLoanOut || isLoanPayback) {
+    // Loan name dropdown — existing Loan Out names + Add New for Loan Out only
+    // (Loan Payback can only apply to existing loans, not create new ones)
+    const loanNames = getExistingLoanNames();
+    const currentName = uploadReviewChoices[t.idx]?.loan_name || '';
+    const loanOpts = [`<option value="">${isLoanPayback ? '— Apply to Loan —' : '— Pick / Name Loan —'}</option>`];
+    loanNames.forEach((ids, name) => {
+      loanOpts.push(`<option value="${name.replace(/"/g,'&quot;')}" ${name === currentName ? 'selected' : ''}>${name}</option>`);
+    });
+    if (isLoanOut) loanOpts.push(`<option value="__new__">+ Add New Loan…</option>`);
+    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:160px;font-size:10px;" onchange="uploadLinkLoan(${t.idx}, this.value, this)">
+      ${loanOpts.join('')}
     </select>`;
   }
 
@@ -2828,6 +2843,10 @@ function updateApproveAllCheckbox() {
 function uploadChangeCategory(idx, newCategory, selectEl) {
   uploadReviewChoices[idx].category = newCategory;
   uploadReviewChoices[idx].userModified = true;
+  // If category changed away from Loan Out/Payback, clear the loan_name binding
+  if (newCategory !== 'Loan Out' && newCategory !== 'Loan Payback') {
+    uploadReviewChoices[idx].loan_name = null;
+  }
   // If category changed to one that needs a linking dropdown, re-render the row
   // (simpler to just re-render the whole review screen)
   const row = selectEl.closest('.upload-txn-row');
@@ -2882,6 +2901,31 @@ function uploadLinkLiability(idx, liabilityId) {
   showToast(`Linked → ${liabName}`);
 }
 
+function uploadLinkLoan(idx, value, selectEl) {
+  if (value === '__new__') {
+    const name = prompt('New loan name (e.g. "Wooster loan to Ricky"):', '');
+    if (!name || !name.trim()) {
+      selectEl.value = uploadReviewChoices[idx].loan_name || '';
+      return;
+    }
+    const trimmed = name.trim();
+    uploadReviewChoices[idx] = { ...(uploadReviewChoices[idx] || {}), loan_name: trimmed, userModified: true, userApproved: true };
+    showToast(`Loan name → ${trimmed}`);
+    // Re-render this row so the new name appears in the dropdown
+    const rowEl = document.querySelector(`.upload-txn-row[data-idx="${idx}"]`);
+    if (rowEl) {
+      const txn = uploadStagedTxns[idx];
+      const c = uploadReviewChoices[idx];
+      const result = { ...txn, idx, type: c.category, property_id: c.property_id, investment_id: c.investment_id, liability_id: c.liability_id };
+      rowEl.outerHTML = renderUploadTxnRow(result);
+    }
+    return;
+  }
+  const loanName = value || null;
+  uploadReviewChoices[idx] = { ...(uploadReviewChoices[idx] || {}), loan_name: loanName, userModified: true, userApproved: true };
+  showToast(loanName ? `Linked → ${loanName}` : 'Unlinked');
+}
+
 async function confirmImport() {
   const btn = document.getElementById('btnConfirmImport');
   btn.disabled = true;
@@ -2908,7 +2952,11 @@ async function confirmImport() {
     row.investment_id = choice.investment_id || null;
     row.property_id = choice.property_id || null;
     row.liability_id = choice.liability_id || null;
-    row.category_name = null;
+    // category_name carries the loan/deposit friendly name. Loan Out + Loan Payback both
+    // use this column to bucket transactions to a single loan on the balance sheet.
+    row.category_name = (choice.category === 'Loan Out' || choice.category === 'Loan Payback') ? (choice.loan_name || null) : null;
+    // Loan Out needs a start date for cash flow period filtering. Default to txn date.
+    row.loan_start_date = (choice.category === 'Loan Out') ? txn.date : null;
     row.payroll_split = choice.payroll_split || null;
     // Mark as reviewed if: high confidence, user changed category, or user explicitly approved
     row.reviewed = (choice.confidence === 'high' || choice.userModified || choice.userApproved) ? true : false;
@@ -4638,7 +4686,7 @@ const _exposeFns = {
   onPropertyLinkChange, reviewChangeCategory, reviewLinkInvestment,
   reviewLinkLiability, reviewLinkLoan, reviewLinkPropOrInv,
   updateLoanName, uploadApproveItem, uploadApproveAll, uploadChangeCategory, uploadLinkInvestment,
-  uploadLinkLiability, uploadLinkProperty, uploadSetPayrollSplit, setPayrollSplit,
+  uploadLinkLiability, uploadLinkLoan, uploadLinkProperty, uploadSetPayrollSplit, setPayrollSplit,
   saveAssetValue, editAssetValue, editCapRate, editDistributed,
   openEditInvestment, openEditLiability
 };
