@@ -1696,6 +1696,48 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     _bulkP3Cancel = true;
   }
 
+  // Pull every score for a market, recompute weighted composite + tier,
+  // PATCH market.score / market.tier. Mirrors the edge function logic so
+  // the browser-side per-town research updates the composite immediately.
+  async function _recomputeMarketComposite(marketId) {
+    // Use cached categories/criteria if loaded; otherwise fetch
+    let cats = _categories;
+    if (!cats || cats.length === 0) {
+      cats = await window.supaFetch('market_research_categories', '?select=*');
+    }
+    const crits = (_criteria && _criteria.length)
+      ? _criteria
+      : await window.supaFetch('market_research_criteria', '?select=*');
+    const catOfCrit = new Map(crits.map(c => [c.id, c.category_id]));
+    const weightOfCat = new Map(cats.map(c => [c.id, parseFloat(c.weight || 1)]));
+    // Fetch scores for this market
+    const scores = await window.supaFetch(
+      'market_research_scores',
+      `?select=value_numeric,criterion_id&market_id=eq.${marketId}&limit=1000`
+    );
+    const byCat = new Map();
+    for (const s of (scores || [])) {
+      if (s.value_numeric == null) continue;
+      const catId = catOfCrit.get(s.criterion_id);
+      if (!catId) continue;
+      if (!byCat.has(catId)) byCat.set(catId, []);
+      byCat.get(catId).push(parseFloat(s.value_numeric));
+    }
+    let weightedSum = 0, totalWeight = 0;
+    for (const [catId, subs] of byCat) {
+      if (subs.length === 0) continue;
+      const mean = subs.reduce((a, b) => a + b, 0) / subs.length;
+      const w = weightOfCat.get(catId) ?? 1;
+      weightedSum += mean * w;
+      totalWeight += w;
+    }
+    if (totalWeight === 0) return;
+    const composite = weightedSum / totalWeight;
+    const tier = composite >= 8 ? 1 : composite >= 6 ? 2 : composite >= 4 ? 3 : 4;
+    const score = Math.round(composite * 10) / 10;
+    await window.supaWrite('market_research_markets', 'PATCH', { score, tier }, `?id=eq.${marketId}`);
+  }
+
   // ── Phase 3: Deep Research per town ─────────────────────
   // Calls Claude (sonnet-4-6) to score the 4 Phase 3 categories using its
   // training knowledge + the Research Websites list as citation sources.
@@ -1897,6 +1939,9 @@ Research this town now and produce the scoring JSON.`;
             }).join('')}
           </div>
         </div>`;
+
+      // Recompute composite Score / Tier using ALL stored scores (P2 + P3)
+      try { await _recomputeMarketComposite(market.id); } catch (e) { /* swallow */ }
 
       // Refresh data so scorecard re-renders with new scores
       await _loadData();
