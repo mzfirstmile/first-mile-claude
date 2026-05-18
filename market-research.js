@@ -636,7 +636,7 @@
     transit: 'Transit & Access',
     company_concentrations: 'Company Concentrations',
   };
-  const _CAT_ORDER = ['demographics', 'governance', 'economic_activity', 'education', 'quality_of_life', 'transit', 'company_concentrations'];
+  const _CAT_ORDER = ['demographics', 'company_concentrations', 'governance', 'economic_activity', 'education', 'quality_of_life', 'transit'];
   // Which categories Phase 2 can score programmatically. Others require Phase 3.
   const _PHASE2_CATEGORIES = new Set(['demographics', 'education', 'company_concentrations']);
   const _PHASE3_CATEGORIES = new Set(['governance', 'economic_activity', 'quality_of_life', 'transit']);
