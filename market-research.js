@@ -805,16 +805,6 @@
         <div class="mr-chat-output" id="mrChatOutput"></div>
       </div>
 
-      <!-- Dropbox source banner — shown across both list and detail views -->
-      <div class="mr-dropbox-banner">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0ea5e9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:13px;color:#1e293b;font-weight:600;margin-bottom:2px;">Source folder: <span style="color:#0ea5e9;font-family:'SF Mono','Monaco',monospace;font-weight:500;">First Mile Prop Dropbox / 1.4 Special Projects / Market Research - Claude</span></div>
-          <div style="font-size:12px;color:#64748b;line-height:1.45;">Criteria definitions, research links, and source datasets live here. Drop new files into that folder and Claude will pull them in to update this list (criteria, market scores, and notes).</div>
-          <div style="font-size:12px;color:#0369a1;line-height:1.45;margin-top:6px;font-weight:500;">↻ Rankings will be updated as new research information and sources are added to the Dropbox folder.</div>
-        </div>
-      </div>
-
       <!-- Phase coverage banner -->
       <div class="mr-phase-banner">
         <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
@@ -827,34 +817,6 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <!-- Bulk Phase 3 CTA — runs the cloud edge function across all Tier-1 towns -->
-      <div class="mr-rerank-cta" id="mrBulkP3Cta" style="background:linear-gradient(135deg,#fff7ed 0%,#ffedd5 100%);border-color:#fed7aa;">
-        <div class="mr-rerank-icon" style="background:#fed7aa;color:#9a3412;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M11 8v6M8 11h6"/></svg>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div class="mr-rerank-title">🔬 Bulk Phase 3 on Tier 1</div>
-          <div class="mr-rerank-desc">Run Claude deep-research on every Tier-1 town (skipping ones already done). Runs in the cloud via edge function — your laptop can sleep. ~$14 total, ~20-25 min.</div>
-        </div>
-        <button class="mr-btn mr-btn-primary mr-rerank-btn" id="mrBulkP3Btn" onclick="mrBulkPhase3()" style="background:#ea580c;">
-          <span id="mrBulkP3BtnLabel">Run on Tier 1</span>
-        </button>
-      </div>
-
-      <!-- Update Rankings CTA — server-side Dropbox pull + weighted re-rank -->
-      <div class="mr-rerank-cta" id="mrRerankCta">
-        <div class="mr-rerank-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div class="mr-rerank-title">Update Rankings</div>
-          <div class="mr-rerank-desc">Click to pull the latest research files from Dropbox and re-rank every market using the current criteria weights. Runs server-side so it works even when your laptop is asleep.</div>
-        </div>
-        <button class="mr-btn mr-btn-primary mr-rerank-btn" id="mrRerankBtn" onclick="mrUpdateRankings()">
-          <span id="mrRerankBtnLabel">Update Rankings</span>
-        </button>
       </div>
 
       <!-- List View -->
