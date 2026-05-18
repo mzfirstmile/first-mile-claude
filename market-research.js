@@ -539,8 +539,9 @@
     education: 'Education',
     quality_of_life: 'Quality of Life',
     transit: 'Transit & Access',
+    company_concentrations: 'Company Concentrations',
   };
-  const _CAT_ORDER = ['demographics', 'governance', 'economic_activity', 'education', 'quality_of_life', 'transit'];
+  const _CAT_ORDER = ['demographics', 'governance', 'economic_activity', 'education', 'quality_of_life', 'transit', 'company_concentrations'];
 
   function _fmtTarget(c) {
     if (c.target_label) return c.target_label;
