@@ -1426,7 +1426,7 @@
   }
 
   function _setViewMode(mode) {
-    _viewMode = mode === 'list' ? 'list' : 'grid';
+    _viewMode = (mode === 'list' || mode === 'map') ? mode : 'grid';
     try { localStorage.setItem('mr_view_mode', _viewMode); } catch(_) {}
     _renderGrid();
   }
