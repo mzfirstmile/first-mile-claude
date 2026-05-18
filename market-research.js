@@ -35,7 +35,11 @@
     const style = document.createElement('style');
     style.id = 'mr-css';
     style.textContent = `
-      #mrRoot { padding: 24px 28px; }
+      /* Let market-research breathe to the full viewport — override the
+         default .manage-view 1400px cap so the split list+map view has room
+         for the Thesis column without horizontal scroll. */
+      #view-marketresearch { max-width: none !important; padding: 0 !important; }
+      #mrRoot { padding: 16px 20px; max-width: none; }
       #mrRoot h2 { margin: 0 0 6px 0; font-size: 22px; font-weight: 700; color: #1e293b; }
       #mrRoot .mr-subtitle { font-size: 13px; color: #94a3b8; margin: 0; }
 
@@ -539,9 +543,10 @@
       #mrRoot .mr-tier-pill.active { background: #0ea5e9; border-color: #0284c7; color: #fff; font-weight: 600; }
       #mrRoot .mr-tier-pill.active:hover { background: #0284c7; }
 
-      /* Split list+map layout */
+      /* Split list+map layout — give the list the lion's share so the
+         Thesis column doesn't get clipped on standard 14"/15" laptops. */
       #mrRoot .mr-split {
-        display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, 42%);
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 32%);
         gap: 16px; align-items: flex-start;
       }
       #mrRoot .mr-split-list { min-width: 0; overflow-x: auto; }
@@ -553,6 +558,9 @@
         background: #f0f4f8;
       }
       #mrRoot .mr-split-map > #mrMap { width: 100%; height: 100%; }
+      @media (max-width: 1280px) {
+        #mrRoot .mr-split { grid-template-columns: minmax(0, 1fr) minmax(300px, 36%); }
+      }
       @media (max-width: 1100px) {
         #mrRoot .mr-split { grid-template-columns: 1fr; }
         #mrRoot .mr-split-map { position: relative; height: 420px; top: auto; }
