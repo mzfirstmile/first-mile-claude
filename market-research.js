@@ -1375,7 +1375,11 @@
     if (!input || !out || !btn) return;
     const q = (input.value || '').trim();
     if (!q) return;
-    const apiKey = window.CLAUDE_API_KEY;
+    // Same key chain as Phase 3
+    const BUILD_INJECTED_KEY = '__CLAUDE_API_KEY__';
+    const apiKey = (BUILD_INJECTED_KEY.indexOf('__CLAUDE') === -1)
+      ? BUILD_INJECTED_KEY
+      : window.CLAUDE_API_KEY;
     if (!apiKey) { out.classList.add('show'); out.innerHTML = '<div class="mr-chat-q">Error</div><div class="mr-chat-a">Claude API key not configured.</div>'; return; }
 
     // Build context for Claude — current markets, criteria (grouped), and any scores
@@ -1488,7 +1492,11 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   ];
 
   async function _deepResearch(id) {
-    const apiKey = window.CLAUDE_API_KEY;
+    // Key chain: build-time substituted (deployed) → config.js (local dev)
+    const BUILD_INJECTED_KEY = '__CLAUDE_API_KEY__';
+    const apiKey = (BUILD_INJECTED_KEY.indexOf('__CLAUDE') === -1)
+      ? BUILD_INJECTED_KEY
+      : window.CLAUDE_API_KEY;
     if (!apiKey) { _toast('Claude API key not configured', true); return; }
     const m = _markets.find(x => x.id === id) || _shortlistFull.find(x => x.id === id);
     if (!m) {
