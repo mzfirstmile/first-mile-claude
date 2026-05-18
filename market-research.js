@@ -503,6 +503,14 @@
       }
       #mrRoot .mr-pager-info strong { color: #0f172a; font-weight: 700; }
 
+      /* Shortlist criteria subtext */
+      #mrRoot .mr-shortlist-criteria {
+        font-size: 11px; color: #64748b;
+        margin-top: 8px; line-height: 1.4;
+      }
+      #mrRoot .mr-shortlist-criteria strong {
+        color: #0f172a; font-weight: 600;
+      }
       /* Tier filter pills */
       #mrRoot .mr-tier-filter {
         display: inline-flex; align-items: center; gap: 6px;
@@ -842,8 +850,9 @@
         </div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
+          <div>
           <div class="mr-filters" id="mrFilters">
-            <button class="mr-filter-btn active" data-filter="phase_shortlisted" title="Pop 5,000–75,000 + median HHI ≥ $130,000">🎯 Shortlist <span class="mr-filter-count" id="mrCountShortlist"></span></button>
+            <button class="mr-filter-btn active" data-filter="phase_shortlisted">🎯 Shortlist <span class="mr-filter-count" id="mrCountShortlist"></span></button>
             <button class="mr-filter-btn" data-filter="all">All <span class="mr-filter-count" id="mrCountAll"></span></button>
             <button class="mr-filter-btn" data-filter="favorites">❤ Favorites <span class="mr-filter-count" id="mrCountFavorites"></span></button>
             <div class="mr-tier-filter">
@@ -853,6 +862,10 @@
               <label class="mr-tier-pill" data-tier="3"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
               <label class="mr-tier-pill" data-tier="4"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</label>
             </div>
+          </div>
+          <div class="mr-shortlist-criteria" id="mrShortlistCriteria">
+            Shortlist criteria: Town population <strong>5,000–75,000</strong> · Median Household Income <strong id="mrHHIThresholdLabel">≥ $120,000</strong>
+          </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select class="mr-sort" id="mrSort" onchange="mrChangeSort(this.value)">
@@ -2242,7 +2255,6 @@ Research this town now and produce the scoring JSON.`;
           <div class="mr-cat-card-head">
             <div>
               <div class="mr-cat-card-title">${_esc(cat.name)}</div>
-              <div class="mr-cat-card-sub">${subs.length} sub-${subs.length === 1 ? 'criterion' : 'criteria'}${cat.description ? ' · ' + _esc(cat.description) : ''}</div>
             </div>
             <div class="mr-cat-weight-wrap">
               <input type="number" min="0" step="0.1" value="${cat.weight != null ? cat.weight : 1}"
