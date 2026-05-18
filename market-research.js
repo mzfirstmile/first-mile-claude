@@ -307,6 +307,7 @@
         <div style="flex:1;min-width:0;">
           <div style="font-size:13px;color:#1e293b;font-weight:600;margin-bottom:2px;">Source folder: <span style="color:#0ea5e9;font-family:'SF Mono','Monaco',monospace;font-weight:500;">First Mile Prop Dropbox / 1.4 Special Projects / Market Research - Claude</span></div>
           <div style="font-size:12px;color:#64748b;line-height:1.45;">Criteria definitions, research links, and source datasets live here. Drop new files into that folder and Claude will pull them in to update this list (criteria, market scores, and notes).</div>
+          <div style="font-size:12px;color:#0369a1;line-height:1.45;margin-top:6px;font-weight:500;">↻ Rankings will be updated as new research information and sources are added to the Dropbox folder.</div>
         </div>
       </div>
 
