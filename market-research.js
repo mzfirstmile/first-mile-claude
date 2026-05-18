@@ -539,7 +539,7 @@
       #mrRoot .mr-phase-chip.phase2 { background: #f0fdf4; border-color: #bbf7d0; color: #166534; }
       #mrRoot .mr-phase-chip.phase3 { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
 
-      /* Deep Research button */
+      /* Deep Research button (table row) */
       #mrRoot .mr-deep-btn {
         font-size: 11px; padding: 4px 10px;
         background: #fff; color: #9a3412;
@@ -547,6 +547,20 @@
         cursor: pointer; font-weight: 600; white-space: nowrap;
       }
       #mrRoot .mr-deep-btn:hover { background: #fff7ed; border-color: #fb923c; }
+      /* Prominent Deep Research button (detail header) */
+      #mrRoot .mr-btn-deep {
+        background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+        color: #fff; border: none;
+        padding: 9px 18px; border-radius: 8px;
+        font-weight: 700; font-size: 13px;
+        cursor: pointer; box-shadow: 0 1px 3px rgba(234,88,12,0.3);
+        transition: transform .12s, box-shadow .12s;
+      }
+      #mrRoot .mr-btn-deep:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(234,88,12,0.4);
+        background: linear-gradient(135deg, #c2410c 0%, #9a3412 100%);
+      }
 
       /* Heart toggle */
       #mrRoot .mr-heart {
@@ -825,6 +839,9 @@
             <div class="mr-detail-meta" id="mrDetailMeta"></div>
           </div>
           <div class="mr-actions">
+            <button class="mr-btn mr-btn-deep" id="mrDetailDeepBtn" onclick="mrDeepResearchCurrent()">
+              🔬 Deep Research
+            </button>
             <button class="mr-btn" onclick="mrEditMarket()">Edit Market</button>
             <button class="mr-btn" onclick="mrDeleteMarket()" style="color:#b91c1c;">Delete</button>
           </div>
@@ -2031,6 +2048,7 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   window.mrToggleFavorite = (id)  => _toggleFavorite(id);
   window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
   window.mrDeepResearch = (id) => _deepResearch(id);
+  window.mrDeepResearchCurrent = () => { if (_currentMarket) _deepResearch(_currentMarket.id); };
   window.mrToggleTier = (tier, on) => {
     if (on) _activeTiers.add(tier); else _activeTiers.delete(tier);
     // Sync visual state of the pill
