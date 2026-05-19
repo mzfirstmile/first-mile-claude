@@ -13,7 +13,7 @@
   let _filterCounts = { all: 0, favorites: 0 };
   let _totalForCurrentFilter = 0;
   let _page = 0;
-  const PAGE_SIZE = 100;   // small enough that pager is always visible
+  const PAGE_SIZE = 500;   // bigger default page — still pages with controls visible at top/bottom
   let _activeTiers = new Set(); // empty = no tier filter; full list shown (sorted by score desc so T1 surfaces first)
   let _categories = []; // 6 high-level groups carrying weights
   let _criteria = [];   // sub-criteria, linked via category_id
@@ -29,6 +29,8 @@
   let _mapInstance = null;
   let _markerCluster = null;
   let _mapLeafletLoaded = false;
+  let _mapBounds = null;          // { north, south, east, west } when user has zoomed/panned past the initial CONUS view
+  let _mapBoundsSettling = false; // suppresses moveend during programmatic fitBounds on initial render
   let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'list' | 'map'
   // Migrate legacy 'grid' to 'list'
   if (_viewMode === 'grid') _viewMode = 'list';
@@ -581,8 +583,9 @@
       #mrRoot .mr-split-list { min-width: 0; overflow-x: auto; }
       #mrRoot .mr-split-map {
         position: sticky; top: 12px;
-        height: calc(100vh - 80px);
-        min-height: 480px;
+        height: calc(100vh - 200px);
+        min-height: 420px;
+        max-height: 720px;
         border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;
         background: #f0f4f8;
       }
@@ -1034,6 +1037,13 @@
     if (_activeMetro) {
       parts.push(`nearest_top50_city=eq.${encodeURIComponent(_activeMetro)}`);
     }
+    if (_mapBounds) {
+      // Narrow to the visible map viewport — set as user zooms/pans the map.
+      parts.push(`latitude=gte.${_mapBounds.south}`);
+      parts.push(`latitude=lte.${_mapBounds.north}`);
+      parts.push(`longitude=gte.${_mapBounds.west}`);
+      parts.push(`longitude=lte.${_mapBounds.east}`);
+    }
     return parts;
   }
 
@@ -1138,6 +1148,35 @@
       _markets = paged.rows;
       _totalForCurrentFilter = paged.total;
       _renderGrid();
+    } catch (e) {
+      _toast('Load failed: ' + e.message, true);
+    }
+  }
+
+  // Re-fetch and re-render ONLY the list portion, leaving the map untouched.
+  // Used by the map-bounds → list sync so panning doesn't reset the map.
+  async function _refreshListOnly() {
+    try {
+      const paged = await _fetchPage();
+      _markets = paged.rows;
+      _totalForCurrentFilter = paged.total;
+      const listContainer = document.querySelector('.mr-split-list');
+      if (!listContainer) { _renderGrid(); return; }
+      const total = _totalForCurrentFilter || 0;
+      const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      const pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
+      const listInner = _renderListView(_markets);
+      listContainer.innerHTML = pager + listInner + pager;
+      // Refresh the "Showing X–Y of Z" header in place
+      const firstIdx = total ? (_page * PAGE_SIZE) + 1 : 0;
+      const lastIdx = Math.min(total, (_page + 1) * PAGE_SIZE);
+      const pageCountEl = document.querySelector('.mr-page-count');
+      if (pageCountEl) {
+        const suffix = _mapBounds
+          ? ` <span style="color:#0369a1;font-weight:600;">· Filtered by map view</span> <button onclick="mrClearMapBounds()" style="margin-left:8px;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
+          : '';
+        pageCountEl.innerHTML = `Showing <strong>${firstIdx.toLocaleString()}–${lastIdx.toLocaleString()}</strong> of <strong>${total.toLocaleString()}</strong>${suffix}`;
+      }
     } catch (e) {
       _toast('Load failed: ' + e.message, true);
     }
@@ -1385,8 +1424,37 @@
         const conus = withCoords.filter(inCONUS);
         const fitTo = conus.length > 0 ? conus : withCoords;
         const bounds = L.latLngBounds(fitTo.map(m => [m.latitude, m.longitude]));
-        _mapInstance.fitBounds(bounds, { padding: [30, 30] });
+        _mapBoundsSettling = true;
+        // Tight fit — no padding, no buffer rendering of Canada/Mexico
+        _mapInstance.fitBounds(bounds, { padding: [0, 0] });
+        // Release the moveend lock after leaflet settles
+        setTimeout(() => { _mapBoundsSettling = false; }, 600);
       }
+
+      // After the map settles, link viewport changes to the list filter.
+      // Debounce so panning doesn't fire a query on every pixel.
+      let moveTimer = null;
+      _mapInstance.on('moveend', () => {
+        if (_mapBoundsSettling) return;
+        if (moveTimer) clearTimeout(moveTimer);
+        moveTimer = setTimeout(() => {
+          const b = _mapInstance.getBounds();
+          // Treat "showing whole US" as no filter to avoid spurious refetches
+          const span = b.getNorth() - b.getSouth();
+          if (span > 20) {
+            if (_mapBounds) { _mapBounds = null; _page = 0; _refreshListOnly(); }
+            return;
+          }
+          _mapBounds = {
+            north: b.getNorth().toFixed(4),
+            south: b.getSouth().toFixed(4),
+            east:  b.getEast().toFixed(4),
+            west:  b.getWest().toFixed(4),
+          };
+          _page = 0;
+          _refreshListOnly();
+        }, 300);
+      });
       if (status) {
         if (rows.length === 0) {
           status.innerHTML = `No markets in current filter.`;
@@ -2779,6 +2847,17 @@ Research this town now and produce the scoring JSON.`;
     const newVal = prompt('Source citation (URL or label):', existing ? (existing.source || '') : '');
     if (newVal == null) return;
     _saveSource(criterionId, newVal).then(() => _renderScorecard());
+  };
+  window.mrClearMapBounds = () => {
+    _mapBounds = null;
+    _page = 0;
+    // Reset map to CONUS view
+    if (_mapInstance) {
+      _mapBoundsSettling = true;
+      _mapInstance.setView([39.5, -98.35], 4);
+      setTimeout(() => { _mapBoundsSettling = false; }, 600);
+    }
+    _refreshListOnly();
   };
   window.mrToggleTier = (tier, on) => {
     if (on) _activeTiers.add(tier); else _activeTiers.delete(tier);
