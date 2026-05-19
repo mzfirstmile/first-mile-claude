@@ -87,10 +87,12 @@ function scoreTargetMin(value: number | null, targetMin: number): number {
 }
 
 async function fetchCensusForState(stateFips: string): Promise<Map<string, any> | null> {
+  const censusKey = Deno.env.get("CENSUS_API_KEY") || "";
+  const keyParam = censusKey ? `&key=${censusKey}` : "";
   const url =
     `https://api.census.gov/data/2022/acs/acs5` +
     `?get=NAME,B19001_001E,B19001_017E,B15003_001E,B15003_022E,B15003_023E,B15003_024E,B15003_025E` +
-    `&for=place:*&in=state:${stateFips}`;
+    `&for=place:*&in=state:${stateFips}${keyParam}`;
   try {
     const r = await fetch(url);
     if (!r.ok) {
