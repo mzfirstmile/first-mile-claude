@@ -36,9 +36,11 @@ const ALLOWED_RES = new Set(["20m", "5m", "500k"]);
 // filters reduce payload (CBSA: LSAD='M1' → MSAs only, drops Micropolitan).
 function buildSourceUrl(layer: string, _resolution: string): string {
   if (layer === "cbsa") {
-    return "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/CBSA/MapServer/0/query" +
-      "?where=" + encodeURIComponent("LSAD='M1'") +
-      "&outFields=" + encodeURIComponent("NAME,GEOID,LSAD") +
+    // CBSA MapServer layer 3 = "Metropolitan Statistical Areas" only
+    // (drops Micropolitan, CSAs, Metro Divisions, NECTAs). ~390 polygons.
+    return "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/CBSA/MapServer/3/query" +
+      "?where=1=1" +
+      "&outFields=" + encodeURIComponent("NAME,BASENAME,GEOID") +
       "&f=geojson&outSR=4326&returnGeometry=true&resultRecordCount=2000";
   }
   if (layer === "state") {
