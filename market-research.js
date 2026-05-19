@@ -1404,9 +1404,17 @@
         );
         _markerCluster.addLayer(marker);
       }
-      // Fit to data
+      // Fit to data — but default to the contiguous lower-48 even when HI/AK
+      // markers exist, so the map opens at a useful zoom. If the active filter
+      // only includes off-mainland towns (e.g. State=HI), fall back to fitting
+      // those so the dropdown still does its job.
       if (withCoords.length > 0) {
-        const bounds = L.latLngBounds(withCoords.map(m => [m.latitude, m.longitude]));
+        // Loose contiguous-US bbox (drops HI, AK, PR/territories)
+        const inCONUS = m => (m.latitude >= 24.5 && m.latitude <= 49.5
+                              && m.longitude >= -125 && m.longitude <= -66);
+        const conus = withCoords.filter(inCONUS);
+        const fitTo = conus.length > 0 ? conus : withCoords;
+        const bounds = L.latLngBounds(fitTo.map(m => [m.latitude, m.longitude]));
         _mapInstance.fitBounds(bounds, { padding: [30, 30] });
       }
       if (status) {
