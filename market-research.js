@@ -874,20 +874,6 @@
         <div class="mr-chat-output" id="mrChatOutput"></div>
       </div>
 
-      <!-- Phase coverage banner -->
-      <div class="mr-phase-banner">
-        <div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:240px;">
-            <div style="font-size:12px;font-weight:700;color:#0f172a;text-transform:uppercase;letter-spacing:0.5px;">Pipeline coverage</div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">
-              <span class="mr-phase-chip phase1">📊 Phase 1 · Census shortlist</span>
-              <span class="mr-phase-chip phase2">⚙️ Phase 2 · Demographics + Education + Company Concentrations (3 of 7 categories)</span>
-              <span class="mr-phase-chip phase3">🔬 Phase 3 · Governance / Economic Activity / Quality of Life / Transit · per-town on demand</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- List View -->
       <div class="mr-list" id="mrListView">
         <div class="mr-header">
