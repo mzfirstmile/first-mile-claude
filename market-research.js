@@ -1768,8 +1768,8 @@
               <th style="width:9%;text-align:right;">Population</th>
               <th style="width:10%;text-align:right;">Median HHI</th>
               <th style="width:12%;">Nearby Metro</th>
-              <th style="width:7%;text-align:center;">Score</th>
-              <th style="width:6%;text-align:center;">Tier</th>
+              <th style="width:9%;text-align:center;">${_viewType === 'office' ? '🏢 Office Score' : '🏠 Residential Score'}</th>
+              <th style="width:8%;text-align:center;">${_viewType === 'office' ? 'Office Tier' : 'Residential Tier'}</th>
               <th>Thesis</th>
             </tr>
           </thead>
