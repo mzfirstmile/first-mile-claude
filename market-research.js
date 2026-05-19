@@ -556,20 +556,72 @@
       #mrRoot .mr-tier-pill input { margin: 0; cursor: pointer; }
       #mrRoot .mr-tier-pill.active { background: #0ea5e9; border-color: #0284c7; color: #fff; font-weight: 600; }
       #mrRoot .mr-tier-pill.active:hover { background: #0284c7; }
-      /* Dual-input rows in Manage Criteria modal (Residential / Office) */
-      #mrRoot .mr-dual-row {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      /* Manage Criteria modal — tabbed redesign */
+      #mrRoot .mr-tab-row {
+        display: flex; align-items: center; gap: 8px;
+        margin-bottom: 12px; padding-bottom: 12px;
+        border-bottom: 1px solid #e2e8f0;
       }
-      #mrRoot .mr-target-row { grid-template-columns: 1fr 1fr 1fr 1fr; }
-      #mrRoot .mr-dual-cell {
-        display: flex; flex-direction: column; gap: 2px;
+      #mrRoot .mr-tab {
+        background: #f8fafc; border: 1px solid #e2e8f0;
+        padding: 8px 18px; font-size: 13px; font-weight: 600; color: #475569;
+        border-radius: 8px; cursor: pointer; transition: all .15s;
       }
-      #mrRoot .mr-dual-cell label {
-        font-size: 10px; color: #64748b; font-weight: 600;
+      #mrRoot .mr-tab:hover { background: #f1f5f9; }
+      #mrRoot .mr-tab.active {
+        background: #0ea5e9; color: #fff; border-color: #0284c7;
+        box-shadow: 0 1px 3px rgba(2,132,199,0.3);
       }
-      #mrRoot .mr-dual-cell input {
-        padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 6px;
-        font-size: 13px;
+      #mrRoot .mr-tab-total {
+        font-size: 12px; color: #64748b; padding-right: 6px;
+      }
+      #mrRoot .mr-modal-hint {
+        font-size: 12px; color: #64748b; margin: 0 0 14px 0;
+        background: #f8fafc; border: 1px solid #e2e8f0;
+        border-radius: 8px; padding: 8px 12px;
+      }
+      /* Criterion row inside category card */
+      #mrRoot .mr-crit-row {
+        padding: 10px 0; border-bottom: 1px solid #f1f5f9;
+      }
+      #mrRoot .mr-crit-row:last-child { border-bottom: none; }
+      #mrRoot .mr-crit-name {
+        font-size: 13px; font-weight: 600; color: #1e293b;
+        display: flex; align-items: center; gap: 6px;
+      }
+      #mrRoot .mr-crit-unit {
+        font-size: 10px; color: #94a3b8; font-weight: 500;
+        background: #f1f5f9; padding: 1px 6px; border-radius: 4px;
+      }
+      #mrRoot .mr-crit-desc {
+        font-size: 11px; color: #64748b; margin-top: 2px;
+        line-height: 1.4;
+      }
+      #mrRoot .mr-crit-inputs {
+        display: flex; align-items: center; gap: 6px; margin-top: 8px;
+        flex-wrap: wrap;
+      }
+      #mrRoot .mr-crit-inputs label {
+        font-size: 11px; font-weight: 600; color: #64748b;
+        margin-left: 4px;
+      }
+      #mrRoot .mr-crit-inputs label:first-child { margin-left: 0; }
+      #mrRoot .mr-crit-inputs input {
+        width: 100px; padding: 5px 8px; border: 1px solid #d1d5db;
+        border-radius: 6px; font-size: 13px;
+      }
+      #mrRoot .mr-crit-inputs input:focus {
+        outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 2px rgba(14,165,233,0.1);
+      }
+      #mrRoot .mr-other-hint-inline {
+        font-size: 10px; color: #7c3aed; font-weight: 600;
+        background: #f3e8ff; border: 1px solid #ddd6fe;
+        padding: 2px 6px; border-radius: 4px; cursor: help;
+      }
+      #mrRoot .mr-other-hint {
+        font-size: 10px; color: #7c3aed; font-weight: 600;
+        margin: -2px 0 6px 0; padding: 2px 8px;
+        background: #f3e8ff; border-radius: 4px; display: inline-block;
       }
       /* Asset-class toggle (Residential / Office) */
       #mrRoot .mr-asset-toggle {
@@ -2697,74 +2749,70 @@ Research this town now and produce the scoring JSON.`;
   // ── Criteria management ────────────────────────────────
   // Weights live on the 6 categories; criteria are read-only definitions
   // surfaced beneath each category panel.
+  // Track which view's inputs are shown in the modal. Defaults to the
+  // page-level asset class so users land in the view they were just browsing.
+  let _criteriaModalView = null;
   function _manageCriteria() {
-    const cats = _categories.slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-    const totalWeight = cats.reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
+    if (_criteriaModalView == null) _criteriaModalView = _viewType;
+    const tab = _criteriaModalView; // 'residential' | 'office'
+    const wCol = tab === 'office' ? 'weight_office' : 'weight';
+    const minCol = tab === 'office' ? 'target_min_office' : 'target_min';
+    const maxCol = tab === 'office' ? 'target_max_office' : 'target_max';
 
-    const totalWeightOffice = cats.reduce((s, c) => s + (parseFloat(c.weight_office) || 0), 0);
+    const cats = _categories.slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    const totalWeight = cats.reduce((s, c) => s + (parseFloat(c[wCol]) || 0), 0);
+    const tabIcon = tab === 'office' ? '🏢' : '🏠';
+    const tabLabel = tab === 'office' ? 'Office' : 'Residential';
+    const otherLabel = tab === 'office' ? 'Residential' : 'Office';
+    const accent = tab === 'office' ? '#7c3aed' : '#0ea5e9';
+
     const cards = cats.map(cat => {
       const subs = _criteria.filter(c => c.category_id === cat.id)
         .slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name));
-      const pctRes = totalWeight > 0 ? ((parseFloat(cat.weight) || 0) / totalWeight * 100).toFixed(0) : '—';
-      const pctOff = totalWeightOffice > 0 ? ((parseFloat(cat.weight_office) || 0) / totalWeightOffice * 100).toFixed(0) : '—';
+      const w = cat[wCol] != null ? cat[wCol] : (cat.weight != null ? cat.weight : 1);
+      const wOther = tab === 'office' ? cat.weight : cat.weight_office;
+      const pct = totalWeight > 0 ? ((parseFloat(w) || 0) / totalWeight * 100).toFixed(0) : '—';
+      const wDiff = wOther != null && String(wOther) !== String(w);
       return `
         <div class="mr-cat-card">
-          <div class="mr-cat-card-head" style="flex-direction:column;align-items:stretch;gap:8px;">
-            <div class="mr-cat-card-title">${_esc(cat.name)}</div>
-            <div class="mr-dual-row">
-              <div class="mr-dual-cell">
-                <label>🏠 Residential weight</label>
-                <input type="number" min="0" step="0.1" value="${cat.weight != null ? cat.weight : 1}"
-                       onchange="mrSaveCategoryWeight('${cat.id}', this.value, 'residential')">
-                <div class="mr-cat-weight-pct">${pctRes === '—' ? '' : pctRes + '%'}</div>
-              </div>
-              <div class="mr-dual-cell">
-                <label>🏢 Office weight</label>
-                <input type="number" min="0" step="0.1" value="${cat.weight_office != null ? cat.weight_office : (cat.weight != null ? cat.weight : 1)}"
-                       onchange="mrSaveCategoryWeight('${cat.id}', this.value, 'office')">
-                <div class="mr-cat-weight-pct">${pctOff === '—' ? '' : pctOff + '%'}</div>
-              </div>
+          <div class="mr-cat-card-head">
+            <div>
+              <div class="mr-cat-card-title">${_esc(cat.name)}</div>
+            </div>
+            <div class="mr-cat-weight-wrap">
+              <input type="number" min="0" step="0.1" value="${w}"
+                     onchange="mrSaveCategoryWeight('${cat.id}', this.value, '${tab}')">
+              <div class="mr-cat-weight-pct">${pct === '—' ? '' : pct + '%'}</div>
             </div>
           </div>
+          ${wDiff ? `<div class="mr-other-hint">${otherLabel}: ${wOther}</div>` : ''}
           <div class="mr-cat-card-body">
             ${subs.length === 0
               ? '<div style="font-size:11px;color:#94a3b8;padding:6px 0;">No sub-criteria.</div>'
               : subs.map(c => {
-                  const minR = c.target_min != null ? c.target_min : '';
-                  const minO = c.target_min_office != null ? c.target_min_office : (c.target_min != null ? c.target_min : '');
-                  const maxR = c.target_max != null ? c.target_max : '';
-                  const maxO = c.target_max_office != null ? c.target_max_office : (c.target_max != null ? c.target_max : '');
+                  const tMin = c[minCol] != null ? c[minCol] : (c.target_min != null ? c.target_min : '');
+                  const tMax = c[maxCol] != null ? c[maxCol] : (c.target_max != null ? c.target_max : '');
+                  const oMin = tab === 'office' ? c.target_min : c.target_min_office;
+                  const oMax = tab === 'office' ? c.target_max : c.target_max_office;
+                  const sameMin = oMin == null || String(oMin) === String(tMin);
+                  const sameMax = oMax == null || String(oMax) === String(tMax);
                   const unit = c.target_unit || '';
-                  const sameMin = String(minR) === String(minO);
-                  const sameMax = String(maxR) === String(maxO);
                   return `
-                    <div class="mr-cat-sub-row" style="flex-direction:column;align-items:stretch;gap:4px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
-                      <div class="mr-cat-sub-name" style="display:flex;align-items:center;gap:6px;">
-                        <span style="font-weight:600;">${_esc(c.name)}</span>
-                        ${unit ? `<span style="font-size:10px;color:#94a3b8;">${_esc(unit)}</span>` : ''}
+                    <div class="mr-crit-row">
+                      <div class="mr-crit-name">
+                        <span>${_esc(c.name)}</span>
+                        ${unit ? `<span class="mr-crit-unit">${_esc(unit)}</span>` : ''}
                       </div>
-                      ${c.description ? `<div class="mr-cat-sub-desc">${_esc(c.description)}</div>` : ''}
-                      <div class="mr-dual-row mr-target-row">
-                        <div class="mr-dual-cell">
-                          <label>Min — 🏠 Res ${sameMin ? '' : '<span style="color:#0ea5e9;">·diff</span>'}</label>
-                          <input type="number" step="any" value="${minR}" placeholder="—"
-                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, 'residential')">
-                        </div>
-                        <div class="mr-dual-cell">
-                          <label>Min — 🏢 Office</label>
-                          <input type="number" step="any" value="${minO}" placeholder="—"
-                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, 'office')">
-                        </div>
-                        <div class="mr-dual-cell">
-                          <label>Max — 🏠 Res ${sameMax ? '' : '<span style="color:#0ea5e9;">·diff</span>'}</label>
-                          <input type="number" step="any" value="${maxR}" placeholder="—"
-                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, 'residential')">
-                        </div>
-                        <div class="mr-dual-cell">
-                          <label>Max — 🏢 Office</label>
-                          <input type="number" step="any" value="${maxO}" placeholder="—"
-                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, 'office')">
-                        </div>
+                      ${c.description ? `<div class="mr-crit-desc">${_esc(c.description)}</div>` : ''}
+                      <div class="mr-crit-inputs">
+                        <label>Min</label>
+                        <input type="number" step="any" value="${tMin}" placeholder="—"
+                               onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, '${tab}')">
+                        ${!sameMin ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMin}">${otherLabel.charAt(0)}: ${oMin}</span>` : ''}
+                        <label>Max</label>
+                        <input type="number" step="any" value="${tMax}" placeholder="—"
+                               onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, '${tab}')">
+                        ${!sameMax ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMax}">${otherLabel.charAt(0)}: ${oMax}</span>` : ''}
                       </div>
                     </div>`;
                 }).join('')}
@@ -2772,17 +2820,58 @@ Research this town now and produce the scoring JSON.`;
         </div>`;
     }).join('');
 
-    _openModal('Manage Categories, Weights &amp; Criteria Targets', `
-      <p style="font-size:12px;color:#64748b;margin:0 0 14px 0;">
-        Weights live on the 7 high-level categories — separately for 🏠 Residential and 🏢 Office investment views.
-        Sub-criteria targets (Min / Max thresholds) also have per-view values.
-        Totals — Residential: <strong style="color:#0ea5e9;">${totalWeight.toFixed(1)}</strong> · Office: <strong style="color:#0ea5e9;">${totalWeightOffice.toFixed(1)}</strong>
+    const copyButton = tab === 'office'
+      ? `<button class="mr-btn" onclick="mrCopyResidentialToOffice()" title="Copy all Residential values into Office">📋 Copy Residential → Office</button>`
+      : '';
+
+    _openModal(`Manage Categories &amp; Criteria — ${tabIcon} ${tabLabel}`, `
+      <div class="mr-tab-row">
+        <button class="mr-tab ${tab === 'residential' ? 'active' : ''}" onclick="mrSetCriteriaModalView('residential')">🏠 Residential</button>
+        <button class="mr-tab ${tab === 'office' ? 'active' : ''}" onclick="mrSetCriteriaModalView('office')">🏢 Office</button>
+        <div style="flex:1;"></div>
+        <span class="mr-tab-total">Total weight: <strong style="color:${accent};">${totalWeight.toFixed(1)}</strong></span>
+        ${copyButton}
+      </div>
+      <p class="mr-modal-hint">
+        Editing <strong>${tabIcon} ${tabLabel}</strong> values. Switch to <strong>${otherLabel}</strong> at any time — your changes save instantly.
+        Where ${otherLabel} differs, you'll see a small hint chip next to the input.
       </p>
       <div class="mr-cat-grid">${cards}</div>
       <div class="mr-modal-actions">
-        <button class="mr-btn mr-btn-primary" onclick="mrCloseModal(); mrRecomputeAndRender()">Done</button>
+        <button class="mr-btn mr-btn-primary" onclick="mrCloseModal()">Done</button>
       </div>
     `, { wide: true });
+  }
+  // Switch the modal tab without closing — just re-render
+  function _setCriteriaModalView(v) {
+    if (!['residential', 'office'].includes(v)) return;
+    _criteriaModalView = v;
+    _manageCriteria();
+  }
+  // Bulk copy: residential → office for all categories + criteria
+  async function _copyResidentialToOffice() {
+    if (!confirm('Copy all Residential weights + target values into Office? This overwrites any Office-specific values.')) return;
+    try {
+      _toast('Copying Residential → Office…');
+      const sql = `
+        UPDATE market_research_categories SET weight_office = weight;
+        UPDATE market_research_criteria SET target_min_office = target_min, target_max_office = target_max;
+      `;
+      // Run as two separate statements (the wrapper appends ") t" so multi-statement
+      // doesn't run cleanly via the SELECT path — use the EXECUTE fallback)
+      const r = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+        method: 'POST',
+        headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sql }),
+      });
+      if (!r.ok) throw new Error('status ' + r.status);
+      // Refresh local cache
+      _categories.forEach(c => { c.weight_office = c.weight; });
+      _criteria.forEach(c => { c.target_min_office = c.target_min; c.target_max_office = c.target_max; });
+      _toast('✓ Copied Residential → Office');
+      _manageCriteria();
+      _scheduleRecomputeAll();
+    } catch (e) { _toast('Copy failed: ' + e.message, true); }
   }
   async function _saveCategoryWeight(id, rawValue, view = 'residential') {
     const weight = Math.max(0, parseFloat(rawValue) || 0);
@@ -3020,6 +3109,8 @@ Research this town now and produce the scoring JSON.`;
   window.mrSaveSource     = (c, v) => _saveSource(c, v);
   window.mrManageCriteria = ()    => _manageCriteria();
   window.mrSaveCriterionTarget = _saveCriterionTarget;
+  window.mrSetCriteriaModalView = _setCriteriaModalView;
+  window.mrCopyResidentialToOffice = _copyResidentialToOffice;
   window.mrAddCriterion   = ()    => _addCriterion();
   window.mrDeleteCriterion= (id, name) => _deleteCriterion(id, name);
   window.mrChangeSort     = ()    => _changeSort();
