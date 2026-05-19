@@ -580,6 +580,32 @@
         background: #f8fafc; border: 1px solid #e2e8f0;
         border-radius: 8px; padding: 8px 12px;
       }
+      /* Full-screen loader during heavy recompute */
+      #mrFullLoader {
+        position: fixed; inset: 0; z-index: 10000;
+        display: none; align-items: center; justify-content: center;
+      }
+      #mrFullLoader .mr-loader-backdrop {
+        position: absolute; inset: 0; background: rgba(15,23,42,0.55);
+        backdrop-filter: blur(2px);
+      }
+      #mrFullLoader .mr-loader-card {
+        position: relative; background: #fff; padding: 28px 36px;
+        border-radius: 14px; box-shadow: 0 16px 40px rgba(0,0,0,0.2);
+        text-align: center; max-width: 420px; min-width: 320px;
+      }
+      #mrFullLoader .mr-loader-spinner {
+        width: 36px; height: 36px; margin: 0 auto 14px auto;
+        border: 3px solid #e2e8f0; border-top-color: #0ea5e9;
+        border-radius: 50%; animation: mrSpin 0.7s linear infinite;
+      }
+      #mrFullLoader .mr-loader-msg {
+        font-size: 14px; font-weight: 600; color: #0f172a; line-height: 1.4;
+      }
+      #mrFullLoader .mr-loader-hint {
+        font-size: 12px; color: #64748b; margin-top: 8px;
+      }
+      @keyframes mrSpin { to { transform: rotate(360deg); } }
       /* Stacked weight bar (Manage Criteria modal) */
       #mrRoot .mr-wbar-label {
         font-size: 10px; color: #94a3b8; font-weight: 600;
@@ -2920,9 +2946,74 @@ Research this town now and produce the scoring JSON.`;
       </p>
       <div class="mr-cat-grid">${cards}</div>
       <div class="mr-modal-actions">
-        <button class="mr-btn mr-btn-primary" onclick="mrCloseModal()">Done</button>
+        <button class="mr-btn mr-btn-primary" onclick="mrFinishCriteriaEdit()">Done</button>
       </div>
     `, { wide: true });
+  }
+  // Called when user clicks Done in the Manage Criteria modal. If they edited
+  // anything, fire the dual-composite recompute behind a full-screen loader.
+  async function _finishCriteriaEdit() {
+    if (!_criteriaDirty) { _closeModal(); return; }
+    _criteriaDirty = false;
+    _closeModal();
+    _showFullScreenLoader('Recalculating all market scores based on adjusted criteria and weights…');
+    try {
+      const sql = `WITH cat_means AS (
+        SELECT s.market_id, c.category_id, AVG(s.value_numeric) AS mean_res, AVG(s.value_numeric_office) AS mean_off
+        FROM market_research_scores s JOIN market_research_criteria c ON c.id = s.criterion_id
+        WHERE c.category_id IS NOT NULL GROUP BY s.market_id, c.category_id
+      ),
+      composites AS (
+        SELECT cm.market_id,
+          SUM(cm.mean_res * cat.weight) / NULLIF(SUM(CASE WHEN cm.mean_res IS NOT NULL THEN cat.weight ELSE 0 END), 0) AS comp_res,
+          SUM(cm.mean_off * cat.weight_office) / NULLIF(SUM(CASE WHEN cm.mean_off IS NOT NULL THEN cat.weight_office ELSE 0 END), 0) AS comp_off
+        FROM cat_means cm JOIN market_research_categories cat ON cat.id = cm.category_id
+        GROUP BY cm.market_id
+      )
+      UPDATE market_research_markets m SET
+        score = ROUND(c.comp_res::numeric, 1),
+        tier  = CASE WHEN c.comp_res >= 8.5 THEN 1 WHEN c.comp_res >= 7.0 THEN 2 WHEN c.comp_res >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
+        office_score = ROUND(c.comp_off::numeric, 1),
+        office_tier  = CASE WHEN c.comp_off >= 8.5 THEN 1 WHEN c.comp_off >= 7.0 THEN 2 WHEN c.comp_off >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
+        updated_at = now()
+      FROM composites c WHERE m.id = c.market_id`;
+      const r = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+        method: 'POST',
+        headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sql }),
+      });
+      if (!r.ok) throw new Error('status ' + r.status);
+      try { await _loadData(); _renderGrid(); } catch {}
+      if (_currentMarket) {
+        try { await _loadScoresForMarket(_currentMarket.id); _renderDetail(); } catch {}
+      }
+      _toast('✓ All markets re-scored');
+    } catch (e) {
+      _toast('Recompute failed: ' + e.message, true);
+    } finally {
+      _hideFullScreenLoader();
+    }
+  }
+  function _showFullScreenLoader(msg) {
+    let el = document.getElementById('mrFullLoader');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'mrFullLoader';
+      el.innerHTML = `
+        <div class="mr-loader-backdrop"></div>
+        <div class="mr-loader-card">
+          <div class="mr-loader-spinner"></div>
+          <div class="mr-loader-msg" id="mrLoaderMsg"></div>
+          <div class="mr-loader-hint">This usually takes 5-15 seconds</div>
+        </div>`;
+      document.body.appendChild(el);
+    }
+    document.getElementById('mrLoaderMsg').textContent = msg;
+    el.style.display = 'flex';
+  }
+  function _hideFullScreenLoader() {
+    const el = document.getElementById('mrFullLoader');
+    if (el) el.style.display = 'none';
   }
   // Switch the modal tab without closing — just re-render
   function _setCriteriaModalView(v) {
@@ -2962,6 +3053,10 @@ Research this town now and produce the scoring JSON.`;
     clearTimeout(_modalRerenderTimer);
     _modalRerenderTimer = setTimeout(() => { _manageCriteria(); }, delay);
   }
+  // Tracks whether the user edited anything during this modal session.
+  // Recompute is deferred until they click Done (or close the modal) so
+  // we don't re-score the whole universe on every keystroke.
+  let _criteriaDirty = false;
   async function _saveCategoryWeight(id, rawValue, view = 'residential') {
     const weight = Math.max(0, parseFloat(rawValue) || 0);
     const col = view === 'office' ? 'weight_office' : 'weight';
@@ -2970,9 +3065,9 @@ Research this town now and produce the scoring JSON.`;
       const cat = _categories.find(c => c.id === id);
       if (cat) cat[col] = weight;
       _toast(`${cat ? cat.name : 'Category'} ${view} weight → ${weight}`);
+      _criteriaDirty = true;
       _scheduleModalRerender();
       if (_currentMarket) _renderScorecard();
-      _scheduleRecomputeAll();
     } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
   async function _saveCriterionTarget(id, kind, rawValue, view = 'residential') {
@@ -2983,8 +3078,8 @@ Research this town now and produce the scoring JSON.`;
       const c = _criteria.find(x => x.id === id);
       if (c) c[col] = v;
       _toast(`${c ? c.name : 'Criterion'} ${kind} (${view}) → ${v == null ? 'cleared' : v}`);
+      _criteriaDirty = true;
       _scheduleModalRerender();
-      _scheduleRecomputeAll();
     } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
   async function _saveCriterionLabel(id, rawValue, view = 'residential') {
@@ -3212,6 +3307,7 @@ Research this town now and produce the scoring JSON.`;
   window.mrSaveCriterionLabel = _saveCriterionLabel;
   window.mrSetCriteriaModalView = _setCriteriaModalView;
   window.mrCopyResidentialToOffice = _copyResidentialToOffice;
+  window.mrFinishCriteriaEdit = _finishCriteriaEdit;
   window.mrScrollToCat = (catId) => {
     const el = document.getElementById('mr-cat-' + catId);
     if (!el) return;
