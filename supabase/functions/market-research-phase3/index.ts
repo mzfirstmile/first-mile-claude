@@ -221,9 +221,15 @@ async function processOne(sb: any, apiKey: string, system: string, m: Market, cr
     });
     scored++;
   }
-  // Wipe old phase3 rows for this market
-  await sb.from("market_research_scores").delete().eq("market_id", m.id).eq("updated_by", "phase3_claude");
+  // Wipe ALL existing rows for the criteria we're about to write — not just
+  // phase3_claude. Phase 2 commute uses 'phase2_commute' for transit criteria
+  // and would otherwise collide with the UNIQUE(market_id, criterion_id) key.
   if (scoreRows.length > 0) {
+    const critIds = [...new Set(scoreRows.map((r) => r.criterion_id))];
+    await sb.from("market_research_scores")
+      .delete()
+      .eq("market_id", m.id)
+      .in("criterion_id", critIds);
     const { error } = await sb.from("market_research_scores").insert(scoreRows);
     if (error) throw new Error(`scores insert: ${error.message}`);
   }
