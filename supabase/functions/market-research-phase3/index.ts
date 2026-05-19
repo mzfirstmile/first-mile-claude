@@ -188,9 +188,10 @@ async function recomputeMarketComposite(sb: any, marketId: string) {
   if (totalWeight === 0) return null;
   const composite = weightedSum / totalWeight;
   const score = Math.round(composite * 10) / 10;
-  // Tier bands (unified across recompute paths) — T1 is tight at ≥8.5 so it
-  // stays selective even after Phase 2 Commute lifted metro-adjacent towns.
-  const tier = score >= 8.5 ? 1 : score >= 6.5 ? 2 : score >= 4.5 ? 3 : 4;
+  // Tier bands (unified across recompute paths, updated 2026-05-19):
+  // T3 widened to 4.0-6.9 to accommodate the broader $100k+ HHI shortlist.
+  // Mirror in market-research.js _recomputeMarketScore + phase2 edge fn.
+  const tier = score >= 8.5 ? 1 : score >= 7.0 ? 2 : score >= 4.0 ? 3 : 4;
   await sb.from("market_research_markets").update({ score, tier }).eq("id", marketId);
   return { score, tier, categories_with_data: byCat.size };
 }

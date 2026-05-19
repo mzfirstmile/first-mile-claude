@@ -918,9 +918,6 @@
               <button class="mr-geo-clear" id="mrGeoClear" onclick="mrClearGeoFilters()" style="display:none;" title="Clear state + metro">× Clear</button>
             </div>
           </div>
-          <div class="mr-shortlist-criteria" id="mrShortlistCriteria">
-            Scored universe: <strong>1,865</strong> towns scored across our 13 Phase 2 sub-criteria · Filter by tier above to narrow the list.
-          </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select class="mr-sort" id="mrSort" onchange="mrChangeSort(this.value)">
