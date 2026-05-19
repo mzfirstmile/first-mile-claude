@@ -22,6 +22,10 @@
   let _currentUser = null;
   let _activeFilter = 'phase_shortlisted'; // default to Phase 1 shortlist
   let _searchQuery = '';
+  let _activeState = '';   // '' = any state ; otherwise 2-letter state code (NJ, NY, ...)
+  let _activeMetro = '';   // '' = any metro ; otherwise nearest_top50_city value
+  let _stateOptions = [];  // cached distinct states ['CA','NJ',...]
+  let _metroOptions = [];  // cached distinct nearest_top50_city values
   let _mapInstance = null;
   let _markerCluster = null;
   let _mapLeafletLoaded = false;
@@ -543,6 +547,31 @@
       #mrRoot .mr-tier-pill.active { background: #0ea5e9; border-color: #0284c7; color: #fff; font-weight: 600; }
       #mrRoot .mr-tier-pill.active:hover { background: #0284c7; }
 
+      /* State + Metro geographic dropdown filters */
+      #mrRoot .mr-geo-filter {
+        display: inline-flex; align-items: center; gap: 8px; margin-left: 8px;
+        padding-left: 12px; border-left: 1px solid #e2e8f0;
+      }
+      #mrRoot .mr-geo-select {
+        font-size: 12px; padding: 5px 26px 5px 10px;
+        border: 1px solid #cbd5e1; border-radius: 6px; background: #fff;
+        color: #0f172a; cursor: pointer; min-width: 140px;
+        appearance: none; -webkit-appearance: none; -moz-appearance: none;
+        background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364748b' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 9px center;
+        transition: border-color .12s, box-shadow .12s;
+      }
+      #mrRoot .mr-geo-select:hover { border-color: #94a3b8; }
+      #mrRoot .mr-geo-select:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 3px rgba(14,165,233,.15); }
+      #mrRoot .mr-geo-select.is-active {
+        background-color: #ecfeff; border-color: #0ea5e9; color: #0c4a6e; font-weight: 600;
+      }
+      #mrRoot .mr-geo-clear {
+        font-size: 11px; padding: 5px 10px; border: 1px solid #fecaca;
+        border-radius: 6px; background: #fef2f2; color: #b91c1c; cursor: pointer;
+      }
+      #mrRoot .mr-geo-clear:hover { background: #fee2e2; }
+
       /* Split list+map layout — give the list the lion's share so the
          Thesis column doesn't get clipped on standard 14"/15" laptops. */
       #mrRoot .mr-split {
@@ -894,6 +923,15 @@
               <label class="mr-tier-pill" data-tier="3"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
               <label class="mr-tier-pill" data-tier="4"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</label>
             </div>
+            <div class="mr-geo-filter">
+              <select id="mrStateFilter" class="mr-geo-select" onchange="mrSetGeoFilter('state', this.value)">
+                <option value="">All states</option>
+              </select>
+              <select id="mrMetroFilter" class="mr-geo-select" onchange="mrSetGeoFilter('metro', this.value)">
+                <option value="">All nearby metros</option>
+              </select>
+              <button class="mr-geo-clear" id="mrGeoClear" onclick="mrClearGeoFilters()" style="display:none;" title="Clear state + metro">× Clear</button>
+            </div>
           </div>
           <div class="mr-shortlist-criteria" id="mrShortlistCriteria">
             Shortlist criteria: Town population <strong>4,000–75,000</strong> · Median Household Income <strong id="mrHHIThresholdLabel">≥ $130,000</strong>
@@ -995,30 +1033,57 @@
     const parts = [];
     const q = (_searchQuery || '').trim();
     const isSearching = q.length > 0;
-    // Search always spans All markets — ignore active filter + tier pills.
-    if (!isSearching) {
+    const hasTierFilter = _activeTiers && _activeTiers.size > 0;
+    const hasGeoFilter  = Boolean(_activeState || _activeMetro);
+    // Any of: search / tier / state / metro → span All markets (ignore the
+    // Shortlist/Favorites chip so user can find e.g. a T4 town outside the
+    // shortlist or every Texas town in the universe).
+    const spanAll = isSearching || hasTierFilter || hasGeoFilter;
+    if (!spanAll) {
       if (_activeFilter === 'phase_shortlisted')   parts.push('phase=eq.shortlisted');
       else if (_activeFilter === 'favorites')      parts.push('is_favorite=eq.true');
       // 'all' = no filter
-      if (_activeTiers && _activeTiers.size > 0) {
-        const tiers = Array.from(_activeTiers).sort().join(',');
-        parts.push(`tier=in.(${tiers})`);
-      }
+    } else if (_activeFilter === 'favorites') {
+      // Favorites should still constrain even when other filters are on —
+      // user explicitly opted into it. Shortlist chip however is implicit.
+      parts.push('is_favorite=eq.true');
+    }
+    if (hasTierFilter) {
+      const tiers = Array.from(_activeTiers).sort().join(',');
+      parts.push(`tier=in.(${tiers})`);
     }
     if (isSearching) {
       const safe = q.replace(/[%*]/g, '');
       const enc = encodeURIComponent('*' + safe + '*');
       parts.push(`or=(name.ilike.${enc},state.ilike.${enc})`);
     }
+    if (_activeState) {
+      parts.push(`state=eq.${encodeURIComponent(_activeState)}`);
+    }
+    if (_activeMetro) {
+      parts.push(`nearest_top50_city=eq.${encodeURIComponent(_activeMetro)}`);
+    }
     return parts;
   }
+
+  // Geographic filter is "active" when at least one of state/metro is set.
+  // Toggles sort order from default (HHI desc) to Score desc (per user spec).
+  function _geoFilterActive() { return Boolean(_activeState || _activeMetro); }
 
   // Single source-of-truth fetch for the active filter + search + page.
   // Returns total count via Content-Range header (Prefer: count=exact).
   async function _fetchPage() {
     const parts = _buildFilterQuery();
     parts.push('select=*');
-    parts.push('order=median_household_income.desc.nullslast,name.asc');
+    // When any geo (state/metro) or tier filter is active, auto-sort by
+    // composite Score descending so the user immediately sees the best
+    // candidates within the slice. Otherwise keep the default HHI sort.
+    const sortByScore = _geoFilterActive() || (_activeTiers && _activeTiers.size > 0);
+    if (sortByScore) {
+      parts.push('order=score.desc.nullslast,median_household_income.desc.nullslast,name.asc');
+    } else {
+      parts.push('order=median_household_income.desc.nullslast,name.asc');
+    }
     const offset = _page * PAGE_SIZE;
     parts.push(`offset=${offset}`);
     parts.push(`limit=${PAGE_SIZE}`);
@@ -1092,6 +1157,7 @@
     _totalForCurrentFilter = paged.total;
     _loadFilterCounts();
     _loadShortlistForChatbot();
+    _loadGeoFilterOptions();
   }
 
   // Load scores for a specific market (used by detail view).
@@ -2741,6 +2807,87 @@ Research this town now and produce the scoring JSON.`;
     if (lbl) lbl.classList.toggle('active', on);
     _page = 0; _refreshPage();
   };
+  // ── State + Metro geographic filters ──
+  window.mrSetGeoFilter = (kind, value) => {
+    if (kind === 'state') _activeState = value || '';
+    else if (kind === 'metro') _activeMetro = value || '';
+    _syncGeoUI();
+    _page = 0; _refreshPage();
+  };
+  window.mrClearGeoFilters = () => {
+    _activeState = ''; _activeMetro = '';
+    const s = document.getElementById('mrStateFilter');
+    const m = document.getElementById('mrMetroFilter');
+    if (s) s.value = '';
+    if (m) m.value = '';
+    _syncGeoUI();
+    _page = 0; _refreshPage();
+  };
+
+  // Toggle the active styling on the dropdowns + show/hide Clear button.
+  function _syncGeoUI() {
+    const s = document.getElementById('mrStateFilter');
+    const m = document.getElementById('mrMetroFilter');
+    const c = document.getElementById('mrGeoClear');
+    if (s) s.classList.toggle('is-active', Boolean(_activeState));
+    if (m) m.classList.toggle('is-active', Boolean(_activeMetro));
+    if (c) c.style.display = (_activeState || _activeMetro) ? '' : 'none';
+  }
+
+  // Populate the State + Metro <select> dropdowns from distinct DB values.
+  // Cheap: 805 shortlist + 25k universe → we only pull distinct (state) and
+  // distinct (nearest_top50_city) once per session.
+  async function _loadGeoFilterOptions() {
+    if (_stateOptions.length && _metroOptions.length) {
+      _renderGeoOptions(); return;
+    }
+    try {
+      // Pull a wide slice of just (state, nearest_top50_city) — small payload.
+      const r = await fetch(
+        `${window.SUPABASE_URL}/rest/v1/market_research_markets?` +
+        `select=state,nearest_top50_city&limit=30000`,
+        {
+          headers: {
+            apikey: window.SUPABASE_KEY,
+            Authorization: 'Bearer ' + window.SUPABASE_KEY,
+          },
+        }
+      );
+      if (!r.ok) throw new Error(`Supabase ${r.status}`);
+      const rows = await r.json();
+      const stateSet = new Set();
+      const metroSet = new Set();
+      for (const row of rows) {
+        if (row.state) stateSet.add(row.state);
+        if (row.nearest_top50_city) metroSet.add(row.nearest_top50_city);
+      }
+      _stateOptions = Array.from(stateSet).sort();
+      _metroOptions = Array.from(metroSet).sort();
+    } catch (e) {
+      console.warn('[geo-filters] could not load options:', e);
+      _stateOptions = [];
+      _metroOptions = [];
+    }
+    _renderGeoOptions();
+  }
+
+  function _renderGeoOptions() {
+    const s = document.getElementById('mrStateFilter');
+    const m = document.getElementById('mrMetroFilter');
+    if (s) {
+      const cur = s.value;
+      s.innerHTML = '<option value="">All states</option>'
+        + _stateOptions.map(st => `<option value="${st}">${st}</option>`).join('');
+      s.value = cur;
+    }
+    if (m) {
+      const cur = m.value;
+      m.innerHTML = '<option value="">All nearby metros</option>'
+        + _metroOptions.map(mt => `<option value="${mt}">${mt}</option>`).join('');
+      m.value = cur;
+    }
+    _syncGeoUI();
+  }
 
   // ── Main init ──────────────────────────────────────────
   window.marketResearchInit = async function () {
