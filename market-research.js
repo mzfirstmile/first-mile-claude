@@ -580,6 +580,36 @@
         background: #f8fafc; border: 1px solid #e2e8f0;
         border-radius: 8px; padding: 8px 12px;
       }
+      /* Stacked weight bar (Manage Criteria modal) */
+      #mrRoot .mr-wbar-label {
+        font-size: 10px; color: #94a3b8; font-weight: 600;
+        text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;
+      }
+      #mrRoot .mr-wbar {
+        display: flex; width: 100%; height: 28px;
+        border-radius: 8px; overflow: hidden;
+        border: 1px solid #e2e8f0;
+      }
+      #mrRoot .mr-wbar-seg {
+        display: flex; align-items: center; justify-content: center;
+        font-size: 11px; font-weight: 600; color: #fff;
+        cursor: pointer; transition: opacity .15s, filter .15s;
+        min-width: 0;
+      }
+      #mrRoot .mr-wbar-seg:hover { filter: brightness(1.1); }
+      #mrRoot .mr-wbar-legend {
+        display: flex; flex-wrap: wrap; gap: 6px 14px;
+        margin: 10px 0 16px 0; font-size: 11px; color: #64748b;
+      }
+      #mrRoot .mr-wbar-legend-item {
+        display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+        transition: color .15s;
+      }
+      #mrRoot .mr-wbar-legend-item:hover { color: #0ea5e9; }
+      #mrRoot .mr-wbar-swatch {
+        width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+      }
+      #mrRoot .mr-wbar-legend-val { color: #94a3b8; font-weight: 500; }
       /* Criterion row inside category card */
       #mrRoot .mr-crit-row {
         padding: 10px 0; border-bottom: 1px solid #f1f5f9;
@@ -2752,6 +2782,22 @@ Research this town now and produce the scoring JSON.`;
   // Track which view's inputs are shown in the modal. Defaults to the
   // page-level asset class so users land in the view they were just browsing.
   let _criteriaModalView = null;
+  // Stable color palette for the 7 categories (used by the weight bar).
+  // Keyed by category name so adding/removing/reordering categories doesn't shift.
+  const _CAT_COLORS = {
+    'Demographics':              '#888780',
+    'Company Concentrations':    '#7F77DD',
+    'Governance & Barriers to Entry': '#D4537E',
+    'Transit & Access':          '#1D9E75',
+    'Economic Activity':         '#D85A30',
+    'Education':                 '#BA7517',
+    'Quality of Life':           '#378ADD',
+  };
+  const _CAT_FALLBACK_COLORS = ['#94a3b8', '#a78bfa', '#f472b6', '#5eead4', '#fb923c', '#fbbf24', '#60a5fa'];
+  function _catColor(name, idx) {
+    return _CAT_COLORS[name] || _CAT_FALLBACK_COLORS[idx % _CAT_FALLBACK_COLORS.length];
+  }
+
   function _manageCriteria() {
     if (_criteriaModalView == null) _criteriaModalView = _viewType;
     const tab = _criteriaModalView; // 'residential' | 'office'
@@ -2766,15 +2812,34 @@ Research this town now and produce the scoring JSON.`;
     const otherLabel = tab === 'office' ? 'Residential' : 'Office';
     const accent = tab === 'office' ? '#7c3aed' : '#0ea5e9';
 
-    const cards = cats.map(cat => {
+    // Build the stacked weight bar (segments + legend)
+    const barSegs = cats.map((cat, i) => {
+      const w = parseFloat(cat[wCol]) || 0;
+      const pct = totalWeight > 0 ? (w / totalWeight) * 100 : 0;
+      const color = _catColor(cat.name, i);
+      const label = pct >= 7 ? Math.round(pct) + '%' : '';
+      return `<div class="mr-wbar-seg" style="background:${color};width:${pct}%;" onclick="mrScrollToCat('${cat.id}')" title="${_esc(cat.name)} · weight ${w.toFixed(1)} · ${pct.toFixed(0)}%">${label}</div>`;
+    }).join('');
+    const legend = cats.map((cat, i) => {
+      const w = parseFloat(cat[wCol]) || 0;
+      const color = _catColor(cat.name, i);
+      return `<span class="mr-wbar-legend-item" onclick="mrScrollToCat('${cat.id}')"><span class="mr-wbar-swatch" style="background:${color};"></span>${_esc(cat.name)} <span class="mr-wbar-legend-val">· ${w.toFixed(1)}</span></span>`;
+    }).join('');
+    const weightBar = `
+      <div class="mr-wbar-label">Weight distribution · click any segment to jump to that category</div>
+      <div class="mr-wbar">${barSegs}</div>
+      <div class="mr-wbar-legend">${legend}</div>`;
+
+    const cards = cats.map((cat, i) => {
       const subs = _criteria.filter(c => c.category_id === cat.id)
         .slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name));
       const w = cat[wCol] != null ? cat[wCol] : (cat.weight != null ? cat.weight : 1);
       const wOther = tab === 'office' ? cat.weight : cat.weight_office;
       const pct = totalWeight > 0 ? ((parseFloat(w) || 0) / totalWeight * 100).toFixed(0) : '—';
       const wDiff = wOther != null && String(wOther) !== String(w);
+      const color = _catColor(cat.name, i);
       return `
-        <div class="mr-cat-card">
+        <div class="mr-cat-card" id="mr-cat-${cat.id}" style="border-top:3px solid ${color};">
           <div class="mr-cat-card-head">
             <div>
               <div class="mr-cat-card-title">${_esc(cat.name)}</div>
@@ -2832,6 +2897,7 @@ Research this town now and produce the scoring JSON.`;
         <span class="mr-tab-total">Total weight: <strong style="color:${accent};">${totalWeight.toFixed(1)}</strong></span>
         ${copyButton}
       </div>
+      ${weightBar}
       <p class="mr-modal-hint">
         Editing <strong>${tabIcon} ${tabLabel}</strong> values. Switch to <strong>${otherLabel}</strong> at any time — your changes save instantly.
         Where ${otherLabel} differs, you'll see a small hint chip next to the input.
@@ -3111,6 +3177,15 @@ Research this town now and produce the scoring JSON.`;
   window.mrSaveCriterionTarget = _saveCriterionTarget;
   window.mrSetCriteriaModalView = _setCriteriaModalView;
   window.mrCopyResidentialToOffice = _copyResidentialToOffice;
+  window.mrScrollToCat = (catId) => {
+    const el = document.getElementById('mr-cat-' + catId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    // Brief flash to confirm landing
+    el.style.transition = 'box-shadow 0.2s';
+    el.style.boxShadow = '0 0 0 3px rgba(14,165,233,0.35)';
+    setTimeout(() => { el.style.boxShadow = ''; }, 900);
+  };
   window.mrAddCriterion   = ()    => _addCriterion();
   window.mrDeleteCriterion= (id, name) => _deleteCriterion(id, name);
   window.mrChangeSort     = ()    => _changeSort();
