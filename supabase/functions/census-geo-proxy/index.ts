@@ -31,8 +31,25 @@ const corsHeaders = {
 const ALLOWED_LAYERS = new Set(["cbsa", "state", "county"]);
 const ALLOWED_RES = new Set(["20m", "5m", "500k"]);
 
-function buildSourceUrl(layer: string, resolution: string): string {
-  return `https://raw.githubusercontent.com/loganpowell/census-geojson/master/GeoJSON/${resolution}/2023/${layer}.geojson`;
+// Maps logical layer name → Census TIGERweb ArcGIS REST endpoint.
+// Each endpoint serves GeoJSON when you append &f=geojson. Optional where=
+// filters reduce payload (CBSA: LSAD='M1' → MSAs only, drops Micropolitan).
+function buildSourceUrl(layer: string, _resolution: string): string {
+  if (layer === "cbsa") {
+    return "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/CBSA/MapServer/0/query" +
+      "?where=" + encodeURIComponent("LSAD='M1'") +
+      "&outFields=" + encodeURIComponent("NAME,GEOID,LSAD") +
+      "&f=geojson&outSR=4326&returnGeometry=true&resultRecordCount=2000";
+  }
+  if (layer === "state") {
+    return "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/0/query" +
+      "?where=1=1&outFields=NAME,STUSAB,GEOID&f=geojson&outSR=4326&returnGeometry=true&resultRecordCount=100";
+  }
+  if (layer === "county") {
+    return "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query" +
+      "?where=1=1&outFields=NAME,GEOID&f=geojson&outSR=4326&returnGeometry=true&resultRecordCount=5000";
+  }
+  return "";
 }
 
 serve(async (req: Request) => {

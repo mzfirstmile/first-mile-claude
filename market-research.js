@@ -1269,9 +1269,12 @@
     const firstIdx = total ? (_page * PAGE_SIZE) + 1 : 0;
     const lastIdx = Math.min(total, (_page + 1) * PAGE_SIZE);
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const boundsPill = _mapBounds
+      ? ` <span style="color:#0369a1;font-weight:600;">· Filtered by map view</span> <button onclick="mrClearMapBounds()" style="margin-left:8px;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
+      : '';
     const header = `
       <div class="mr-page-header">
-        <div class="mr-page-count">Showing <strong>${firstIdx.toLocaleString()}–${lastIdx.toLocaleString()}</strong> of <strong>${total.toLocaleString()}</strong></div>
+        <div class="mr-page-count">Showing <strong>${firstIdx.toLocaleString()}–${lastIdx.toLocaleString()}</strong> of <strong>${total.toLocaleString()}</strong>${boundsPill}</div>
       </div>`;
     let body, pager = '';
     if (_viewMode === 'map') {
@@ -1372,25 +1375,17 @@
       _mapInstance.addLayer(_markerCluster);
 
       // MSA boundary overlay — lazy-load once per session via Supabase proxy.
-      // Rendered BELOW the markers (added first, so cluster layer paints on top).
+      // Proxy already filters to LSAD='M1' (MSAs only — drops Micropolitan).
       (async () => {
         try {
           if (!_msaGeoJson) {
-            const r = await fetch(`${window.SUPABASE_URL}/functions/v1/census-geo-proxy?layer=cbsa&resolution=20m`, {
+            const r = await fetch(`${window.SUPABASE_URL}/functions/v1/census-geo-proxy?layer=cbsa`, {
               headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY }
             });
             if (!r.ok) throw new Error('MSA fetch ' + r.status);
             _msaGeoJson = await r.json();
-            // Filter to only Metropolitan Statistical Areas (drop Micropolitan).
-            // CBSA LSAD code "M1" = MSA, "M2" = Micropolitan.
-            if (_msaGeoJson.features) {
-              const before = _msaGeoJson.features.length;
-              _msaGeoJson.features = _msaGeoJson.features.filter(f => {
-                const lsad = (f.properties && (f.properties.LSAD || f.properties.lsad)) || '';
-                return lsad === 'M1' || lsad === '' || lsad === 'M0';
-              });
-              console.log(`[mr] MSA layer: ${_msaGeoJson.features.length}/${before} features (MSAs only)`);
-            }
+            const n = (_msaGeoJson.features || []).length;
+            console.log(`[mr] MSA layer loaded: ${n} polygons`);
           }
           if (_msaLayer && _mapInstance) { try { _mapInstance.removeLayer(_msaLayer); } catch(_) {} }
           _msaLayer = L.geoJSON(_msaGeoJson, {
@@ -1402,7 +1397,6 @@
             },
           });
           _msaLayer.addTo(_mapInstance);
-          // Ensure markers sit on top
           if (_markerCluster) _markerCluster.bringToFront && _markerCluster.bringToFront();
         } catch (e) {
           console.warn('[mr] MSA overlay failed:', e.message || e);
