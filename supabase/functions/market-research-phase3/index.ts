@@ -286,12 +286,23 @@ serve(async (req: Request) => {
       }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 1. Load criteria
-    const { data: criteria, error: critErr } = await sb
-      .from("market_research_criteria")
-      .select("*")
-      .in("category", PHASE3_CATEGORIES)
-      .eq("is_active", true);
+    // 1. Load criteria — Phase 3 categories + 3 specific Education criteria
+    // (Top 500 Schools, Math/Reading, AP Participation) that Census can't reach.
+    const EDU_EXTRAS = ["Top 500 National Schools", "Math / Reading Proficiency", "AP Participation"];
+    const { data: byCat, error: catErr } = await sb
+      .from("market_research_criteria").select("*")
+      .in("category", PHASE3_CATEGORIES).eq("is_active", true);
+    if (catErr) throw catErr;
+    const { data: byName, error: nameErr } = await sb
+      .from("market_research_criteria").select("*")
+      .in("name", EDU_EXTRAS).eq("is_active", true);
+    if (nameErr) throw nameErr;
+    const seen = new Set<string>();
+    const criteria: any[] = [];
+    for (const c of [...(byCat || []), ...(byName || [])]) {
+      if (!seen.has(c.id)) { seen.add(c.id); criteria.push(c); }
+    }
+    const critErr = null;
     if (critErr) throw critErr;
     const critByName = new Map<string, Criterion>(
       (criteria || []).map((c: any) => [c.name.toLowerCase().trim(), c]),
