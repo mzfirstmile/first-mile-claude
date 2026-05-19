@@ -647,6 +647,21 @@
         padding: 10px 0; border-bottom: 1px solid #f1f5f9;
       }
       #mrRoot .mr-crit-row:last-child { border-bottom: none; }
+      #mrRoot .mr-crit-row-disabled {
+        opacity: 0.45; background: #fafafa;
+      }
+      #mrRoot .mr-crit-row-disabled .mr-crit-inputs,
+      #mrRoot .mr-crit-row-disabled .mr-crit-desc {
+        opacity: 0.6;
+      }
+      #mrRoot .mr-crit-toggle {
+        display: inline-flex; align-items: center; gap: 6px;
+        cursor: pointer; user-select: none;
+      }
+      #mrRoot .mr-crit-toggle input[type="checkbox"] {
+        width: 14px; height: 14px; cursor: pointer; margin: 0;
+        accent-color: #0ea5e9;
+      }
       #mrRoot .mr-crit-name {
         font-size: 13px; font-weight: 600; color: #1e293b;
         display: flex; align-items: center; gap: 6px;
@@ -1788,7 +1803,10 @@
               const pop = m.population ? parseInt(m.population).toLocaleString() : '—';
               const hhi = m.median_household_income ? '$' + parseInt(m.median_household_income).toLocaleString() : '—';
               const metro = m.nearest_top50_city || '—';
-              const rank = startIdx + idx + 1;
+              // Persistent global rank — survives search/filter so user always
+              // sees the market's true ranking, not its position in the result list.
+              const mRank = _viewType === 'office' ? m.rank_office : m.rank_residential;
+              const rank = mRank != null ? mRank : (startIdx + idx + 1);
               return `
                 <tr onclick="mrOpenMarket('${m.id}')">
                   <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:#64748b;font-size:12px;">${rank}</td>
@@ -2236,10 +2254,13 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
         _toast('Recomputing Residential + Office scores…');
         // Single SQL that computes BOTH composites at once, using each
         // view's category weights + each row's value_numeric / value_numeric_office.
-        const sql = `WITH cat_means AS (
+        // Composite recompute. Per-view AVG excludes criteria where the
+      // corresponding is_active_{view} flag is false — those criteria don't
+      // factor into that view's category mean. Each view independently.
+      const sql = `WITH cat_means AS (
           SELECT s.market_id, c.category_id,
-                 AVG(s.value_numeric)         AS mean_res,
-                 AVG(s.value_numeric_office)  AS mean_off
+                 AVG(CASE WHEN c.is_active_residential IS NOT FALSE THEN s.value_numeric ELSE NULL END) AS mean_res,
+                 AVG(CASE WHEN c.is_active_office      IS NOT FALSE THEN s.value_numeric_office ELSE NULL END) AS mean_off
           FROM market_research_scores s
           JOIN market_research_criteria c ON c.id = s.criterion_id
           WHERE c.category_id IS NOT NULL
@@ -2258,7 +2279,12 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
           office_score = ROUND(c.comp_off::numeric, 1),
           office_tier  = CASE WHEN c.comp_off >= 8.5 THEN 1 WHEN c.comp_off >= 7.0 THEN 2 WHEN c.comp_off >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
           updated_at = now()
-        FROM composites c WHERE m.id = c.market_id`;
+        FROM composites c WHERE m.id = c.market_id;
+        -- Refresh global rank columns based on new composites
+        WITH rr AS (SELECT id, ROW_NUMBER() OVER (ORDER BY score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE score IS NOT NULL)
+        UPDATE market_research_markets m SET rank_residential = rr.r FROM rr WHERE m.id = rr.id;
+        WITH ro AS (SELECT id, ROW_NUMBER() OVER (ORDER BY office_score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE office_score IS NOT NULL)
+        UPDATE market_research_markets m SET rank_office = ro.r FROM ro WHERE m.id = ro.id;`;
         const r = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
           method: 'POST',
           headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
@@ -2936,10 +2962,17 @@ Research this town now and produce the scoring JSON.`;
                          ${hasMaxR ? maxInput : ''}
                        </div>`;
                   const displayName = (tab === 'office' && c.name_office) ? c.name_office : c.name;
+                  const activeCol = tab === 'office' ? 'is_active_office' : 'is_active_residential';
+                  const isActive = c[activeCol] !== false; // default true if null
+                  const dimClass = isActive ? '' : ' mr-crit-row-disabled';
                   return `
-                    <div class="mr-crit-row">
+                    <div class="mr-crit-row${dimClass}">
                       <div class="mr-crit-name">
-                        <span>${_esc(displayName)}</span>
+                        <label class="mr-crit-toggle" title="Include in ${tabLabel} score">
+                          <input type="checkbox" ${isActive ? 'checked' : ''}
+                                 onchange="mrSaveCriterionActive('${c.id}', this.checked, '${tab}')">
+                          <span>${_esc(displayName)}</span>
+                        </label>
                         ${unit ? `<span class="mr-crit-unit">${_esc(unit)}</span>` : ''}
                       </div>
                       ${c.description ? `<div class="mr-crit-desc">${_esc(c.description)}</div>` : ''}
@@ -3222,6 +3255,22 @@ Research this town now and produce the scoring JSON.`;
       } catch (e) { _toast('Save failed: ' + e.message, true); }
     });
   }
+  function _saveCriterionActive(id, isActive, view = 'residential') {
+    const col = view === 'office' ? 'is_active_office' : 'is_active_residential';
+    const c = _criteria.find(x => x.id === id);
+    if (c) c[col] = !!isActive;
+    _criteriaDirty = true;
+    _refreshWeightChipsInPlace();
+    // Re-render needed to update the disabled visual state, but debounced
+    // to avoid focus loss while user is clicking
+    clearTimeout(_modalRerenderTimer);
+    _modalRerenderTimer = setTimeout(() => _manageCriteria(), 400);
+    _debouncePatch('crit:' + id + ':' + col, async () => {
+      try {
+        await window.supaWrite('market_research_criteria', 'PATCH', { [col]: isActive }, `?id=eq.${id}`);
+      } catch (e) { _toast('Save failed: ' + e.message, true); }
+    });
+  }
   function _saveCriterionLabel(id, rawValue, view = 'residential') {
     const v = (rawValue || '').trim() || null;
     const col = view === 'office' ? 'target_label_office' : 'target_label';
@@ -3446,6 +3495,7 @@ Research this town now and produce the scoring JSON.`;
   window.mrManageCriteria = ()    => _manageCriteria();
   window.mrSaveCriterionTarget = _saveCriterionTarget;
   window.mrSaveCriterionLabel = _saveCriterionLabel;
+  window.mrSaveCriterionActive = _saveCriterionActive;
   window.mrSetCriteriaModalView = _setCriteriaModalView;
   window.mrCopyResidentialToOffice = _copyResidentialToOffice;
   window.mrFinishCriteriaEdit = _finishCriteriaEdit;
