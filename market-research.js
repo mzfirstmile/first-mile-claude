@@ -1020,12 +1020,17 @@
       <div class="mr-toast" id="mrToast"></div>
     `;
 
-    // Filter button wiring — change filter, reset to page 0, re-fetch
+    // Filter button wiring — change filter, reset to page 0, re-fetch.
+    // Clicking an already-active filter toggles back to 'all' so chips like
+    // Favorites can be unselected (the 'all' chip itself is display:none).
     root.querySelectorAll('.mr-filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        root.querySelectorAll('.mr-filter-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        _activeFilter = btn.dataset.filter;
+        const clicked = btn.dataset.filter;
+        const newFilter = (_activeFilter === clicked && clicked !== 'all') ? 'all' : clicked;
+        root.querySelectorAll('.mr-filter-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.filter === newFilter);
+        });
+        _activeFilter = newFilter;
         _page = 0;
         _refreshPage();
       });
