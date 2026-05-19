@@ -31,6 +31,8 @@
   let _mapLeafletLoaded = false;
   let _mapBounds = null;          // { north, south, east, west } when user has zoomed/panned past the initial CONUS view
   let _mapBoundsSettling = false; // suppresses moveend during programmatic fitBounds on initial render
+  let _msaGeoJson = null;         // cached CBSA GeoJSON once fetched (per-session)
+  let _msaLayer = null;           // Leaflet layer reference so we can remove on re-init
   let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'list' | 'map'
   // Migrate legacy 'grid' to 'list'
   if (_viewMode === 'grid') _viewMode = 'list';
@@ -1368,6 +1370,44 @@
       }).addTo(_mapInstance);
       _markerCluster = L.markerClusterGroup({ maxClusterRadius: 50, disableClusteringAtZoom: 10 });
       _mapInstance.addLayer(_markerCluster);
+
+      // MSA boundary overlay — lazy-load once per session via Supabase proxy.
+      // Rendered BELOW the markers (added first, so cluster layer paints on top).
+      (async () => {
+        try {
+          if (!_msaGeoJson) {
+            const r = await fetch(`${window.SUPABASE_URL}/functions/v1/census-geo-proxy?layer=cbsa&resolution=20m`, {
+              headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY }
+            });
+            if (!r.ok) throw new Error('MSA fetch ' + r.status);
+            _msaGeoJson = await r.json();
+            // Filter to only Metropolitan Statistical Areas (drop Micropolitan).
+            // CBSA LSAD code "M1" = MSA, "M2" = Micropolitan.
+            if (_msaGeoJson.features) {
+              const before = _msaGeoJson.features.length;
+              _msaGeoJson.features = _msaGeoJson.features.filter(f => {
+                const lsad = (f.properties && (f.properties.LSAD || f.properties.lsad)) || '';
+                return lsad === 'M1' || lsad === '' || lsad === 'M0';
+              });
+              console.log(`[mr] MSA layer: ${_msaGeoJson.features.length}/${before} features (MSAs only)`);
+            }
+          }
+          if (_msaLayer && _mapInstance) { try { _mapInstance.removeLayer(_msaLayer); } catch(_) {} }
+          _msaLayer = L.geoJSON(_msaGeoJson, {
+            style: { color: '#0ea5e9', weight: 1.1, opacity: 0.55, fillColor: '#0ea5e9', fillOpacity: 0.04 },
+            onEachFeature: (feat, lyr) => {
+              const p = feat.properties || {};
+              const name = p.NAME || p.name || 'MSA';
+              lyr.bindTooltip(name, { sticky: true, direction: 'top', opacity: 0.92 });
+            },
+          });
+          _msaLayer.addTo(_mapInstance);
+          // Ensure markers sit on top
+          if (_markerCluster) _markerCluster.bringToFront && _markerCluster.bringToFront();
+        } catch (e) {
+          console.warn('[mr] MSA overlay failed:', e.message || e);
+        }
+      })();
 
       // Fetch the full filtered set (paginated — PostgREST anon caps each call
       // at 1000 rows, so loop with offset until we have everything).
