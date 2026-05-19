@@ -10,17 +10,17 @@
   let _inited = false;
   let _markets = [];          // current page only (server-paginated)
   let _shortlistFull = [];    // full shortlist (≤ 1k) loaded once, used by the chatbot
-  let _filterCounts = { phase_shortlisted: 0, all: 0, favorites: 0 };
+  let _filterCounts = { all: 0, favorites: 0 };
   let _totalForCurrentFilter = 0;
   let _page = 0;
   const PAGE_SIZE = 1000;  // Supabase anon REST caps here
-  let _activeTiers = new Set(); // empty = all tiers
+  let _activeTiers = new Set([1, 2, 3]); // default to scored T1+T2+T3 (hides unscored universe + low-quality T4)
   let _categories = []; // 6 high-level groups carrying weights
   let _criteria = [];   // sub-criteria, linked via category_id
   let _scores = []; // shortlist scores only
   let _currentMarket = null; // detail view
   let _currentUser = null;
-  let _activeFilter = 'phase_shortlisted'; // default to Phase 1 shortlist
+  let _activeFilter = 'all'; // 'all' | 'favorites'; tier multi-select drives the real filter
   let _searchQuery = '';
   let _activeState = '';   // '' = any state ; otherwise 2-letter state code (NJ, NY, ...)
   let _activeMetro = '';   // '' = any metro ; otherwise nearest_top50_city value
@@ -899,14 +899,13 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
           <div>
           <div class="mr-filters" id="mrFilters">
-            <button class="mr-filter-btn active" data-filter="phase_shortlisted">🎯 Shortlist <span class="mr-filter-count" id="mrCountShortlist"></span></button>
-            <button class="mr-filter-btn" data-filter="all">All <span class="mr-filter-count" id="mrCountAll"></span></button>
+            <button class="mr-filter-btn active" data-filter="all">All <span class="mr-filter-count" id="mrCountAll"></span></button>
             <button class="mr-filter-btn" data-filter="favorites">❤ Favorites <span class="mr-filter-count" id="mrCountFavorites"></span></button>
             <div class="mr-tier-filter">
               <span class="mr-tier-label">Tier:</span>
-              <label class="mr-tier-pill" data-tier="1"><input type="checkbox" onchange="mrToggleTier(1, this.checked)"> Tier 1</label>
-              <label class="mr-tier-pill" data-tier="2"><input type="checkbox" onchange="mrToggleTier(2, this.checked)"> Tier 2</label>
-              <label class="mr-tier-pill" data-tier="3"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
+              <label class="mr-tier-pill active" data-tier="1"><input type="checkbox" checked onchange="mrToggleTier(1, this.checked)"> Tier 1</label>
+              <label class="mr-tier-pill active" data-tier="2"><input type="checkbox" checked onchange="mrToggleTier(2, this.checked)"> Tier 2</label>
+              <label class="mr-tier-pill active" data-tier="3"><input type="checkbox" checked onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
               <label class="mr-tier-pill" data-tier="4"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</label>
             </div>
             <div class="mr-geo-filter">
@@ -920,7 +919,7 @@
             </div>
           </div>
           <div class="mr-shortlist-criteria" id="mrShortlistCriteria">
-            Shortlist criteria: Town population <strong>4,000–75,000</strong> · Median Household Income <strong id="mrHHIThresholdLabel">≥ $100,000</strong>
+            Scored universe: <strong>1,865</strong> towns scored across our 13 Phase 2 sub-criteria · Filter by tier above to narrow the list.
           </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
@@ -1020,20 +1019,9 @@
     const q = (_searchQuery || '').trim();
     const isSearching = q.length > 0;
     const hasTierFilter = _activeTiers && _activeTiers.size > 0;
-    const hasGeoFilter  = Boolean(_activeState || _activeMetro);
-    // Any of: search / tier / state / metro → span All markets (ignore the
-    // Shortlist/Favorites chip so user can find e.g. a T4 town outside the
-    // shortlist or every Texas town in the universe).
-    const spanAll = isSearching || hasTierFilter || hasGeoFilter;
-    if (!spanAll) {
-      if (_activeFilter === 'phase_shortlisted')   parts.push('phase=eq.shortlisted');
-      else if (_activeFilter === 'favorites')      parts.push('is_favorite=eq.true');
-      // 'all' = no filter
-    } else if (_activeFilter === 'favorites') {
-      // Favorites should still constrain even when other filters are on —
-      // user explicitly opted into it. Shortlist chip however is implicit.
-      parts.push('is_favorite=eq.true');
-    }
+    // Favorites chip always constrains when active; tier multi-select is the
+    // primary surface for filtering the scored universe.
+    if (_activeFilter === 'favorites') parts.push('is_favorite=eq.true');
     if (hasTierFilter) {
       const tiers = Array.from(_activeTiers).sort().join(',');
       parts.push(`tier=in.(${tiers})`);
@@ -1106,25 +1094,23 @@
   }
 
   async function _loadFilterCounts() {
-    const [shortlist, all, favs] = await Promise.all([
-      _fetchCount(['phase=eq.shortlisted']),
+    const [all, favs] = await Promise.all([
       _fetchCount([]),
       _fetchCount(['is_favorite=eq.true']),
     ]);
-    _filterCounts = { phase_shortlisted: shortlist, all, favorites: favs };
+    _filterCounts = { all, favorites: favs };
     // Refresh just the count badges (cheap)
     const set = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = (n || 0).toLocaleString(); };
-    set('mrCountShortlist', shortlist);
     set('mrCountAll', all);
     set('mrCountFavorites', favs);
   }
 
-  // Load shortlist once for chatbot context. Kept separate from grid pagination.
+  // Load the scored T1-T3 set once for chatbot context (~1k rows, fits Supabase cap).
   async function _loadShortlistForChatbot() {
     try {
       _shortlistFull = await window.supaFetch(
         'market_research_markets',
-        '?select=id,name,state,population,median_household_income,median_home_value,nearest_top50_city,is_favorite,thesis&phase=eq.shortlisted&order=median_household_income.desc.nullslast,name.asc&limit=1000'
+        '?select=id,name,state,population,median_household_income,median_home_value,nearest_top50_city,is_favorite,thesis&tier=in.(1,2,3)&order=score.desc.nullslast,name.asc&limit=1000'
       ) || [];
     } catch (e) { _shortlistFull = []; }
   }
@@ -1212,7 +1198,6 @@
 
     // Chip counts come from server (_loadFilterCounts) — independent of current page
     const setCount = (id, n) => { const el = document.getElementById(id); if (el) el.textContent = (n || 0).toLocaleString(); };
-    setCount('mrCountShortlist', _filterCounts.phase_shortlisted);
     setCount('mrCountAll',       _filterCounts.all);
     setCount('mrCountFavorites', _filterCounts.favorites);
 
