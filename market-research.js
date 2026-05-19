@@ -550,10 +550,12 @@
       #mrRoot .mr-tier-pill input { margin: 0; cursor: pointer; }
       #mrRoot .mr-tier-pill.active { background: #0ea5e9; border-color: #0284c7; color: #fff; font-weight: 600; }
       #mrRoot .mr-tier-pill.active:hover { background: #0284c7; }
-      #mrRoot .mr-tier-ranges {
-        font-size: 11px; color: #64748b; margin-left: 12px;
-        display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center;
+      #mrRoot .mr-tier-pill.mr-tier-pill-col {
+        flex-direction: column; align-items: center; gap: 2px; padding: 5px 10px;
       }
+      #mrRoot .mr-tier-pill-row { display: inline-flex; align-items: center; gap: 4px; }
+      #mrRoot .mr-tier-pill-range { font-size: 10px; font-weight: 600; opacity: 0.85; line-height: 1; }
+      #mrRoot .mr-tier-pill.active .mr-tier-pill-range { color: #fff !important; opacity: 0.92; }
 
       /* State + Metro geographic dropdown filters */
       #mrRoot .mr-geo-filter {
@@ -912,17 +914,22 @@
             <button class="mr-filter-btn" data-filter="favorites">❤ Favorites <span class="mr-filter-count" id="mrCountFavorites"></span></button>
             <div class="mr-tier-filter">
               <span class="mr-tier-label">Tier:</span>
-              <label class="mr-tier-pill" data-tier="1"><input type="checkbox" onchange="mrToggleTier(1, this.checked)"> Tier 1</label>
-              <label class="mr-tier-pill" data-tier="2"><input type="checkbox" onchange="mrToggleTier(2, this.checked)"> Tier 2</label>
-              <label class="mr-tier-pill" data-tier="3"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
-              <label class="mr-tier-pill" data-tier="4"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</label>
-              <span class="mr-tier-ranges">
-                <span style="color:#15803d;font-weight:600;">T1 ≥ 8.5</span> ·
-                <span style="color:#1e40af;font-weight:600;">T2 7.0–8.4</span> ·
-                <span style="color:#b45309;font-weight:600;">T3 4.0–6.9</span> ·
-                <span style="color:#64748b;font-weight:600;">T4 &lt; 4.0</span>
-                <span style="color:#94a3b8;"> · composite score 0–10</span>
-              </span>
+              <label class="mr-tier-pill mr-tier-pill-col" data-tier="1">
+                <span class="mr-tier-pill-row"><input type="checkbox" onchange="mrToggleTier(1, this.checked)"> Tier 1</span>
+                <span class="mr-tier-pill-range" style="color:#15803d;">≥ 8.5</span>
+              </label>
+              <label class="mr-tier-pill mr-tier-pill-col" data-tier="2">
+                <span class="mr-tier-pill-row"><input type="checkbox" onchange="mrToggleTier(2, this.checked)"> Tier 2</span>
+                <span class="mr-tier-pill-range" style="color:#1e40af;">7.0–8.4</span>
+              </label>
+              <label class="mr-tier-pill mr-tier-pill-col" data-tier="3">
+                <span class="mr-tier-pill-row"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</span>
+                <span class="mr-tier-pill-range" style="color:#b45309;">4.0–6.9</span>
+              </label>
+              <label class="mr-tier-pill mr-tier-pill-col" data-tier="4">
+                <span class="mr-tier-pill-row"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</span>
+                <span class="mr-tier-pill-range" style="color:#64748b;">&lt; 4.0</span>
+              </label>
             </div>
             <div class="mr-geo-filter">
               <select id="mrStateFilter" class="mr-geo-select" onchange="mrSetGeoFilter('state', this.value)">
@@ -1393,11 +1400,18 @@
       (async () => {
         try {
           if (_msaLayer && _mapInstance) { try { _mapInstance.removeLayer(_msaLayer); } catch(_) {} }
-          const metros = new Map(); // nearest_top50_city -> { lats[], lngs[] }
+          // Normalize metro label — "New York" and "New York, NY" should merge.
+          // Strip trailing ", XX" state-code so groups collapse cleanly.
+          const normalizeMetro = (s) => {
+            if (!s) return '';
+            return String(s).replace(/,\s*[A-Z]{2}\s*$/, '').trim();
+          };
+          const metros = new Map(); // canonical metro -> { lats[], lngs[], displayName }
           for (const m of withCoords) {
-            const key = m.nearest_top50_city;
+            const raw = m.nearest_top50_city;
+            const key = normalizeMetro(raw);
             if (!key) continue;
-            if (!metros.has(key)) metros.set(key, { lats: [], lngs: [] });
+            if (!metros.has(key)) metros.set(key, { lats: [], lngs: [], displayName: key });
             const g = metros.get(key);
             g.lats.push(parseFloat(m.latitude));
             g.lngs.push(parseFloat(m.longitude));
@@ -1409,12 +1423,20 @@
             const avgLng = g.lngs.reduce((a, b) => a + b, 0) / g.lngs.length;
             const circle = L.circle([avgLat, avgLng], {
               radius: 60 * 1609.34, // 60 miles in meters
-              color: '#0ea5e9', weight: 1.5, opacity: 0.55,
-              fillColor: '#0ea5e9', fillOpacity: 0.05,
+              color: '#0ea5e9', weight: 2.5, opacity: 0.85,
+              fillColor: '#0ea5e9', fillOpacity: 0.08,
               interactive: true,
             });
-            circle.bindTooltip(`${name} (${g.lats.length} markets)`, { sticky: true, direction: 'top', opacity: 0.92 });
+            circle.bindTooltip(`${g.displayName} (${g.lats.length} markets)`, { sticky: true, direction: 'top', opacity: 0.92 });
             layerGroup.addLayer(circle);
+            // Always-visible center label
+            const labelIcon = L.divIcon({
+              className: 'mr-metro-label',
+              html: `<div style="font-size:11px;font-weight:700;color:#075985;background:rgba(255,255,255,0.85);border:1px solid #bae6fd;padding:1px 6px;border-radius:8px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.05);">${g.displayName}</div>`,
+              iconSize: null, iconAnchor: [0, 0],
+            });
+            const labelMarker = L.marker([avgLat, avgLng], { icon: labelIcon, interactive: false, keyboard: false });
+            layerGroup.addLayer(labelMarker);
           }
           _msaLayer = layerGroup;
           _msaLayer.addTo(_mapInstance);
