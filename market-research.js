@@ -31,6 +31,12 @@
   let _mapLeafletLoaded = false;
   let _mapBounds = null;          // { north, south, east, west } when user has zoomed/panned past the initial CONUS view
   let _mapBoundsSettling = false; // suppresses moveend during programmatic fitBounds on initial render
+  // Asset class — 'residential' or 'office'. Drives which score/tier/target/weight
+  // columns get used everywhere (list, map, modals, sort, filter). Persisted to localStorage.
+  let _viewType = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_type')) || 'residential';
+  if (!['residential', 'office'].includes(_viewType)) _viewType = 'residential';
+  function _scoreCol() { return _viewType === 'office' ? 'office_score' : 'score'; }
+  function _tierCol()  { return _viewType === 'office' ? 'office_tier'  : 'tier';  }
   let _msaGeoJson = null;         // cached CBSA GeoJSON once fetched (per-session)
   let _msaLayer = null;           // Leaflet layer reference so we can remove on re-init
   let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'list' | 'map'
@@ -550,6 +556,33 @@
       #mrRoot .mr-tier-pill input { margin: 0; cursor: pointer; }
       #mrRoot .mr-tier-pill.active { background: #0ea5e9; border-color: #0284c7; color: #fff; font-weight: 600; }
       #mrRoot .mr-tier-pill.active:hover { background: #0284c7; }
+      /* Dual-input rows in Manage Criteria modal (Residential / Office) */
+      #mrRoot .mr-dual-row {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      }
+      #mrRoot .mr-target-row { grid-template-columns: 1fr 1fr 1fr 1fr; }
+      #mrRoot .mr-dual-cell {
+        display: flex; flex-direction: column; gap: 2px;
+      }
+      #mrRoot .mr-dual-cell label {
+        font-size: 10px; color: #64748b; font-weight: 600;
+      }
+      #mrRoot .mr-dual-cell input {
+        padding: 4px 6px; border: 1px solid #d1d5db; border-radius: 6px;
+        font-size: 13px;
+      }
+      /* Asset-class toggle (Residential / Office) */
+      #mrRoot .mr-asset-toggle {
+        display: inline-flex; gap: 0; margin-left: 8px;
+        border: 1px solid #d1d5db; border-radius: 8px; overflow: hidden;
+        vertical-align: middle;
+      }
+      #mrRoot .mr-asset-toggle button {
+        background: #fff; border: none; padding: 4px 12px;
+        font-size: 12px; font-weight: 600; cursor: pointer; color: #475569;
+      }
+      #mrRoot .mr-asset-toggle button:hover { background: #f1f5f9; }
+      #mrRoot .mr-asset-toggle button.active { background: #0ea5e9; color: #fff; }
       #mrRoot .mr-tier-pill.mr-tier-pill-col {
         flex-direction: column; align-items: center; gap: 2px; padding: 5px 10px;
       }
@@ -890,7 +923,13 @@
         <div class="mr-header">
           <div>
             <h2>Market Research</h2>
-            <p class="mr-subtitle">Target US markets &amp; cities for real estate acquisition</p>
+            <p class="mr-subtitle">
+              Target US markets &amp; cities for real estate acquisition ·
+              <span class="mr-asset-toggle" id="mrAssetToggle">
+                <button data-view="residential" onclick="mrSetViewType('residential')">🏠 Residential</button>
+                <button data-view="office" onclick="mrSetViewType('office')">🏢 Office</button>
+              </span>
+            </p>
           </div>
           <div class="mr-actions">
             <button class="mr-btn" onclick="mrManageCriteria()">⚙ Criteria</button>
@@ -1049,7 +1088,7 @@
     if (_activeFilter === 'favorites') parts.push('is_favorite=eq.true');
     if (hasTierFilter) {
       const tiers = Array.from(_activeTiers).sort().join(',');
-      parts.push(`tier=in.(${tiers})`);
+      parts.push(`${_tierCol()}=in.(${tiers})`);
     }
     if (isSearching) {
       const safe = q.replace(/[%*]/g, '');
@@ -1083,7 +1122,7 @@
     parts.push('select=*');
     // Always sort by composite Score descending — T1 surfaces at the top of
     // the list. HHI is the tiebreaker, then alpha by name.
-    parts.push('order=score.desc.nullslast,median_household_income.desc.nullslast,name.asc');
+    parts.push(`order=${_scoreCol()}.desc.nullslast,median_household_income.desc.nullslast,name.asc`);
     const offset = _page * PAGE_SIZE;
     parts.push(`offset=${offset}`);
     parts.push(`limit=${PAGE_SIZE}`);
@@ -1262,9 +1301,11 @@
     // Sort
     const sortSel = document.getElementById('mrSort');
     const sortMode = sortSel ? sortSel.value : 'score_desc';
+    const aScore = (m) => _viewType === 'office' ? (m.office_score ?? -1) : (m.score ?? -1);
+    const aTier  = (m) => _viewType === 'office' ? (m.office_tier ?? 99) : (m.tier ?? 99);
     visible.sort((a, b) => {
-      if (sortMode === 'score_desc') return ((b.score ?? -1) - (a.score ?? -1)) || a.name.localeCompare(b.name);
-      if (sortMode === 'tier_asc')   return ((a.tier ?? 99) - (b.tier ?? 99)) || ((b.score ?? -1) - (a.score ?? -1));
+      if (sortMode === 'score_desc') return (aScore(b) - aScore(a)) || a.name.localeCompare(b.name);
+      if (sortMode === 'tier_asc')   return (aTier(a) - aTier(b)) || (aScore(b) - aScore(a));
       if (sortMode === 'name_asc')   return a.name.localeCompare(b.name);
       if (sortMode === 'updated_desc') return (b.updated_at || '').localeCompare(a.updated_at || '');
       return 0;
@@ -1273,6 +1314,10 @@
     // Sync view-toggle button active state
     document.querySelectorAll('#mrViewToggle button').forEach(b => {
       b.classList.toggle('active', b.dataset.mode === _viewMode);
+    });
+    // Sync asset-type toggle (Residential / Office)
+    document.querySelectorAll('#mrAssetToggle button').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === _viewType);
     });
 
     if (visible.length === 0) {
@@ -1455,7 +1500,7 @@
       // Fetch the full filtered set (paginated — PostgREST anon caps each call
       // at 1000 rows, so loop with offset until we have everything).
       const parts = _buildFilterQuery();
-      parts.push('select=id,name,state,population,median_household_income,latitude,longitude,score,tier');
+      parts.push('select=id,name,state,population,median_household_income,latitude,longitude,score,tier,office_score,office_tier');
       const baseUrl = `${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&');
       const PAGE = 1000;
       const rows = [];
@@ -1475,8 +1520,9 @@
       // Tier 4 markers are intentionally not drawn (the bottom band isn't useful)
       const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6' };
       for (const m of withCoords) {
-        if (m.tier === 4 || m.tier == null) continue;
-        const color = tierColor[m.tier] || '#94a3b8';
+        const mTier = _viewType === 'office' ? m.office_tier : m.tier;
+        if (mTier === 4 || mTier == null) continue;
+        const color = tierColor[mTier] || '#94a3b8';
         const icon = L.divIcon({
           className: 'mr-marker',
           html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.2);"></div>`,
@@ -1484,8 +1530,9 @@
           iconAnchor: [7, 7],
         });
         const marker = L.marker([m.latitude, m.longitude], { icon, title: m.name });
-        const tierLabel = m.tier ? `Tier ${m.tier}` : '';
-        const scoreLabel = m.score != null ? `Score ${m.score}` : '';
+        const tierLabel = mTier ? `Tier ${mTier}` : '';
+        const _ms = _viewType === 'office' ? m.office_score : m.score;
+        const scoreLabel = _ms != null ? `Score ${_ms}` : '';
         marker.bindPopup(
           `<div style="font-size:13px;min-width:160px;">
             <div style="font-weight:700;color:#0f172a;font-size:14px;">${_esc(m.name)}</div>
@@ -1620,8 +1667,10 @@
           </thead>
           <tbody>
             ${visible.map((m, idx) => {
-              const scoreNum = m.score != null ? m.score.toFixed(1) : '—';
-              const tierLabel = m.tier != null ? `T${m.tier}` : '—';
+              const mScore = _viewType === 'office' ? m.office_score : m.score;
+              const mTier  = _viewType === 'office' ? m.office_tier  : m.tier;
+              const scoreNum = mScore != null ? mScore.toFixed(1) : '—';
+              const tierLabel = mTier != null ? `T${mTier}` : '—';
               const pop = m.population ? parseInt(m.population).toLocaleString() : '—';
               const hhi = m.median_household_income ? '$' + parseInt(m.median_household_income).toLocaleString() : '—';
               const metro = m.nearest_top50_city || '—';
@@ -2067,16 +2116,39 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     clearTimeout(_recomputeTimer);
     _recomputeTimer = setTimeout(async () => {
       try {
-        _toast('Recomputing scores…');
-        const r = await fetch(`${window.SUPABASE_URL}/functions/v1/market-research-phase3`, {
+        _toast('Recomputing Residential + Office scores…');
+        // Single SQL that computes BOTH composites at once, using each
+        // view's category weights + each row's value_numeric / value_numeric_office.
+        const sql = `WITH cat_means AS (
+          SELECT s.market_id, c.category_id,
+                 AVG(s.value_numeric)         AS mean_res,
+                 AVG(s.value_numeric_office)  AS mean_off
+          FROM market_research_scores s
+          JOIN market_research_criteria c ON c.id = s.criterion_id
+          WHERE c.category_id IS NOT NULL
+          GROUP BY s.market_id, c.category_id
+        ),
+        composites AS (
+          SELECT cm.market_id,
+                 SUM(cm.mean_res * cat.weight)        / NULLIF(SUM(CASE WHEN cm.mean_res IS NOT NULL THEN cat.weight ELSE 0 END), 0)        AS comp_res,
+                 SUM(cm.mean_off * cat.weight_office) / NULLIF(SUM(CASE WHEN cm.mean_off IS NOT NULL THEN cat.weight_office ELSE 0 END), 0) AS comp_off
+          FROM cat_means cm JOIN market_research_categories cat ON cat.id = cm.category_id
+          GROUP BY cm.market_id
+        )
+        UPDATE market_research_markets m SET
+          score        = ROUND(c.comp_res::numeric, 1),
+          tier         = CASE WHEN c.comp_res >= 8.5 THEN 1 WHEN c.comp_res >= 7.0 THEN 2 WHEN c.comp_res >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
+          office_score = ROUND(c.comp_off::numeric, 1),
+          office_tier  = CASE WHEN c.comp_off >= 8.5 THEN 1 WHEN c.comp_off >= 7.0 THEN 2 WHEN c.comp_off >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
+          updated_at = now()
+        FROM composites c WHERE m.id = c.market_id`;
+        const r = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
           method: 'POST',
-          headers: { Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ recompute_only: true, limit: 1000 }),
+          headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: sql }),
         });
-        const data = await r.json();
-        if (!r.ok || !data.ok) throw new Error(data.error || ('status ' + r.status));
-        _toast(`✓ Recomputed ${data.recomputed} markets`);
-        // Refresh data so the list view picks up new scores
+        if (!r.ok) throw new Error('status ' + r.status);
+        _toast('✓ Recomputed all markets (Residential + Office)');
         try { await _loadData(); _renderGrid(); } catch {}
         if (_currentMarket) {
           try { await _loadScoresForMarket(_currentMarket.id); _renderDetail(); } catch {}
@@ -2084,7 +2156,7 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
       } catch (e) {
         _toast('Recompute failed: ' + e.message, true);
       }
-    }, 1500); // debounce: coalesce rapid edits
+    }, 1500);
   }
 
   // Pull every score for a market, recompute weighted composite + tier,
@@ -2629,36 +2701,70 @@ Research this town now and produce the scoring JSON.`;
     const cats = _categories.slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
     const totalWeight = cats.reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
 
+    const totalWeightOffice = cats.reduce((s, c) => s + (parseFloat(c.weight_office) || 0), 0);
     const cards = cats.map(cat => {
       const subs = _criteria.filter(c => c.category_id === cat.id)
         .slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.name.localeCompare(b.name));
-      const pct = totalWeight > 0 ? ((parseFloat(cat.weight) || 0) / totalWeight * 100).toFixed(0) : '—';
+      const pctRes = totalWeight > 0 ? ((parseFloat(cat.weight) || 0) / totalWeight * 100).toFixed(0) : '—';
+      const pctOff = totalWeightOffice > 0 ? ((parseFloat(cat.weight_office) || 0) / totalWeightOffice * 100).toFixed(0) : '—';
       return `
         <div class="mr-cat-card">
-          <div class="mr-cat-card-head">
-            <div>
-              <div class="mr-cat-card-title">${_esc(cat.name)}</div>
-            </div>
-            <div class="mr-cat-weight-wrap">
-              <input type="number" min="0" step="0.1" value="${cat.weight != null ? cat.weight : 1}"
-                     onchange="mrSaveCategoryWeight('${cat.id}', this.value)">
-              <div class="mr-cat-weight-pct">${pct === '—' ? '' : pct + '%'}</div>
+          <div class="mr-cat-card-head" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <div class="mr-cat-card-title">${_esc(cat.name)}</div>
+            <div class="mr-dual-row">
+              <div class="mr-dual-cell">
+                <label>🏠 Residential weight</label>
+                <input type="number" min="0" step="0.1" value="${cat.weight != null ? cat.weight : 1}"
+                       onchange="mrSaveCategoryWeight('${cat.id}', this.value, 'residential')">
+                <div class="mr-cat-weight-pct">${pctRes === '—' ? '' : pctRes + '%'}</div>
+              </div>
+              <div class="mr-dual-cell">
+                <label>🏢 Office weight</label>
+                <input type="number" min="0" step="0.1" value="${cat.weight_office != null ? cat.weight_office : (cat.weight != null ? cat.weight : 1)}"
+                       onchange="mrSaveCategoryWeight('${cat.id}', this.value, 'office')">
+                <div class="mr-cat-weight-pct">${pctOff === '—' ? '' : pctOff + '%'}</div>
+              </div>
             </div>
           </div>
           <div class="mr-cat-card-body">
             ${subs.length === 0
               ? '<div style="font-size:11px;color:#94a3b8;padding:6px 0;">No sub-criteria.</div>'
               : subs.map(c => {
-                  const target = _fmtTarget(c);
+                  const minR = c.target_min != null ? c.target_min : '';
+                  const minO = c.target_min_office != null ? c.target_min_office : (c.target_min != null ? c.target_min : '');
+                  const maxR = c.target_max != null ? c.target_max : '';
+                  const maxO = c.target_max_office != null ? c.target_max_office : (c.target_max != null ? c.target_max : '');
+                  const unit = c.target_unit || '';
+                  const sameMin = String(minR) === String(minO);
+                  const sameMax = String(maxR) === String(maxO);
                   return `
-                    <div class="mr-cat-sub-row">
-                      <div class="mr-cat-sub-bullet"></div>
-                      <div style="flex:1;min-width:0;">
-                        <div class="mr-cat-sub-name">
-                          ${_esc(c.name)}
-                          ${target ? `<span class="mr-target-chip">🎯 ${_esc(target)}</span>` : ''}
+                    <div class="mr-cat-sub-row" style="flex-direction:column;align-items:stretch;gap:4px;padding:6px 0;border-bottom:1px solid #f1f5f9;">
+                      <div class="mr-cat-sub-name" style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-weight:600;">${_esc(c.name)}</span>
+                        ${unit ? `<span style="font-size:10px;color:#94a3b8;">${_esc(unit)}</span>` : ''}
+                      </div>
+                      ${c.description ? `<div class="mr-cat-sub-desc">${_esc(c.description)}</div>` : ''}
+                      <div class="mr-dual-row mr-target-row">
+                        <div class="mr-dual-cell">
+                          <label>Min — 🏠 Res ${sameMin ? '' : '<span style="color:#0ea5e9;">·diff</span>'}</label>
+                          <input type="number" step="any" value="${minR}" placeholder="—"
+                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, 'residential')">
                         </div>
-                        ${c.description ? `<div class="mr-cat-sub-desc">${_esc(c.description)}</div>` : ''}
+                        <div class="mr-dual-cell">
+                          <label>Min — 🏢 Office</label>
+                          <input type="number" step="any" value="${minO}" placeholder="—"
+                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, 'office')">
+                        </div>
+                        <div class="mr-dual-cell">
+                          <label>Max — 🏠 Res ${sameMax ? '' : '<span style="color:#0ea5e9;">·diff</span>'}</label>
+                          <input type="number" step="any" value="${maxR}" placeholder="—"
+                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, 'residential')">
+                        </div>
+                        <div class="mr-dual-cell">
+                          <label>Max — 🏢 Office</label>
+                          <input type="number" step="any" value="${maxO}" placeholder="—"
+                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, 'office')">
+                        </div>
                       </div>
                     </div>`;
                 }).join('')}
@@ -2666,10 +2772,11 @@ Research this town now and produce the scoring JSON.`;
         </div>`;
     }).join('');
 
-    _openModal('Manage Categories & Weights', `
+    _openModal('Manage Categories, Weights &amp; Criteria Targets', `
       <p style="font-size:12px;color:#64748b;margin:0 0 14px 0;">
-        Weights live on the 6 high-level categories. Higher weight = more influence on the composite score.
-        Weights are relative and normalized when ranking is computed. Total: <strong style="color:#0ea5e9;">${totalWeight.toFixed(1)}</strong>
+        Weights live on the 7 high-level categories — separately for 🏠 Residential and 🏢 Office investment views.
+        Sub-criteria targets (Min / Max thresholds) also have per-view values.
+        Totals — Residential: <strong style="color:#0ea5e9;">${totalWeight.toFixed(1)}</strong> · Office: <strong style="color:#0ea5e9;">${totalWeightOffice.toFixed(1)}</strong>
       </p>
       <div class="mr-cat-grid">${cards}</div>
       <div class="mr-modal-actions">
@@ -2677,15 +2784,28 @@ Research this town now and produce the scoring JSON.`;
       </div>
     `, { wide: true });
   }
-  async function _saveCategoryWeight(id, rawValue) {
+  async function _saveCategoryWeight(id, rawValue, view = 'residential') {
     const weight = Math.max(0, parseFloat(rawValue) || 0);
+    const col = view === 'office' ? 'weight_office' : 'weight';
     try {
-      await window.supaWrite('market_research_categories', 'PATCH', { weight }, `?id=eq.${id}`);
+      await window.supaWrite('market_research_categories', 'PATCH', { [col]: weight }, `?id=eq.${id}`);
       const cat = _categories.find(c => c.id === id);
-      if (cat) cat.weight = weight;
-      _toast(`${cat ? cat.name : 'Category'} weight → ${weight}`);
-      _manageCriteria(); // refresh % chips
+      if (cat) cat[col] = weight;
+      _toast(`${cat ? cat.name : 'Category'} ${view} weight → ${weight}`);
+      _manageCriteria();
       if (_currentMarket) _renderScorecard();
+      _scheduleRecomputeAll();
+    } catch(e) { _toast('Save failed: ' + e.message, true); }
+  }
+  async function _saveCriterionTarget(id, kind /* target_min|target_max */, rawValue, view = 'residential') {
+    const v = rawValue === '' ? null : parseFloat(rawValue);
+    const col = view === 'office' ? `${kind}_office` : kind;
+    try {
+      await window.supaWrite('market_research_criteria', 'PATCH', { [col]: v }, `?id=eq.${id}`);
+      const c = _criteria.find(x => x.id === id);
+      if (c) c[col] = v;
+      _toast(`${c ? c.name : 'Criterion'} ${kind} (${view}) → ${v == null ? 'cleared' : v}`);
+      _manageCriteria();
       _scheduleRecomputeAll();
     } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
@@ -2899,6 +3019,7 @@ Research this town now and produce the scoring JSON.`;
   window.mrSaveScore      = (c, t, v) => _saveScore(c, t, v);
   window.mrSaveSource     = (c, v) => _saveSource(c, v);
   window.mrManageCriteria = ()    => _manageCriteria();
+  window.mrSaveCriterionTarget = _saveCriterionTarget;
   window.mrAddCriterion   = ()    => _addCriterion();
   window.mrDeleteCriterion= (id, name) => _deleteCriterion(id, name);
   window.mrChangeSort     = ()    => _changeSort();
@@ -2930,6 +3051,14 @@ Research this town now and produce the scoring JSON.`;
     const newVal = prompt('Source citation (URL or label):', existing ? (existing.source || '') : '');
     if (newVal == null) return;
     _saveSource(criterionId, newVal).then(() => _renderScorecard());
+  };
+  window.mrSetViewType = (vt) => {
+    if (!['residential', 'office'].includes(vt)) return;
+    if (_viewType === vt) return;
+    _viewType = vt;
+    try { localStorage.setItem('mr_view_type', vt); } catch(_) {}
+    _page = 0;
+    _refreshPage();
   };
   window.mrClearMapBounds = () => {
     _mapBounds = null;
