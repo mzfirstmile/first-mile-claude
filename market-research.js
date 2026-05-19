@@ -13,8 +13,8 @@
   let _filterCounts = { all: 0, favorites: 0 };
   let _totalForCurrentFilter = 0;
   let _page = 0;
-  const PAGE_SIZE = 1000;  // Supabase anon REST caps here
-  let _activeTiers = new Set([1, 2, 3]); // default to scored T1+T2+T3 (hides unscored universe + low-quality T4)
+  const PAGE_SIZE = 100;   // small enough that pager is always visible
+  let _activeTiers = new Set(); // empty = no tier filter; full list shown (sorted by score desc so T1 surfaces first)
   let _categories = []; // 6 high-level groups carrying weights
   let _criteria = [];   // sub-criteria, linked via category_id
   let _scores = []; // shortlist scores only
@@ -899,13 +899,13 @@
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
           <div>
           <div class="mr-filters" id="mrFilters">
-            <button class="mr-filter-btn active" data-filter="all">All <span class="mr-filter-count" id="mrCountAll"></span></button>
+            <button class="mr-filter-btn active" data-filter="all" style="display:none;">All <span class="mr-filter-count" id="mrCountAll"></span></button>
             <button class="mr-filter-btn" data-filter="favorites">❤ Favorites <span class="mr-filter-count" id="mrCountFavorites"></span></button>
             <div class="mr-tier-filter">
               <span class="mr-tier-label">Tier:</span>
-              <label class="mr-tier-pill active" data-tier="1"><input type="checkbox" checked onchange="mrToggleTier(1, this.checked)"> Tier 1</label>
-              <label class="mr-tier-pill active" data-tier="2"><input type="checkbox" checked onchange="mrToggleTier(2, this.checked)"> Tier 2</label>
-              <label class="mr-tier-pill active" data-tier="3"><input type="checkbox" checked onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
+              <label class="mr-tier-pill" data-tier="1"><input type="checkbox" onchange="mrToggleTier(1, this.checked)"> Tier 1</label>
+              <label class="mr-tier-pill" data-tier="2"><input type="checkbox" onchange="mrToggleTier(2, this.checked)"> Tier 2</label>
+              <label class="mr-tier-pill" data-tier="3"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
               <label class="mr-tier-pill" data-tier="4"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</label>
             </div>
             <div class="mr-geo-filter">
@@ -1046,15 +1046,9 @@
   async function _fetchPage() {
     const parts = _buildFilterQuery();
     parts.push('select=*');
-    // When any geo (state/metro) or tier filter is active, auto-sort by
-    // composite Score descending so the user immediately sees the best
-    // candidates within the slice. Otherwise keep the default HHI sort.
-    const sortByScore = _geoFilterActive() || (_activeTiers && _activeTiers.size > 0);
-    if (sortByScore) {
-      parts.push('order=score.desc.nullslast,median_household_income.desc.nullslast,name.asc');
-    } else {
-      parts.push('order=median_household_income.desc.nullslast,name.asc');
-    }
+    // Always sort by composite Score descending — T1 surfaces at the top of
+    // the list. HHI is the tiebreaker, then alpha by name.
+    parts.push('order=score.desc.nullslast,median_household_income.desc.nullslast,name.asc');
     const offset = _page * PAGE_SIZE;
     parts.push(`offset=${offset}`);
     parts.push(`limit=${PAGE_SIZE}`);
@@ -1247,7 +1241,7 @@
       pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
       body = `
         <div class="mr-split">
-          <div class="mr-split-list">${listInner}${pager}</div>
+          <div class="mr-split-list">${pager}${listInner}${pager}</div>
           <div class="mr-split-map">${_renderMapShell({ full: false })}</div>
         </div>`;
       pager = '';
