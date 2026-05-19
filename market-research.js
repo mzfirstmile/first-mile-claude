@@ -934,7 +934,7 @@
             </div>
           </div>
           <div class="mr-shortlist-criteria" id="mrShortlistCriteria">
-            Shortlist criteria: Town population <strong>4,000–75,000</strong> · Median Household Income <strong id="mrHHIThresholdLabel">≥ $130,000</strong>
+            Shortlist criteria: Town population <strong>4,000–75,000</strong> · Median Household Income <strong id="mrHHIThresholdLabel">≥ $100,000</strong>
           </div>
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
@@ -2004,9 +2004,9 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     if (totalWeight === 0) return;
     const composite = weightedSum / totalWeight;
     const score = Math.round(composite * 10) / 10;
-    // Tier bands — Tier 1 is tight (≥8.5) so it stays selective even after
-    // Phase 2 Commute lifted the bulk of the metro-adjacent shortlist.
-    const tier = score >= 8.5 ? 1 : score >= 6.5 ? 2 : score >= 4.5 ? 3 : 4;
+    // Tier bands — Tier 1 stays tight (≥8.5); Tier 3 widened (4.0–6.9) so it
+    // captures the broader $100k-HHI shortlist additions and isn't near-empty.
+    const tier = score >= 8.5 ? 1 : score >= 7.0 ? 2 : score >= 4.0 ? 3 : 4;
     await window.supaWrite('market_research_markets', 'PATCH', { score, tier }, `?id=eq.${marketId}`);
   }
 

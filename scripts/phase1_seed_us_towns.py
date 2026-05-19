@@ -7,7 +7,7 @@ top-50 city distance, and bulk-loads into Supabase market_research_markets.
 
 Phase 1 filters (matches Morris's 5/18/26 criteria doc):
   - Population 5,000 – 75,000
-  - Median Household Income ≥ $130,000
+  - Median Household Income ≥ $100,000
   - Straight-line distance to a top-50 US city ≤ 35 miles
     (proxy for the "45-min commute to major metro" criterion)
 
@@ -50,7 +50,7 @@ import zipfile
 
 POP_MIN = 5_000
 POP_MAX = 75_000
-HHI_MIN = 130_000
+HHI_MIN = 100_000
 DISTANCE_TO_TOP50_MAX_MI = 35  # ≈ 45-min commute proxy
 
 CENSUS_API = "https://api.census.gov/data/2022/acs/acs5"
