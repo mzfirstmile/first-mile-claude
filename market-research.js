@@ -1008,8 +1008,8 @@
             <p class="mr-subtitle">
               Target US markets &amp; cities for real estate acquisition ·
               <span class="mr-asset-toggle" id="mrAssetToggle">
-                <button data-view="residential" onclick="mrSetViewType('residential')">🏠 Residential</button>
                 <button data-view="office" onclick="mrSetViewType('office')">🏢 Office</button>
+                <button data-view="residential" onclick="mrSetViewType('residential')">🏠 Residential</button>
               </span>
             </p>
           </div>
@@ -2855,13 +2855,39 @@ Research this town now and produce the scoring JSON.`;
             ${subs.length === 0
               ? '<div style="font-size:11px;color:#94a3b8;padding:6px 0;">No sub-criteria.</div>'
               : subs.map(c => {
+                  const labelCol = tab === 'office' ? 'target_label_office' : 'target_label';
                   const tMin = c[minCol] != null ? c[minCol] : (c.target_min != null ? c.target_min : '');
                   const tMax = c[maxCol] != null ? c[maxCol] : (c.target_max != null ? c.target_max : '');
+                  const tLabel = c[labelCol] != null ? c[labelCol] : (c.target_label || '');
                   const oMin = tab === 'office' ? c.target_min : c.target_min_office;
                   const oMax = tab === 'office' ? c.target_max : c.target_max_office;
+                  const oLabel = tab === 'office' ? c.target_label : c.target_label_office;
                   const sameMin = oMin == null || String(oMin) === String(tMin);
                   const sameMax = oMax == null || String(oMax) === String(tMax);
+                  const sameLabel = oLabel == null || String(oLabel) === String(tLabel);
                   const unit = c.target_unit || '';
+                  // If the criterion is qualitative (no numeric min/max set on the
+                  // Residential side), show a single editable text-label input
+                  // instead of empty Min/Max inputs.
+                  const isQualitative = (c.target_min == null && c.target_max == null);
+                  const inputsRow = isQualitative
+                    ? `<div class="mr-crit-inputs">
+                         <label>Target</label>
+                         <input type="text" value="${_esc(tLabel)}" placeholder="e.g. Top 20% nationally"
+                                style="flex:1;min-width:160px;width:auto;"
+                                onchange="mrSaveCriterionLabel('${c.id}', this.value, '${tab}')">
+                         ${!sameLabel ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${_esc(oLabel || '—')}">${otherLabel.charAt(0)}: ${_esc(oLabel || '—')}</span>` : ''}
+                       </div>`
+                    : `<div class="mr-crit-inputs">
+                         <label>Min</label>
+                         <input type="number" step="any" value="${tMin}" placeholder="—"
+                                onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, '${tab}')">
+                         ${!sameMin ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMin}">${otherLabel.charAt(0)}: ${oMin}</span>` : ''}
+                         <label>Max</label>
+                         <input type="number" step="any" value="${tMax}" placeholder="—"
+                                onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, '${tab}')">
+                         ${!sameMax ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMax}">${otherLabel.charAt(0)}: ${oMax}</span>` : ''}
+                       </div>`;
                   return `
                     <div class="mr-crit-row">
                       <div class="mr-crit-name">
@@ -2869,16 +2895,7 @@ Research this town now and produce the scoring JSON.`;
                         ${unit ? `<span class="mr-crit-unit">${_esc(unit)}</span>` : ''}
                       </div>
                       ${c.description ? `<div class="mr-crit-desc">${_esc(c.description)}</div>` : ''}
-                      <div class="mr-crit-inputs">
-                        <label>Min</label>
-                        <input type="number" step="any" value="${tMin}" placeholder="—"
-                               onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, '${tab}')">
-                        ${!sameMin ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMin}">${otherLabel.charAt(0)}: ${oMin}</span>` : ''}
-                        <label>Max</label>
-                        <input type="number" step="any" value="${tMax}" placeholder="—"
-                               onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, '${tab}')">
-                        ${!sameMax ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMax}">${otherLabel.charAt(0)}: ${oMax}</span>` : ''}
-                      </div>
+                      ${inputsRow}
                     </div>`;
                 }).join('')}
           </div>
@@ -2891,8 +2908,8 @@ Research this town now and produce the scoring JSON.`;
 
     _openModal(`Manage Categories &amp; Criteria — ${tabIcon} ${tabLabel}`, `
       <div class="mr-tab-row">
-        <button class="mr-tab ${tab === 'residential' ? 'active' : ''}" onclick="mrSetCriteriaModalView('residential')">🏠 Residential</button>
         <button class="mr-tab ${tab === 'office' ? 'active' : ''}" onclick="mrSetCriteriaModalView('office')">🏢 Office</button>
+        <button class="mr-tab ${tab === 'residential' ? 'active' : ''}" onclick="mrSetCriteriaModalView('residential')">🏠 Residential</button>
         <div style="flex:1;"></div>
         <span class="mr-tab-total">Total weight: <strong style="color:${accent};">${totalWeight.toFixed(1)}</strong></span>
         ${copyButton}
@@ -2962,6 +2979,19 @@ Research this town now and produce the scoring JSON.`;
       _toast(`${c ? c.name : 'Criterion'} ${kind} (${view}) → ${v == null ? 'cleared' : v}`);
       _manageCriteria();
       _scheduleRecomputeAll();
+    } catch(e) { _toast('Save failed: ' + e.message, true); }
+  }
+  async function _saveCriterionLabel(id, rawValue, view = 'residential') {
+    const v = (rawValue || '').trim() || null;
+    const col = view === 'office' ? 'target_label_office' : 'target_label';
+    try {
+      await window.supaWrite('market_research_criteria', 'PATCH', { [col]: v }, `?id=eq.${id}`);
+      const c = _criteria.find(x => x.id === id);
+      if (c) c[col] = v;
+      _toast(`${c ? c.name : 'Criterion'} target (${view}) → ${v == null ? 'cleared' : v}`);
+      _manageCriteria();
+      // Label-only changes don't affect numeric composites, but Phase 3 will
+      // see the new label next time it runs — so no recompute needed here.
     } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
   // Legacy criterion-level weight setter kept for back-compat — no-op for now.
@@ -3175,6 +3205,7 @@ Research this town now and produce the scoring JSON.`;
   window.mrSaveSource     = (c, v) => _saveSource(c, v);
   window.mrManageCriteria = ()    => _manageCriteria();
   window.mrSaveCriterionTarget = _saveCriterionTarget;
+  window.mrSaveCriterionLabel = _saveCriterionLabel;
   window.mrSetCriteriaModalView = _setCriteriaModalView;
   window.mrCopyResidentialToOffice = _copyResidentialToOffice;
   window.mrScrollToCat = (catId) => {
