@@ -1996,8 +1996,9 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     if (totalWeight === 0) return;
     const composite = weightedSum / totalWeight;
     const score = Math.round(composite * 10) / 10;
-    // Derive tier from the rounded display score so 8.0 always = Tier 1
-    const tier = score >= 8 ? 1 : score >= 6 ? 2 : score >= 4 ? 3 : 4;
+    // Tier bands — Tier 1 is tight (≥8.5) so it stays selective even after
+    // Phase 2 Commute lifted the bulk of the metro-adjacent shortlist.
+    const tier = score >= 8.5 ? 1 : score >= 6.5 ? 2 : score >= 4.5 ? 3 : 4;
     await window.supaWrite('market_research_markets', 'PATCH', { score, tier }, `?id=eq.${marketId}`);
   }
 
@@ -2669,7 +2670,8 @@ Research this town now and produce the scoring JSON.`;
       let composite = sumWeighted / sumWeightUsed;        // 0-10
       composite = Math.max(1, Math.min(10, composite));   // clamp to seeding bounds
       composite = Math.round(composite * 10) / 10;        // 1 decimal place
-      const tier = composite >= 8.0 ? 1 : (composite >= 6.5 ? 2 : (composite >= 5.0 ? 3 : 4));
+      // Tier bands (unified across recompute paths) — T1 tight at ≥8.5
+      const tier = composite >= 8.5 ? 1 : (composite >= 6.5 ? 2 : (composite >= 4.5 ? 3 : 4));
       // Only push update if value changed (avoid noisy writes)
       if (m.score !== composite || m.tier !== tier) {
         updates.push({ id: m.id, name: m.name, score: composite, tier, prevScore: m.score, prevTier: m.tier });
