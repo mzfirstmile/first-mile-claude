@@ -2892,10 +2892,28 @@ Research this town now and produce the scoring JSON.`;
                   const sameMax = oMax == null || String(oMax) === String(tMax);
                   const sameLabel = oLabel == null || String(oLabel) === String(tLabel);
                   const unit = c.target_unit || '';
-                  // If the criterion is qualitative (no numeric min/max set on the
-                  // Residential side), show a single editable text-label input
-                  // instead of empty Min/Max inputs.
-                  const isQualitative = (c.target_min == null && c.target_max == null);
+                  // Decide which inputs to render. A criterion is:
+                  //   qualitative: no numeric min/max anywhere → single Target text input
+                  //   range:       both min & max meaningful (e.g., Town Population)
+                  //   min-only:    "≥ X is better" (e.g., Median HHI ≥ $200k)
+                  //   max-only:    "≤ X is better" (e.g., Commute ≤ 45 min)
+                  // Use the criterion's RESIDENTIAL definition as the source of truth
+                  // for which inputs are relevant; both views keep the same shape.
+                  const hasMinR = c.target_min != null;
+                  const hasMaxR = c.target_max != null;
+                  const isQualitative = !hasMinR && !hasMaxR;
+                  const showMin = hasMinR || (hasMaxR === false && hasMinR === false); // also show in true-blank case below
+                  const showMax = hasMaxR;
+                  const minInput = `
+                    <label>Min</label>
+                    <input type="number" step="any" value="${tMin}" placeholder="—"
+                           onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, '${tab}')">
+                    ${!sameMin ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMin}">${otherLabel.charAt(0)}: ${oMin}</span>` : ''}`;
+                  const maxInput = `
+                    <label>Max</label>
+                    <input type="number" step="any" value="${tMax}" placeholder="—"
+                           onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, '${tab}')">
+                    ${!sameMax ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMax}">${otherLabel.charAt(0)}: ${oMax}</span>` : ''}`;
                   const inputsRow = isQualitative
                     ? `<div class="mr-crit-inputs">
                          <label>Target</label>
@@ -2905,14 +2923,8 @@ Research this town now and produce the scoring JSON.`;
                          ${!sameLabel ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${_esc(oLabel || '—')}">${otherLabel.charAt(0)}: ${_esc(oLabel || '—')}</span>` : ''}
                        </div>`
                     : `<div class="mr-crit-inputs">
-                         <label>Min</label>
-                         <input type="number" step="any" value="${tMin}" placeholder="—"
-                                onchange="mrSaveCriterionTarget('${c.id}', 'target_min', this.value, '${tab}')">
-                         ${!sameMin ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMin}">${otherLabel.charAt(0)}: ${oMin}</span>` : ''}
-                         <label>Max</label>
-                         <input type="number" step="any" value="${tMax}" placeholder="—"
-                                onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, '${tab}')">
-                         ${!sameMax ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMax}">${otherLabel.charAt(0)}: ${oMax}</span>` : ''}
+                         ${hasMinR ? minInput : ''}
+                         ${hasMaxR ? maxInput : ''}
                        </div>`;
                   const displayName = (tab === 'office' && c.name_office) ? c.name_office : c.name;
                   return `
@@ -3083,18 +3095,53 @@ Research this town now and produce the scoring JSON.`;
     await Promise.all(entries.map(e => e.fire().catch(() => {})));
   }
 
+  // Update the small % chip + total weight + stacked-bar segment in place,
+  // WITHOUT re-rendering the whole modal (which would nuke the input the user
+  // is mid-clicking on).
+  function _refreshWeightChipsInPlace() {
+    const cats = _categories.slice();
+    const tab = _criteriaModalView || 'residential';
+    const wCol = tab === 'office' ? 'weight_office' : 'weight';
+    const total = cats.reduce((s, c) => s + (parseFloat(c[wCol]) || 0), 0);
+    // Update total chip
+    const totalEl = document.querySelector('.mr-tab-total strong');
+    if (totalEl) totalEl.textContent = total.toFixed(1);
+    // Update each card's % chip
+    document.querySelectorAll('.mr-cat-card').forEach((card) => {
+      const id = (card.id || '').replace('mr-cat-', '');
+      const cat = cats.find(c => c.id === id);
+      if (!cat) return;
+      const w = parseFloat(cat[wCol]) || 0;
+      const pctEl = card.querySelector('.mr-cat-weight-pct');
+      if (pctEl) pctEl.textContent = total > 0 ? Math.round(w / total * 100) + '%' : '';
+    });
+    // Update stacked-bar segments by width
+    const bar = document.querySelector('.mr-wbar');
+    if (bar) {
+      const segs = bar.querySelectorAll('.mr-wbar-seg');
+      // Segments are in the same order as cats (sorted by sort_order)
+      const ordered = cats.slice().sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+      segs.forEach((seg, i) => {
+        const cat = ordered[i];
+        if (!cat) return;
+        const w = parseFloat(cat[wCol]) || 0;
+        const pct = total > 0 ? (w / total) * 100 : 0;
+        seg.style.width = pct + '%';
+        seg.textContent = pct >= 7 ? Math.round(pct) + '%' : '';
+      });
+    }
+  }
+
   function _saveCategoryWeight(id, rawValue, view = 'residential') {
     const weight = Math.max(0, parseFloat(rawValue) || 0);
     const col = view === 'office' ? 'weight_office' : 'weight';
-    // Cache update first — synchronous, so the re-render sees the new value.
     const cat = _categories.find(c => c.id === id);
     if (cat) cat[col] = weight;
     _criteriaDirty = true;
-    _scheduleModalRerender();
+    _refreshWeightChipsInPlace(); // surgical update — no innerHTML reset
     _debouncePatch('cat:' + id + ':' + col, async () => {
       try {
         await window.supaWrite('market_research_categories', 'PATCH', { [col]: weight }, `?id=eq.${id}`);
-        _toast(`${cat ? cat.name : 'Category'} ${view} weight → ${weight}`);
       } catch (e) { _toast('Save failed: ' + e.message, true); }
     });
   }
@@ -3104,11 +3151,9 @@ Research this town now and produce the scoring JSON.`;
     const c = _criteria.find(x => x.id === id);
     if (c) c[col] = v;
     _criteriaDirty = true;
-    _scheduleModalRerender();
     _debouncePatch('crit:' + id + ':' + col, async () => {
       try {
         await window.supaWrite('market_research_criteria', 'PATCH', { [col]: v }, `?id=eq.${id}`);
-        _toast(`${c ? c.name : 'Criterion'} ${kind} (${view}) → ${v == null ? 'cleared' : v}`);
       } catch (e) { _toast('Save failed: ' + e.message, true); }
     });
   }
@@ -3118,11 +3163,9 @@ Research this town now and produce the scoring JSON.`;
     const c = _criteria.find(x => x.id === id);
     if (c) c[col] = v;
     _criteriaDirty = true;
-    _scheduleModalRerender();
     _debouncePatch('crit:' + id + ':' + col, async () => {
       try {
         await window.supaWrite('market_research_criteria', 'PATCH', { [col]: v }, `?id=eq.${id}`);
-        _toast(`${c ? c.name : 'Criterion'} target (${view}) → ${v == null ? 'cleared' : v}`);
       } catch (e) { _toast('Save failed: ' + e.message, true); }
     });
   }
