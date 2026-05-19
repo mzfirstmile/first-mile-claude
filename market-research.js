@@ -572,10 +572,10 @@
       }
       #mrRoot .mr-geo-clear:hover { background: #fee2e2; }
 
-      /* Split list+map layout — give the list the lion's share so the
-         Thesis column doesn't get clipped on standard 14"/15" laptops. */
+      /* Split list+map layout — map gets a bigger pane (42%) now that the
+         list's Market column has been tightened. */
       #mrRoot .mr-split {
-        display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 32%);
+        display: grid; grid-template-columns: minmax(0, 1fr) minmax(420px, 42%);
         gap: 16px; align-items: flex-start;
       }
       #mrRoot .mr-split-list { min-width: 0; overflow-x: auto; }
@@ -588,7 +588,7 @@
       }
       #mrRoot .mr-split-map > #mrMap { width: 100%; height: 100%; }
       @media (max-width: 1280px) {
-        #mrRoot .mr-split { grid-template-columns: minmax(0, 1fr) minmax(300px, 36%); }
+        #mrRoot .mr-split { grid-template-columns: minmax(0, 1fr) minmax(360px, 38%); }
       }
       @media (max-width: 1100px) {
         #mrRoot .mr-split { grid-template-columns: 1fr; }
@@ -1456,12 +1456,12 @@
         <table class="mr-table">
           <thead>
             <tr>
-              <th style="width:42px;text-align:center;">#</th>
-              <th style="width:30px;"></th>
-              <th style="width:16%;">Market</th>
+              <th style="width:36px;text-align:center;">#</th>
+              <th style="width:26px;"></th>
+              <th style="width:13%;">Market</th>
               <th style="width:9%;text-align:right;">Population</th>
               <th style="width:10%;text-align:right;">Median HHI</th>
-              <th style="width:11%;">Nearby Metro</th>
+              <th style="width:12%;">Nearby Metro</th>
               <th style="width:7%;text-align:center;">Score</th>
               <th style="width:6%;text-align:center;">Tier</th>
               <th>Thesis</th>
