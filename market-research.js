@@ -2279,18 +2279,18 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
           office_score = ROUND(c.comp_off::numeric, 1),
           office_tier  = CASE WHEN c.comp_off >= 8.5 THEN 1 WHEN c.comp_off >= 7.0 THEN 2 WHEN c.comp_off >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
           updated_at = now()
-        FROM composites c WHERE m.id = c.market_id;
-        -- Refresh global rank columns based on new composites
-        WITH rr AS (SELECT id, ROW_NUMBER() OVER (ORDER BY score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE score IS NOT NULL)
-        UPDATE market_research_markets m SET rank_residential = rr.r FROM rr WHERE m.id = rr.id;
-        WITH ro AS (SELECT id, ROW_NUMBER() OVER (ORDER BY office_score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE office_score IS NOT NULL)
-        UPDATE market_research_markets m SET rank_office = ro.r FROM ro WHERE m.id = ro.id;`;
-        const r = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
-          method: 'POST',
-          headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: sql }),
-        });
-        if (!r.ok) throw new Error('status ' + r.status);
+        FROM composites c WHERE m.id = c.market_id`;
+        const _runSql = async (q) => {
+          const resp = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+            method: 'POST',
+            headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: q }),
+          });
+          if (!resp.ok) throw new Error('status ' + resp.status);
+        };
+        await _runSql(sql);
+        await _runSql(`WITH rr AS (SELECT id, ROW_NUMBER() OVER (ORDER BY score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE score IS NOT NULL) UPDATE market_research_markets m SET rank_residential = rr.r FROM rr WHERE m.id = rr.id`);
+        await _runSql(`WITH ro AS (SELECT id, ROW_NUMBER() OVER (ORDER BY office_score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE office_score IS NOT NULL) UPDATE market_research_markets m SET rank_office = ro.r FROM ro WHERE m.id = ro.id`);
         _toast('✓ Recomputed all markets (Residential + Office)');
         try { await _loadData(); _renderGrid(); } catch {}
         if (_currentMarket) {
@@ -3089,12 +3089,19 @@ Research this town now and produce the scoring JSON.`;
         office_tier  = CASE WHEN c.comp_off >= 8.5 THEN 1 WHEN c.comp_off >= 7.0 THEN 2 WHEN c.comp_off >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
         updated_at = now()
       FROM composites c WHERE m.id = c.market_id`;
-      const r = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
-        method: 'POST',
-        headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: sql }),
-      });
-      if (!r.ok) throw new Error('status ' + r.status);
+      const runSql = async (q) => {
+        const resp = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+          method: 'POST',
+          headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: q }),
+        });
+        if (!resp.ok) throw new Error('status ' + resp.status);
+      };
+      await runSql(sql);
+      // Recompute persistent rank columns AFTER composites settle (separate
+      // requests — multi-statement in one exec_sql call can silently truncate).
+      await runSql(`WITH rr AS (SELECT id, ROW_NUMBER() OVER (ORDER BY score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE score IS NOT NULL) UPDATE market_research_markets m SET rank_residential = rr.r FROM rr WHERE m.id = rr.id`);
+      await runSql(`WITH ro AS (SELECT id, ROW_NUMBER() OVER (ORDER BY office_score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE office_score IS NOT NULL) UPDATE market_research_markets m SET rank_office = ro.r FROM ro WHERE m.id = ro.id`);
       try { await _loadData(); _renderGrid(); } catch {}
       if (_currentMarket) {
         try { await _loadScoresForMarket(_currentMarket.id); _renderDetail(); } catch {}
