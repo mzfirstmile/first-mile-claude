@@ -39,6 +39,7 @@
   function _tierCol()  { return _viewType === 'office' ? 'office_tier'  : 'tier';  }
   let _msaGeoJson = null;         // cached CBSA GeoJSON once fetched (per-session)
   let _msaLayer = null;           // Leaflet layer reference so we can remove on re-init
+  let _scorecardView = null;      // detail-page scorecard: 'residential' | 'office' (defaults to page toggle)
   let _viewMode = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_mode')) || 'list'; // 'list' | 'map'
   // Migrate legacy 'grid' to 'list'
   if (_viewMode === 'grid') _viewMode = 'list';
@@ -1169,6 +1170,10 @@
         <div class="mr-scorecard">
           <div class="mr-scorecard-header">
             <h3>Criteria Scorecard</h3>
+            <span class="mr-asset-toggle" id="mrScorecardToggle" style="margin-left:auto;">
+              <button data-view="office" onclick="mrSetScorecardView('office')">🏢 Office</button>
+              <button data-view="residential" onclick="mrSetScorecardView('residential')">🏠 Residential</button>
+            </span>
           </div>
           <div id="mrScorecardBody"></div>
         </div>
@@ -1866,15 +1871,18 @@
       <span class="mr-status ${m.status}">${_statusLabel(m.status)}</span>
     `;
 
-    // Top metric cards
+    // Top metric cards — show BOTH Residential and Office score/tier
+    const scoreColor = (s) => s >= 8 ? '#15803d' : (s >= 6 ? '#65a30d' : (s >= 4 ? '#ca8a04' : (s != null ? '#b91c1c' : '#cbd5e1')));
     document.getElementById('mrDetailMetrics').innerHTML = `
       <div class="mr-metric-card">
-        <div class="mr-metric-label">Score (1-10)</div>
-        <div class="mr-metric-value" style="color:${m.score >= 8 ? '#15803d' : (m.score >= 6 ? '#65a30d' : (m.score >= 4 ? '#ca8a04' : (m.score != null ? '#b91c1c' : '#cbd5e1')))};">${m.score != null ? m.score.toFixed(1) : '—'}</div>
+        <div class="mr-metric-label">🏠 Residential Score</div>
+        <div class="mr-metric-value" style="color:${scoreColor(m.score)};">${m.score != null ? m.score.toFixed(1) : '—'}</div>
+        <div style="font-size:11px;margin-top:4px;"><span class="mr-tier ${_tierClass(m.tier)}">${m.tier != null ? 'Tier ' + m.tier : 'Untiered'}</span> ${m.rank_residential != null ? `<span style="color:#94a3b8;margin-left:4px;">· #${m.rank_residential.toLocaleString()}</span>` : ''}</div>
       </div>
       <div class="mr-metric-card">
-        <div class="mr-metric-label">Tier</div>
-        <div class="mr-metric-value"><span class="mr-tier ${_tierClass(m.tier)}" style="font-size:13px;">${m.tier != null ? 'Tier ' + m.tier : 'Untiered'}</span></div>
+        <div class="mr-metric-label">🏢 Office Score</div>
+        <div class="mr-metric-value" style="color:${scoreColor(m.office_score)};">${m.office_score != null ? m.office_score.toFixed(1) : '—'}</div>
+        <div style="font-size:11px;margin-top:4px;"><span class="mr-tier ${_tierClass(m.office_tier)}">${m.office_tier != null ? 'Tier ' + m.office_tier : 'Untiered'}</span> ${m.rank_office != null ? `<span style="color:#94a3b8;margin-left:4px;">· #${m.rank_office.toLocaleString()}</span>` : ''}</div>
       </div>
       ${m.population ? `
       <div class="mr-metric-card">
@@ -1904,6 +1912,13 @@
     const m = _currentMarket;
     const bodyEl = document.getElementById('mrScorecardBody');
     if (!bodyEl) return;
+    // Resolve scorecard view — defaults to the page-level asset class
+    if (_scorecardView == null) _scorecardView = _viewType || 'residential';
+    const view = _scorecardView;
+    // Sync toggle button active state
+    document.querySelectorAll('#mrScorecardToggle button').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === view);
+    });
 
     if (_criteria.length === 0) {
       bodyEl.innerHTML = `
@@ -1963,7 +1978,9 @@
         if (!displayValue && _PHASE2_VALUE_FROM_MARKET[c.name]) {
           displayValue = _PHASE2_VALUE_FROM_MARKET[c.name](m) || '';
         }
-        const scoreNum = (s.value_numeric != null && s.value_numeric !== '') ? Number(s.value_numeric).toFixed(1) : null;
+        // Use the view-specific 0-10 score column
+        const scoreVal = view === 'office' ? s.value_numeric_office : s.value_numeric;
+        const scoreNum = (scoreVal != null && scoreVal !== '') ? Number(scoreVal).toFixed(1) : null;
         const target = _fmtTarget(c);
         // Always cite a source. If no score yet for a Phase 3 criterion, show suggested source.
         const SOURCE_SUGGESTIONS = {
@@ -3491,6 +3508,12 @@ Research this town now and produce the scoring JSON.`;
   window.mrSaveCriterionLabel = _saveCriterionLabel;
   window.mrSaveCriterionActive = _saveCriterionActive;
   window.mrSetCriteriaModalView = _setCriteriaModalView;
+  window.mrSetScorecardView = (v) => {
+    if (!['residential', 'office'].includes(v)) return;
+    if (_scorecardView === v) return;
+    _scorecardView = v;
+    _renderScorecard();
+  };
   window.mrCopyResidentialToOffice = _copyResidentialToOffice;
   window.mrFinishCriteriaEdit = _finishCriteriaEdit;
   window.mrViewOnMap = (lat, lng, name) => {
