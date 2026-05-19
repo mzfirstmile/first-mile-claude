@@ -387,11 +387,11 @@
         background: #fff; border-radius: 12px; max-width: 520px; width: 100%;
         max-height: 90vh; overflow-y: auto; padding: 24px;
       }
-      /* Wide variant for the categories editor — multi-column grid */
-      #mrRoot .mr-modal.mr-modal-wide { max-width: 1200px; }
+      /* Wide variant for the categories editor — 4-column grid → 7 cards in 2 rows */
+      #mrRoot .mr-modal.mr-modal-wide { max-width: 1280px; }
       #mrRoot .mr-cat-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
         gap: 12px;
       }
       #mrRoot .mr-cat-card {
@@ -637,8 +637,8 @@
       }
       #mrRoot .mr-crit-inputs label:first-child { margin-left: 0; }
       #mrRoot .mr-crit-inputs input {
-        width: 100px; padding: 5px 8px; border: 1px solid #d1d5db;
-        border-radius: 6px; font-size: 13px;
+        width: 80px; padding: 4px 6px; border: 1px solid #d1d5db;
+        border-radius: 6px; font-size: 12px;
       }
       #mrRoot .mr-crit-inputs input:focus {
         outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 2px rgba(14,165,233,0.1);
