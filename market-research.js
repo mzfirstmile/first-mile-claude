@@ -2872,7 +2872,7 @@ Research this town now and produce the scoring JSON.`;
             </div>
             <div class="mr-cat-weight-wrap">
               <input type="number" min="0" step="0.1" value="${w}"
-                     onchange="mrSaveCategoryWeight('${cat.id}', this.value, '${tab}')">
+                     oninput="mrSaveCategoryWeight('${cat.id}', this.value, '${tab}')">
               <div class="mr-cat-weight-pct">${pct === '—' ? '' : pct + '%'}</div>
             </div>
           </div>
