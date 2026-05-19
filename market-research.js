@@ -550,6 +550,10 @@
       #mrRoot .mr-tier-pill input { margin: 0; cursor: pointer; }
       #mrRoot .mr-tier-pill.active { background: #0ea5e9; border-color: #0284c7; color: #fff; font-weight: 600; }
       #mrRoot .mr-tier-pill.active:hover { background: #0284c7; }
+      #mrRoot .mr-tier-ranges {
+        font-size: 11px; color: #64748b; margin-left: 12px;
+        display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center;
+      }
 
       /* State + Metro geographic dropdown filters */
       #mrRoot .mr-geo-filter {
@@ -912,6 +916,13 @@
               <label class="mr-tier-pill" data-tier="2"><input type="checkbox" onchange="mrToggleTier(2, this.checked)"> Tier 2</label>
               <label class="mr-tier-pill" data-tier="3"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</label>
               <label class="mr-tier-pill" data-tier="4"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</label>
+              <span class="mr-tier-ranges">
+                <span style="color:#15803d;font-weight:600;">T1 ≥ 8.5</span> ·
+                <span style="color:#1e40af;font-weight:600;">T2 7.0–8.4</span> ·
+                <span style="color:#b45309;font-weight:600;">T3 4.0–6.9</span> ·
+                <span style="color:#64748b;font-weight:600;">T4 &lt; 4.0</span>
+                <span style="color:#94a3b8;"> · composite score 0–10</span>
+              </span>
             </div>
             <div class="mr-geo-filter">
               <select id="mrStateFilter" class="mr-geo-select" onchange="mrSetGeoFilter('state', this.value)">
@@ -1374,32 +1385,43 @@
       _markerCluster = L.markerClusterGroup({ maxClusterRadius: 50, disableClusteringAtZoom: 10 });
       _mapInstance.addLayer(_markerCluster);
 
-      // MSA boundary overlay — lazy-load once per session via Supabase proxy.
-      // Proxy already filters to LSAD='M1' (MSAs only — drops Micropolitan).
+      // Metro overlay — derive centroids per nearest_top50_city from the
+      // markets themselves (no external GeoJSON needed; Census TIGERweb is
+      // WAF-blocked from edge functions). Draws a 60-mile radius circle +
+      // label at each metro's center of mass, matching the Big Four /
+      // Wealth-Mgmt 60mi criterion radius.
       (async () => {
         try {
-          if (!_msaGeoJson) {
-            const r = await fetch(`${window.SUPABASE_URL}/functions/v1/census-geo-proxy?layer=cbsa`, {
-              headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY }
-            });
-            if (!r.ok) throw new Error('MSA fetch ' + r.status);
-            _msaGeoJson = await r.json();
-            const n = (_msaGeoJson.features || []).length;
-            console.log(`[mr] MSA layer loaded: ${n} polygons`);
-          }
           if (_msaLayer && _mapInstance) { try { _mapInstance.removeLayer(_msaLayer); } catch(_) {} }
-          _msaLayer = L.geoJSON(_msaGeoJson, {
-            style: { color: '#0ea5e9', weight: 1.1, opacity: 0.55, fillColor: '#0ea5e9', fillOpacity: 0.04 },
-            onEachFeature: (feat, lyr) => {
-              const p = feat.properties || {};
-              const name = p.NAME || p.name || 'MSA';
-              lyr.bindTooltip(name, { sticky: true, direction: 'top', opacity: 0.92 });
-            },
-          });
+          const metros = new Map(); // nearest_top50_city -> { lats[], lngs[] }
+          for (const m of withCoords) {
+            const key = m.nearest_top50_city;
+            if (!key) continue;
+            if (!metros.has(key)) metros.set(key, { lats: [], lngs: [] });
+            const g = metros.get(key);
+            g.lats.push(parseFloat(m.latitude));
+            g.lngs.push(parseFloat(m.longitude));
+          }
+          const layerGroup = L.layerGroup();
+          for (const [name, g] of metros) {
+            if (g.lats.length < 2) continue; // need at least 2 markets to anchor a metro
+            const avgLat = g.lats.reduce((a, b) => a + b, 0) / g.lats.length;
+            const avgLng = g.lngs.reduce((a, b) => a + b, 0) / g.lngs.length;
+            const circle = L.circle([avgLat, avgLng], {
+              radius: 60 * 1609.34, // 60 miles in meters
+              color: '#0ea5e9', weight: 1.5, opacity: 0.55,
+              fillColor: '#0ea5e9', fillOpacity: 0.05,
+              interactive: true,
+            });
+            circle.bindTooltip(`${name} (${g.lats.length} markets)`, { sticky: true, direction: 'top', opacity: 0.92 });
+            layerGroup.addLayer(circle);
+          }
+          _msaLayer = layerGroup;
           _msaLayer.addTo(_mapInstance);
           if (_markerCluster) _markerCluster.bringToFront && _markerCluster.bringToFront();
+          console.log(`[mr] Metro overlay: ${metros.size} top-50 cities`);
         } catch (e) {
-          console.warn('[mr] MSA overlay failed:', e.message || e);
+          console.warn('[mr] Metro overlay failed:', e.message || e);
         }
       })();
 
