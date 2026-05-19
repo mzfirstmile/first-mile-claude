@@ -2937,7 +2937,7 @@ Research this town now and produce the scoring JSON.`;
         <button class="mr-tab ${tab === 'residential' ? 'active' : ''}" onclick="mrSetCriteriaModalView('residential')">🏠 Residential</button>
         <div style="flex:1;"></div>
         <span class="mr-tab-total">Total weight: <strong style="color:${accent};">${totalWeight.toFixed(1)}</strong></span>
-        ${copyButton}
+        <button class="mr-btn mr-btn-primary" onclick="mrFinishCriteriaEdit()" style="padding:6px 18px;">Done</button>
       </div>
       ${weightBar}
       <p class="mr-modal-hint">
@@ -2957,6 +2957,8 @@ Research this town now and produce the scoring JSON.`;
     _criteriaDirty = false;
     _closeModal();
     _showFullScreenLoader('Recalculating all market scores based on adjusted criteria and weights…');
+    // Flush pending debounced PATCHes so the recompute SQL sees latest values
+    await _flushAllPendingPatches();
     try {
       const sql = `WITH cat_means AS (
         SELECT s.market_id, c.category_id, AVG(s.value_numeric) AS mean_res, AVG(s.value_numeric_office) AS mean_off
@@ -3057,41 +3059,72 @@ Research this town now and produce the scoring JSON.`;
   // Recompute is deferred until they click Done (or close the modal) so
   // we don't re-score the whole universe on every keystroke.
   let _criteriaDirty = false;
-  async function _saveCategoryWeight(id, rawValue, view = 'residential') {
+
+  // Per-cell save debouncer. Cache updates happen SYNCHRONOUSLY in the handler
+  // so the modal's debounced re-render always reads the latest user value.
+  // The actual PATCH is debounced 400ms per (entity, column) so rapid arrow
+  // ratcheting only fires one network request per cell — no out-of-order races.
+  // Tracks pending debounced saves. Each entry: { timer, fire }.
+  const _saveTimers = new Map();
+  function _debouncePatch(key, fn, delay = 400) {
+    const prev = _saveTimers.get(key);
+    if (prev) clearTimeout(prev.timer);
+    const wrapped = async () => {
+      _saveTimers.delete(key);
+      await fn();
+    };
+    _saveTimers.set(key, { timer: setTimeout(wrapped, delay), fire: wrapped });
+  }
+  async function _flushAllPendingPatches() {
+    const entries = [...(_saveTimers.values())];
+    _saveTimers.clear();
+    for (const e of entries) clearTimeout(e.timer);
+    // Fire them all in parallel and wait
+    await Promise.all(entries.map(e => e.fire().catch(() => {})));
+  }
+
+  function _saveCategoryWeight(id, rawValue, view = 'residential') {
     const weight = Math.max(0, parseFloat(rawValue) || 0);
     const col = view === 'office' ? 'weight_office' : 'weight';
-    try {
-      await window.supaWrite('market_research_categories', 'PATCH', { [col]: weight }, `?id=eq.${id}`);
-      const cat = _categories.find(c => c.id === id);
-      if (cat) cat[col] = weight;
-      _toast(`${cat ? cat.name : 'Category'} ${view} weight → ${weight}`);
-      _criteriaDirty = true;
-      _scheduleModalRerender();
-      if (_currentMarket) _renderScorecard();
-    } catch(e) { _toast('Save failed: ' + e.message, true); }
+    // Cache update first — synchronous, so the re-render sees the new value.
+    const cat = _categories.find(c => c.id === id);
+    if (cat) cat[col] = weight;
+    _criteriaDirty = true;
+    _scheduleModalRerender();
+    _debouncePatch('cat:' + id + ':' + col, async () => {
+      try {
+        await window.supaWrite('market_research_categories', 'PATCH', { [col]: weight }, `?id=eq.${id}`);
+        _toast(`${cat ? cat.name : 'Category'} ${view} weight → ${weight}`);
+      } catch (e) { _toast('Save failed: ' + e.message, true); }
+    });
   }
-  async function _saveCriterionTarget(id, kind, rawValue, view = 'residential') {
+  function _saveCriterionTarget(id, kind, rawValue, view = 'residential') {
     const v = rawValue === '' ? null : parseFloat(rawValue);
     const col = view === 'office' ? `${kind}_office` : kind;
-    try {
-      await window.supaWrite('market_research_criteria', 'PATCH', { [col]: v }, `?id=eq.${id}`);
-      const c = _criteria.find(x => x.id === id);
-      if (c) c[col] = v;
-      _toast(`${c ? c.name : 'Criterion'} ${kind} (${view}) → ${v == null ? 'cleared' : v}`);
-      _criteriaDirty = true;
-      _scheduleModalRerender();
-    } catch(e) { _toast('Save failed: ' + e.message, true); }
+    const c = _criteria.find(x => x.id === id);
+    if (c) c[col] = v;
+    _criteriaDirty = true;
+    _scheduleModalRerender();
+    _debouncePatch('crit:' + id + ':' + col, async () => {
+      try {
+        await window.supaWrite('market_research_criteria', 'PATCH', { [col]: v }, `?id=eq.${id}`);
+        _toast(`${c ? c.name : 'Criterion'} ${kind} (${view}) → ${v == null ? 'cleared' : v}`);
+      } catch (e) { _toast('Save failed: ' + e.message, true); }
+    });
   }
-  async function _saveCriterionLabel(id, rawValue, view = 'residential') {
+  function _saveCriterionLabel(id, rawValue, view = 'residential') {
     const v = (rawValue || '').trim() || null;
     const col = view === 'office' ? 'target_label_office' : 'target_label';
-    try {
-      await window.supaWrite('market_research_criteria', 'PATCH', { [col]: v }, `?id=eq.${id}`);
-      const c = _criteria.find(x => x.id === id);
-      if (c) c[col] = v;
-      _toast(`${c ? c.name : 'Criterion'} target (${view}) → ${v == null ? 'cleared' : v}`);
-      _scheduleModalRerender();
-    } catch(e) { _toast('Save failed: ' + e.message, true); }
+    const c = _criteria.find(x => x.id === id);
+    if (c) c[col] = v;
+    _criteriaDirty = true;
+    _scheduleModalRerender();
+    _debouncePatch('crit:' + id + ':' + col, async () => {
+      try {
+        await window.supaWrite('market_research_criteria', 'PATCH', { [col]: v }, `?id=eq.${id}`);
+        _toast(`${c ? c.name : 'Criterion'} target (${view}) → ${v == null ? 'cleared' : v}`);
+      } catch (e) { _toast('Save failed: ' + e.message, true); }
+    });
   }
   // Legacy criterion-level weight setter kept for back-compat — no-op for now.
   async function _saveCriterionWeight(id, rawValue) {
