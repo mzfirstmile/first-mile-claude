@@ -55,37 +55,44 @@ function scoreFromMinutes(min: number): number {
   return roundTo(10 - ((min - TARGET_MAX_MIN) / (MAX_MIN - TARGET_MAX_MIN)) * 10, 1);
 }
 
-async function nearestHighwayDist(lat: number, lng: number): Promise<{ miles: number; type: string } | null> {
-  // Overpass QL: find motorway/trunk nodes within radius, return geom.
-  // Using "way" + out skel geom would be ideal but heavier; nodes are fine
-  // because motorways are dense node sequences.
-  const q = `[out:json][timeout:15];(way["highway"~"^(motorway|trunk|motorway_link|trunk_link)$"](around:${SEARCH_RADIUS_M},${lat},${lng}););out geom 50;`;
-  const url = "https://overpass-api.de/api/interpreter";
-  try {
-    const r = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "data=" + encodeURIComponent(q),
-    });
-    if (!r.ok) return null;
-    const json = await r.json();
-    if (!json.elements || json.elements.length === 0) return null;
-    let bestMi = Infinity;
-    let bestType = "";
-    for (const el of json.elements) {
-      if (!el.geometry) continue;
-      const tag = (el.tags && el.tags.highway) || "";
-      for (const pt of el.geometry) {
-        const d = hav(lat, lng, pt.lat, pt.lon);
-        if (d < bestMi) { bestMi = d; bestType = tag; }
+async function nearestHighwayDist(lat: number, lng: number): Promise<{ miles: number; type: string; debug?: string } | null> {
+  // Overpass QL: split into explicit way[highway=motorway] + way[highway=trunk]
+  // queries (regex form was returning empty). out geom returns each way's
+  // node-by-node coordinates.
+  const q = `[out:json][timeout:25];(way["highway"="motorway"](around:${SEARCH_RADIUS_M},${lat},${lng});way["highway"="trunk"](around:${SEARCH_RADIUS_M},${lat},${lng});way["highway"="motorway_link"](around:${SEARCH_RADIUS_M},${lat},${lng}););out geom 100;`;
+  const endpoints = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+  ];
+  for (const url of endpoints) {
+    try {
+      const r = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", "User-Agent": "first-mile-market-research/1.0" },
+        body: "data=" + encodeURIComponent(q),
+      });
+      if (!r.ok) continue;
+      const json = await r.json();
+      if (!json.elements || json.elements.length === 0) {
+        // Try next endpoint
+        continue;
       }
+      let bestMi = Infinity;
+      let bestType = "";
+      for (const el of json.elements) {
+        if (!el.geometry) continue;
+        const tag = (el.tags && el.tags.highway) || "";
+        for (const pt of el.geometry) {
+          const d = hav(lat, lng, pt.lat, pt.lon);
+          if (d < bestMi) { bestMi = d; bestType = tag; }
+        }
+      }
+      if (isFinite(bestMi)) return { miles: bestMi, type: bestType };
+    } catch (e) {
+      console.error("Overpass error:", String(e).slice(0, 200));
     }
-    if (!isFinite(bestMi)) return null;
-    return { miles: bestMi, type: bestType };
-  } catch (e) {
-    console.error("Overpass error:", String(e).slice(0, 200));
-    return null;
   }
+  return null;
 }
 
 serve(async (req: Request) => {
