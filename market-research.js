@@ -1354,15 +1354,23 @@
       _markerCluster = L.markerClusterGroup({ maxClusterRadius: 50, disableClusteringAtZoom: 10 });
       _mapInstance.addLayer(_markerCluster);
 
-      // Fetch the full filtered set (not just current page) — capped at 1000 for now.
+      // Fetch the full filtered set (paginated — PostgREST anon caps each call
+      // at 1000 rows, so loop with offset until we have everything).
       const parts = _buildFilterQuery();
       parts.push('select=id,name,state,population,median_household_income,latitude,longitude,score,tier');
-      parts.push('limit=1000');
-      const url = `${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&');
-      const r = await fetch(url, {
-        headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY }
-      });
-      const rows = await r.json();
+      const baseUrl = `${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&');
+      const PAGE = 1000;
+      const rows = [];
+      for (let offset = 0; offset < 10000; offset += PAGE) {
+        const pageUrl = `${baseUrl}&limit=${PAGE}&offset=${offset}`;
+        const r = await fetch(pageUrl, {
+          headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY }
+        });
+        const chunk = await r.json();
+        if (!Array.isArray(chunk) || chunk.length === 0) break;
+        rows.push(...chunk);
+        if (chunk.length < PAGE) break;
+      }
       const withCoords = rows.filter(m => m.latitude != null && m.longitude != null);
       const withoutCoords = rows.filter(m => m.latitude == null || m.longitude == null);
 
