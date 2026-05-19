@@ -1502,9 +1502,6 @@
     return `
       <div id="mrMapContainer" style="${wrapStyle}">
         <div id="mrMap" style="width:100%;height:100%;"></div>
-        <div id="mrMapStatus" style="position:absolute;top:12px;left:12px;background:rgba(255,255,255,0.95);padding:8px 12px;border-radius:6px;font-size:12px;color:#475569;box-shadow:0 1px 3px rgba(0,0,0,0.1);z-index:1000;">
-          Loading map…
-        </div>
         <div id="mrMapLegend" style="position:absolute;bottom:12px;right:12px;background:rgba(255,255,255,0.95);padding:10px 14px;border-radius:8px;font-size:11px;color:#475569;box-shadow:0 1px 3px rgba(0,0,0,0.1);z-index:1000;">
           <div style="font-weight:700;color:#0f172a;margin-bottom:4px;">Tier</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;"></span> Tier 1</div>
@@ -1557,7 +1554,6 @@
   }
 
   async function _initMap() {
-    const status = document.getElementById('mrMapStatus');
     try {
       await _ensureLeaflet();
       const L = window.L;
@@ -1716,19 +1712,8 @@
           _refreshListOnly();
         }, 300);
       });
-      if (status) {
-        if (rows.length === 0) {
-          status.innerHTML = `No markets in current filter.`;
-        } else if (withCoords.length === 0) {
-          status.innerHTML = `0 of ${rows.length} towns mapped. <strong>Coordinates not populated yet.</strong>`;
-        } else if (withoutCoords.length > 0) {
-          status.innerHTML = `${withCoords.length} of ${rows.length} towns mapped. ${withoutCoords.length} missing coords.`;
-        } else {
-          status.innerHTML = `<strong>${withCoords.length}</strong> towns mapped.`;
-        }
-      }
     } catch (e) {
-      if (status) status.innerHTML = `<span style="color:#b91c1c;">Map failed: ${_esc(String(e).slice(0, 200))}</span>`;
+      console.warn('[mr] map init failed:', e);
     }
   }
 
