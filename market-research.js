@@ -183,12 +183,11 @@
         font-weight: 600; color: #1e293b;
       }
       #mrRoot .mr-view-on-map {
-        display: inline-block; font-size: 10px; color: #0369a1;
-        background: #f0f9ff; border: 1px solid #bae6fd;
-        padding: 1px 6px; border-radius: 4px; margin-top: 3px;
-        cursor: pointer; font-weight: 500;
+        display: inline-block; font-size: 10px; color: #94a3b8;
+        margin-top: 2px; cursor: pointer; font-weight: 400;
+        text-decoration: none;
       }
-      #mrRoot .mr-view-on-map:hover { background: #e0f2fe; color: #075985; }
+      #mrRoot .mr-view-on-map:hover { color: #0369a1; text-decoration: underline; }
       #mrRoot .mr-table .mr-table-state {
         font-size: 11px; color: #94a3b8; font-weight: 500; margin-top: 2px;
       }
@@ -1800,7 +1799,7 @@
                   <td>
                     <div class="mr-table-name">${_esc(m.name)}</div>
                     ${m.latitude != null && m.longitude != null
-                      ? `<a class="mr-view-on-map" onclick="event.stopPropagation(); mrViewOnMap(${m.latitude}, ${m.longitude}, '${_esc(m.name)}')">📍 View on map</a>`
+                      ? `<a class="mr-view-on-map" onclick="event.stopPropagation(); mrViewOnMap(${m.latitude}, ${m.longitude}, '${_esc(m.name)}')">view on map</a>`
                       : ''}
                   </td>
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#475569;">${pop}</td>
