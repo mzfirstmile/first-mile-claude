@@ -2955,6 +2955,13 @@ Research this town now and produce the scoring JSON.`;
       _scheduleRecomputeAll();
     } catch (e) { _toast('Copy failed: ' + e.message, true); }
   }
+  // Debounce the modal re-render so arrow-click sequences on number inputs
+  // don't keep destroying input focus mid-edit.
+  let _modalRerenderTimer = null;
+  function _scheduleModalRerender(delay = 600) {
+    clearTimeout(_modalRerenderTimer);
+    _modalRerenderTimer = setTimeout(() => { _manageCriteria(); }, delay);
+  }
   async function _saveCategoryWeight(id, rawValue, view = 'residential') {
     const weight = Math.max(0, parseFloat(rawValue) || 0);
     const col = view === 'office' ? 'weight_office' : 'weight';
@@ -2963,12 +2970,12 @@ Research this town now and produce the scoring JSON.`;
       const cat = _categories.find(c => c.id === id);
       if (cat) cat[col] = weight;
       _toast(`${cat ? cat.name : 'Category'} ${view} weight → ${weight}`);
-      _manageCriteria();
+      _scheduleModalRerender();
       if (_currentMarket) _renderScorecard();
       _scheduleRecomputeAll();
     } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
-  async function _saveCriterionTarget(id, kind /* target_min|target_max */, rawValue, view = 'residential') {
+  async function _saveCriterionTarget(id, kind, rawValue, view = 'residential') {
     const v = rawValue === '' ? null : parseFloat(rawValue);
     const col = view === 'office' ? `${kind}_office` : kind;
     try {
@@ -2976,7 +2983,7 @@ Research this town now and produce the scoring JSON.`;
       const c = _criteria.find(x => x.id === id);
       if (c) c[col] = v;
       _toast(`${c ? c.name : 'Criterion'} ${kind} (${view}) → ${v == null ? 'cleared' : v}`);
-      _manageCriteria();
+      _scheduleModalRerender();
       _scheduleRecomputeAll();
     } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
@@ -2988,9 +2995,7 @@ Research this town now and produce the scoring JSON.`;
       const c = _criteria.find(x => x.id === id);
       if (c) c[col] = v;
       _toast(`${c ? c.name : 'Criterion'} target (${view}) → ${v == null ? 'cleared' : v}`);
-      _manageCriteria();
-      // Label-only changes don't affect numeric composites, but Phase 3 will
-      // see the new label next time it runs — so no recompute needed here.
+      _scheduleModalRerender();
     } catch(e) { _toast('Save failed: ' + e.message, true); }
   }
   // Legacy criterion-level weight setter kept for back-compat — no-op for now.
