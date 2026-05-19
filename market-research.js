@@ -2888,10 +2888,11 @@ Research this town now and produce the scoring JSON.`;
                                 onchange="mrSaveCriterionTarget('${c.id}', 'target_max', this.value, '${tab}')">
                          ${!sameMax ? `<span class="mr-other-hint-inline" title="${otherLabel}: ${oMax}">${otherLabel.charAt(0)}: ${oMax}</span>` : ''}
                        </div>`;
+                  const displayName = (tab === 'office' && c.name_office) ? c.name_office : c.name;
                   return `
                     <div class="mr-crit-row">
                       <div class="mr-crit-name">
-                        <span>${_esc(c.name)}</span>
+                        <span>${_esc(displayName)}</span>
                         ${unit ? `<span class="mr-crit-unit">${_esc(unit)}</span>` : ''}
                       </div>
                       ${c.description ? `<div class="mr-crit-desc">${_esc(c.description)}</div>` : ''}
@@ -2902,9 +2903,7 @@ Research this town now and produce the scoring JSON.`;
         </div>`;
     }).join('');
 
-    const copyButton = tab === 'office'
-      ? `<button class="mr-btn" onclick="mrCopyResidentialToOffice()" title="Copy all Residential values into Office">📋 Copy Residential → Office</button>`
-      : '';
+    const copyButton = ''; // Removed: bulk overwrite was too easy to fire accidentally
 
     _openModal(`Manage Categories &amp; Criteria — ${tabIcon} ${tabLabel}`, `
       <div class="mr-tab-row">
