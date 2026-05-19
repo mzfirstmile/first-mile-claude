@@ -182,6 +182,13 @@
       #mrRoot .mr-table .mr-table-name {
         font-weight: 600; color: #1e293b;
       }
+      #mrRoot .mr-view-on-map {
+        display: inline-block; font-size: 10px; color: #0369a1;
+        background: #f0f9ff; border: 1px solid #bae6fd;
+        padding: 1px 6px; border-radius: 4px; margin-top: 3px;
+        cursor: pointer; font-weight: 500;
+      }
+      #mrRoot .mr-view-on-map:hover { background: #e0f2fe; color: #075985; }
       #mrRoot .mr-table .mr-table-state {
         font-size: 11px; color: #94a3b8; font-weight: 500; margin-top: 2px;
       }
@@ -1792,6 +1799,9 @@
                   </td>
                   <td>
                     <div class="mr-table-name">${_esc(m.name)}</div>
+                    ${m.latitude != null && m.longitude != null
+                      ? `<a class="mr-view-on-map" onclick="event.stopPropagation(); mrViewOnMap(${m.latitude}, ${m.longitude}, '${_esc(m.name)}')">📍 View on map</a>`
+                      : ''}
                   </td>
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#475569;">${pop}</td>
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#0f172a;font-weight:600;">${hhi}</td>
@@ -2972,6 +2982,62 @@ Research this town now and produce the scoring JSON.`;
     // Flush pending debounced PATCHes so the recompute SQL sees latest values
     await _flushAllPendingPatches();
     try {
+      // STEP 1: Re-score per-criterion 0-10 values based on current targets.
+      // Only touches Phase 2 rows that have a raw_value parsed. Phase 3 (Claude)
+      // scores stay as-is. Town Population uses tent function (same score in
+      // both views). Commute uses ≤target_max scoring. All other target_min-
+      // only criteria use linear `min(10, raw/target*10)` per view.
+      // Re-score per-criterion 0-10 values. raw_value > 0 skips sentinel rows
+      // (Tenant Sector Diversity, etc., where value_text is qualitative and
+      // raw_value was set to -1 during backfill).
+      const perCritSql = `
+        UPDATE market_research_scores s
+        SET
+          value_numeric = CASE
+            WHEN c.name = 'Town Population' AND s.raw_value > 0 THEN
+              CASE
+                WHEN s.raw_value < 5000 OR s.raw_value > 75000 THEN 0
+                WHEN s.raw_value <= 25000 THEN ROUND(LEAST(10, (s.raw_value - 5000)/2000.0)::numeric, 1)
+                WHEN s.raw_value <= 50000 THEN 10
+                ELSE ROUND(GREATEST(0, (75000 - s.raw_value)/2500.0)::numeric, 1)
+              END
+            WHEN c.name = 'Commute to Major Metro' AND s.raw_value > 0 THEN
+              CASE
+                WHEN s.raw_value <= 45 THEN 10
+                WHEN s.raw_value >= 120 THEN 0
+                ELSE ROUND((10 - (s.raw_value - 45)/7.5)::numeric, 1)
+              END
+            WHEN c.target_min IS NOT NULL AND c.target_max IS NULL AND s.raw_value > 0 AND c.target_min > 0 THEN
+              LEAST(10, ROUND((s.raw_value / c.target_min * 10)::numeric, 1))
+            ELSE s.value_numeric
+          END,
+          value_numeric_office = CASE
+            WHEN c.name = 'Town Population' AND s.raw_value > 0 THEN
+              CASE
+                WHEN s.raw_value < 5000 OR s.raw_value > 75000 THEN 0
+                WHEN s.raw_value <= 25000 THEN ROUND(LEAST(10, (s.raw_value - 5000)/2000.0)::numeric, 1)
+                WHEN s.raw_value <= 50000 THEN 10
+                ELSE ROUND(GREATEST(0, (75000 - s.raw_value)/2500.0)::numeric, 1)
+              END
+            WHEN c.name = 'Commute to Major Metro' AND s.raw_value > 0 THEN
+              CASE
+                WHEN s.raw_value <= 45 THEN 10
+                WHEN s.raw_value >= 120 THEN 0
+                ELSE ROUND((10 - (s.raw_value - 45)/7.5)::numeric, 1)
+              END
+            WHEN c.target_min_office IS NOT NULL AND c.target_max_office IS NULL AND s.raw_value > 0 AND c.target_min_office > 0 THEN
+              LEAST(10, ROUND((s.raw_value / c.target_min_office * 10)::numeric, 1))
+            ELSE s.value_numeric_office
+          END
+        FROM market_research_criteria c
+        WHERE s.criterion_id = c.id
+          AND s.updated_by IN ('phase2_auto', 'phase2_commute')`;
+      const r0 = await fetch(`${window.SUPABASE_URL}/rest/v1/rpc/exec_sql`, {
+        method: 'POST',
+        headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: perCritSql }),
+      });
+      if (!r0.ok) throw new Error('per-criterion re-score failed: ' + r0.status);
       const sql = `WITH cat_means AS (
         SELECT s.market_id, c.category_id, AVG(s.value_numeric) AS mean_res, AVG(s.value_numeric_office) AS mean_off
         FROM market_research_scores s JOIN market_research_criteria c ON c.id = s.criterion_id
@@ -3384,6 +3450,20 @@ Research this town now and produce the scoring JSON.`;
   window.mrSetCriteriaModalView = _setCriteriaModalView;
   window.mrCopyResidentialToOffice = _copyResidentialToOffice;
   window.mrFinishCriteriaEdit = _finishCriteriaEdit;
+  window.mrViewOnMap = (lat, lng, name) => {
+    if (!_mapInstance) return;
+    _mapBoundsSettling = true;
+    _mapInstance.setView([lat, lng], 11, { animate: true });
+    setTimeout(() => { _mapBoundsSettling = false; }, 700);
+    // Brief popup at the location
+    if (window.L) {
+      const popup = window.L.popup({ closeButton: true, autoClose: true, closeOnClick: true })
+        .setLatLng([lat, lng])
+        .setContent(`<strong>${name}</strong><br><span style="font-size:11px;color:#64748b;">Centered on map</span>`)
+        .openOn(_mapInstance);
+      setTimeout(() => { try { _mapInstance.closePopup(popup); } catch(_) {} }, 3500);
+    }
+  };
   window.mrScrollToCat = (catId) => {
     const el = document.getElementById('mr-cat-' + catId);
     if (!el) return;
