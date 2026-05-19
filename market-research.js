@@ -1432,9 +1432,11 @@
     const sortMode = sortSel ? sortSel.value : 'score_desc';
     const aScore = (m) => _viewType === 'office' ? (m.office_score ?? -1) : (m.score ?? -1);
     const aTier  = (m) => _viewType === 'office' ? (m.office_tier ?? 99) : (m.tier ?? 99);
+    const aHHI   = (m) => m.median_household_income ?? -1;
     visible.sort((a, b) => {
-      if (sortMode === 'score_desc') return (aScore(b) - aScore(a)) || a.name.localeCompare(b.name);
-      if (sortMode === 'tier_asc')   return (aTier(a) - aTier(b)) || (aScore(b) - aScore(a));
+      // Tiebreaker chain must match the rank_{view} SQL: score DESC → HHI DESC → name ASC
+      if (sortMode === 'score_desc') return (aScore(b) - aScore(a)) || (aHHI(b) - aHHI(a)) || a.name.localeCompare(b.name);
+      if (sortMode === 'tier_asc')   return (aTier(a) - aTier(b)) || (aScore(b) - aScore(a)) || (aHHI(b) - aHHI(a));
       if (sortMode === 'name_asc')   return a.name.localeCompare(b.name);
       if (sortMode === 'updated_desc') return (b.updated_at || '').localeCompare(a.updated_at || '');
       return 0;
