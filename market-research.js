@@ -1816,10 +1816,10 @@
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#0f172a;font-weight:600;">${hhi}</td>
                   <td style="font-size:12px;color:#475569;">${_esc(metro)}</td>
                   <td style="text-align:center;">
-                    <span class="mr-table-score ${_scoreClass(m.score)}">${scoreNum}</span>
+                    <span class="mr-table-score ${_scoreClass(mScore)}">${scoreNum}</span>
                   </td>
                   <td style="text-align:center;">
-                    <span class="mr-tier ${_tierClass(m.tier)}">${tierLabel}</span>
+                    <span class="mr-tier ${_tierClass(mTier)}">${tierLabel}</span>
                   </td>
                   <td>
                     ${m.thesis ? `<div class="mr-table-thesis">${_esc(m.thesis)}</div>` : '<span style="color:#cbd5e1;">—</span>'}
