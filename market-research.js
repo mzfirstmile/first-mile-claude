@@ -113,28 +113,6 @@
         flex-wrap: wrap; gap: 14px; margin-bottom: 20px;
       }
       #mrRoot .mr-actions { display: flex; gap: 8px; align-items: center; }
-      /* PDF export — hide interactive UI when html2pdf is snapshotting the detail view */
-      #mrRoot .mr-pdf-exporting .mr-back,
-      #mrRoot .mr-pdf-exporting .mr-actions,
-      #mrRoot .mr-pdf-exporting .mr-asset-toggle,
-      #mrRoot .mr-pdf-exporting button { display: none !important; }
-      #mrRoot .mr-pdf-exporting .mr-detail-header { page-break-after: avoid; }
-      #mrRoot .mr-pdf-exporting .mr-scorecard-section,
-      #mrRoot .mr-pdf-exporting .mr-narrative { page-break-inside: avoid; }
-      #mrRoot .mr-pdf-header {
-        display:flex; justify-content:space-between; align-items:flex-end;
-        padding: 4px 0 14px; border-bottom: 2px solid #0ea5e9; margin-bottom: 18px;
-      }
-      #mrRoot .mr-pdf-header .mr-pdf-eyebrow {
-        font-size: 10px; color: #64748b; letter-spacing: 0.08em;
-        text-transform: uppercase; font-weight: 700;
-      }
-      #mrRoot .mr-pdf-header .mr-pdf-title {
-        font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 2px;
-      }
-      #mrRoot .mr-pdf-header .mr-pdf-date {
-        text-align: right; font-size: 10px; color: #64748b;
-      }
       #mrRoot .mr-btn {
         font-size: 12px; padding: 7px 14px; border: 1px solid #cbd5e1;
         background: #fff; color: #1e293b; border-radius: 8px; cursor: pointer;
@@ -2462,9 +2440,11 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   ];
 
   // ── PDF export ────────────────────────────────────────────
-  // One-click "Save as PDF" of the active market detail view (header + thesis
-  // + summary + full scorecard). Uses html2pdf.bundle (html2canvas + jsPDF)
-  // loaded lazily from cdnjs on first invocation.
+  // One-click "Save as PDF" of the active market. Builds a clean, fixed-width
+  // PDF document FROM THE UNDERLYING DATA (thesis, summary, scores, metrics)
+  // with fully inline styles — does NOT screenshot the live UI (that caused
+  // unpredictable clipping because the detail view inherits a wide parent
+  // layout). Uses html2pdf.bundle (html2canvas + jsPDF) loaded lazily.
   async function _ensureHtml2Pdf() {
     if (window.html2pdf) return;
     await new Promise((resolve, reject) => {
@@ -2475,58 +2455,190 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
       document.head.appendChild(s);
     });
   }
+  function _pdfMetricCard(label, value) {
+    return `
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px;">
+        <div style="font-size:9px; color:#64748b; letter-spacing:0.05em; text-transform:uppercase; font-weight:700;">${_esc(label)}</div>
+        <div style="font-size:16px; font-weight:700; color:#0f172a; margin-top:2px;">${value || '—'}</div>
+      </div>
+    `;
+  }
+  function _pdfScoreChip(scoreNum) {
+    if (scoreNum == null) return '<span style="color:#cbd5e1; font-size:10px;">—</span>';
+    const n = parseFloat(scoreNum);
+    let bg = '#fee2e2', fg = '#991b1b';
+    if (n >= 7) { bg = '#dcfce7'; fg = '#166534'; }
+    else if (n >= 4) { bg = '#fef3c7'; fg = '#92400e'; }
+    return `<span style="display:inline-block; background:${bg}; color:${fg}; font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px;">${scoreNum}</span>`;
+  }
   async function _exportMarketPDF() {
     if (!_currentMarket) { _toast('Open a market first', true); return; }
     const m = _currentMarket;
     _toast('Generating PDF…');
-    try {
-      await _ensureHtml2Pdf();
-    } catch (e) {
-      _toast('Could not load PDF library', true);
-      return;
-    }
-    const detail = document.getElementById('mrDetailView');
-    if (!detail) return;
-    // 1. Inject a brand header at the top
-    const header = document.createElement('div');
-    header.className = 'mr-pdf-header';
+    try { await _ensureHtml2Pdf(); }
+    catch (e) { _toast('Could not load PDF library', true); return; }
+
+    const view = _scorecardView || _viewType || 'residential';
+    const scoreByCriterion = {};
+    _scores.filter(s => s.market_id === m.id).forEach(s => { scoreByCriterion[s.criterion_id] = s; });
+
     const tierLabel = m.tier ? `Tier ${m.tier}` : '';
-    const scoreLabel = (m.score != null) ? `Score ${Number(m.score).toFixed(1)}` : '';
-    const subtitle = [m.state, scoreLabel, tierLabel].filter(Boolean).join(' · ');
-    header.innerHTML = `
-      <div>
-        <div class="mr-pdf-eyebrow">First Mile Capital · Market Research</div>
-        <div class="mr-pdf-title">${_esc(m.name)}</div>
-        <div style="font-size:11px;color:#475569;margin-top:4px;">${_esc(subtitle)}</div>
+    const scoreLabel = (m.score != null) ? Number(m.score).toFixed(1) : '—';
+    const offScore = (m.office_score != null) ? Number(m.office_score).toFixed(1) : '—';
+    const dateLabel = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    let html = `
+      <!-- Brand header -->
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:14px; border-bottom:2px solid #0ea5e9; margin-bottom:20px;">
+        <div>
+          <div style="font-size:10px; color:#64748b; letter-spacing:0.08em; text-transform:uppercase; font-weight:700;">First Mile Capital · Market Research</div>
+          <div style="font-size:24px; font-weight:700; color:#0f172a; margin-top:4px; line-height:1.15;">${_esc(m.name)}</div>
+          <div style="font-size:11px; color:#475569; margin-top:4px;">
+            ${_esc(m.state || '')}${m.nearest_top50_city ? ' · Metro: ' + _esc(m.nearest_top50_city) : ''}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:10px; color:#64748b;">${_esc(dateLabel)}</div>
+          <div style="margin-top:6px; white-space:nowrap;">
+            <span style="display:inline-block; background:#0ea5e9; color:#fff; font-size:11px; font-weight:700; padding:3px 10px; border-radius:6px;">Score ${scoreLabel}</span>
+            ${tierLabel ? `<span style="display:inline-block; margin-left:4px; background:#0f172a; color:#fff; font-size:11px; font-weight:700; padding:3px 10px; border-radius:6px;">${_esc(tierLabel)}</span>` : ''}
+          </div>
+        </div>
       </div>
-      <div class="mr-pdf-date">
-        <div>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-        <div style="margin-top:2px;">admin.firstmilecap.com</div>
-      </div>`;
-    detail.insertBefore(header, detail.firstChild);
-    detail.classList.add('mr-pdf-exporting');
+
+      <!-- Key metrics 2x2 grid -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;">
+        ${_pdfMetricCard('Population', m.population ? Number(m.population).toLocaleString() : '—')}
+        ${_pdfMetricCard('Median Household Income', m.median_household_income ? '$' + Number(m.median_household_income).toLocaleString() : '—')}
+        ${_pdfMetricCard('Median Home Value', m.median_home_value ? '$' + Number(m.median_home_value).toLocaleString() : '—')}
+        ${_pdfMetricCard('Office Score · Tier', offScore + (m.office_tier ? ' · T' + m.office_tier : ''))}
+      </div>
+    `;
+
+    if (m.summary) {
+      html += `
+        <div style="background:#f8fafc; border-left:3px solid #0ea5e9; padding:10px 14px; margin-bottom:14px; border-radius:0 6px 6px 0; page-break-inside:avoid;">
+          <div style="font-size:10px; color:#64748b; letter-spacing:0.05em; text-transform:uppercase; font-weight:700; margin-bottom:4px;">Executive Summary</div>
+          <div style="font-size:12px; color:#1e293b; line-height:1.5;">${_esc(m.summary)}</div>
+        </div>`;
+    }
+
+    if (m.thesis) {
+      html += `
+        <div style="margin-bottom:18px; page-break-inside:avoid;">
+          <div style="font-size:11px; color:#64748b; letter-spacing:0.05em; text-transform:uppercase; font-weight:700; margin-bottom:6px;">Investment Thesis</div>
+          <div style="font-size:12px; color:#1e293b; line-height:1.55; white-space:pre-wrap;">${_esc(m.thesis)}</div>
+        </div>`;
+    }
+
+    // Scorecard grouped by category
+    const active = _criteria.filter(c => c.is_active !== false);
+    const byCat = {};
+    active.forEach(c => {
+      const cat = c.category || 'uncategorized';
+      if (!byCat[cat]) byCat[cat] = [];
+      byCat[cat].push(c);
+    });
+    const orderedCats = _CAT_ORDER.filter(c => byCat[c]).concat(
+      Object.keys(byCat).filter(c => !_CAT_ORDER.includes(c))
+    );
+
+    html += `
+      <div style="margin-top:6px;">
+        <div style="font-size:11px; color:#64748b; letter-spacing:0.05em; text-transform:uppercase; font-weight:700; margin-bottom:10px;">
+          Criteria Scorecard (${view === 'office' ? 'Office' : 'Residential'} view)
+        </div>
+    `;
+    orderedCats.forEach(cat => {
+      const rows = byCat[cat].slice().sort((a,b) => (a.sort_order||0) - (b.sort_order||0) || a.name.localeCompare(b.name));
+      const catObj = _categories.find(c => c.slug === cat) || {};
+      const catWeight = catObj.weight != null ? catObj.weight : 1;
+      const isPhase2 = _PHASE2_CATEGORIES.has(cat);
+      const phaseLabel = isPhase2 ? 'Phase 2' : 'Phase 3';
+      const phaseBg = isPhase2 ? '#f0fdf4' : '#fff7ed';
+      const phaseFg = isPhase2 ? '#166534' : '#9a3412';
+      const phaseBorder = isPhase2 ? '#bbf7d0' : '#fed7aa';
+
+      html += `
+        <div style="page-break-inside:avoid; margin-bottom:12px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden;">
+          <div style="background:#f8fafc; padding:7px 12px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+            <span style="font-size:13px; font-weight:700; color:#0f172a;">${_esc(_CAT_LABELS[cat] || cat)}</span>
+            <span style="white-space:nowrap;">
+              <span style="font-size:9px; font-weight:600; color:#0369a1; background:#e0f2fe; padding:2px 7px; border-radius:8px;">weight ${catWeight}</span>
+              <span style="font-size:9px; font-weight:600; color:${phaseFg}; background:${phaseBg}; border:1px solid ${phaseBorder}; padding:2px 7px; border-radius:8px; margin-left:4px;">${phaseLabel}</span>
+            </span>
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:11px;">
+      `;
+      rows.forEach(c => {
+        const s = scoreByCriterion[c.id] || {};
+        let displayValue = s.value_text || '';
+        if (!displayValue && _PHASE2_VALUE_FROM_MARKET[c.name]) {
+          displayValue = _PHASE2_VALUE_FROM_MARKET[c.name](m) || '';
+        }
+        const scoreVal = view === 'office' ? s.value_numeric_office : s.value_numeric;
+        const scoreNum = (scoreVal != null && scoreVal !== '') ? Number(scoreVal).toFixed(1) : null;
+        const target = _fmtTarget(c);
+        const source = s.source || '';
+        html += `
+          <tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:6px 10px; vertical-align:top; width:36%;">
+              <div style="font-weight:600; color:#0f172a; font-size:11px; line-height:1.3;">${_esc(c.name)}</div>
+              ${target ? `<div style="font-size:9px; color:#94a3b8; margin-top:1px;">Target: ${_esc(target)}</div>` : ''}
+            </td>
+            <td style="padding:6px 8px; vertical-align:top; width:9%; text-align:center;">${_pdfScoreChip(scoreNum)}</td>
+            <td style="padding:6px 10px; vertical-align:top; width:30%; font-size:10px; color:#334155; line-height:1.35;">${displayValue ? _esc(displayValue) : '<span style="color:#cbd5e1;">—</span>'}</td>
+            <td style="padding:6px 10px; vertical-align:top; width:25%; font-size:9px; color:#64748b; line-height:1.35; word-break:break-word;">${source ? _esc(source) : '<span style="color:#cbd5e1;">—</span>'}</td>
+          </tr>
+        `;
+      });
+      html += `</table></div>`;
+    });
+    html += `</div>`;
+
+    // Footer
+    html += `
+      <div style="margin-top:18px; padding-top:10px; border-top:1px solid #e2e8f0; text-align:center; font-size:9px; color:#94a3b8;">
+        First Mile Capital · admin.firstmilecap.com · Generated ${_esc(dateLabel)}
+      </div>
+    `;
+
+    // Build off-screen wrapper at fixed letter-friendly width
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = `
+      position: fixed; top: -10000px; left: 0;
+      width: 720px; padding: 24px 28px;
+      background: #ffffff; color: #0f172a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-size: 12px; line-height: 1.5;
+      box-sizing: content-box;
+    `;
+    wrapper.innerHTML = html;
+    document.body.appendChild(wrapper);
+    // Let layout settle before snapshot
+    await new Promise(r => setTimeout(r, 80));
 
     const safeName = (m.name || 'market').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
     const filename = `FMC_Market_${safeName}_${new Date().toISOString().slice(0,10)}.pdf`;
 
+    // wrapper total width = 720 content + 28*2 padding = 776
     const opt = {
-      margin: [0.45, 0.45, 0.55, 0.45],
+      margin: [0.4, 0.4, 0.5, 0.4],
       filename,
       image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 1100 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', width: 776, windowWidth: 776 },
       jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait', compress: true },
-      pagebreak: { mode: ['css', 'legacy'], avoid: '.mr-scorecard-section, .mr-narrative' },
+      pagebreak: { mode: ['css', 'legacy'] },
     };
 
     try {
-      await window.html2pdf().set(opt).from(detail).save();
+      await window.html2pdf().set(opt).from(wrapper).save();
       _toast('PDF saved');
     } catch (e) {
       console.error('[mr] PDF export failed:', e);
       _toast('PDF export failed: ' + (e.message || e), true);
     } finally {
-      detail.classList.remove('mr-pdf-exporting');
-      header.remove();
+      wrapper.remove();
     }
   }
 
