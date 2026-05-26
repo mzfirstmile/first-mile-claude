@@ -1359,13 +1359,8 @@
       _markets = paged.rows;
       _totalForCurrentFilter = paged.total;
       const listContainer = document.querySelector('.mr-split-list');
-      if (!listContainer) { _renderGrid(); return; }
       const total = _totalForCurrentFilter || 0;
-      const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-      const pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
-      const listInner = _renderListView(_markets);
-      listContainer.innerHTML = pager + listInner + pager;
-      // Refresh the "Showing X–Y of Z" header in place
+      // Update the "Showing X–Y of Z" header in place (exists in BOTH split and full-map views).
       const firstIdx = total ? (_page * PAGE_SIZE) + 1 : 0;
       const lastIdx = Math.min(total, (_page + 1) * PAGE_SIZE);
       const pageCountEl = document.querySelector('.mr-page-count');
@@ -1375,6 +1370,14 @@
           : '';
         pageCountEl.innerHTML = `Showing <strong>${firstIdx.toLocaleString()}–${lastIdx.toLocaleString()}</strong> of <strong>${total.toLocaleString()}</strong>${suffix}`;
       }
+      // In full-map view there's no list pane to update — bail out without
+      // rebuilding the grid, otherwise the map would be destroyed/recreated
+      // (which resets the user's zoom — that's the "glitching out" bug).
+      if (!listContainer) return;
+      const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      const pager = total > PAGE_SIZE ? _renderPager(pageCount) : '';
+      const listInner = _renderListView(_markets);
+      listContainer.innerHTML = pager + listInner + pager;
     } catch (e) {
       _toast('Load failed: ' + e.message, true);
     }
