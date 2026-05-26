@@ -1611,61 +1611,6 @@
       _markerCluster = L.markerClusterGroup({ maxClusterRadius: 50, disableClusteringAtZoom: 10 });
       _mapInstance.addLayer(_markerCluster);
 
-      // Metro overlay — derive centroids per nearest_top50_city from the
-      // markets themselves (no external GeoJSON needed; Census TIGERweb is
-      // WAF-blocked from edge functions). Draws a 60-mile radius circle +
-      // label at each metro's center of mass, matching the Big Four /
-      // Wealth-Mgmt 60mi criterion radius.
-      (async () => {
-        try {
-          if (_msaLayer && _mapInstance) { try { _mapInstance.removeLayer(_msaLayer); } catch(_) {} }
-          // Normalize metro label — "New York" and "New York, NY" should merge.
-          // Strip trailing ", XX" state-code so groups collapse cleanly.
-          const normalizeMetro = (s) => {
-            if (!s) return '';
-            return String(s).replace(/,\s*[A-Z]{2}\s*$/, '').trim();
-          };
-          const metros = new Map(); // canonical metro -> { lats[], lngs[], displayName }
-          for (const m of withCoords) {
-            const raw = m.nearest_top50_city;
-            const key = normalizeMetro(raw);
-            if (!key) continue;
-            if (!metros.has(key)) metros.set(key, { lats: [], lngs: [], displayName: key });
-            const g = metros.get(key);
-            g.lats.push(parseFloat(m.latitude));
-            g.lngs.push(parseFloat(m.longitude));
-          }
-          const layerGroup = L.layerGroup();
-          for (const [name, g] of metros) {
-            if (g.lats.length < 2) continue; // need at least 2 markets to anchor a metro
-            const avgLat = g.lats.reduce((a, b) => a + b, 0) / g.lats.length;
-            const avgLng = g.lngs.reduce((a, b) => a + b, 0) / g.lngs.length;
-            const circle = L.circle([avgLat, avgLng], {
-              radius: 60 * 1609.34, // 60 miles in meters
-              color: '#0ea5e9', weight: 2.5, opacity: 0.85,
-              fillColor: '#0ea5e9', fillOpacity: 0.08,
-              interactive: true,
-            });
-            circle.bindTooltip(`${g.displayName} (${g.lats.length} markets)`, { sticky: true, direction: 'top', opacity: 0.92 });
-            layerGroup.addLayer(circle);
-            // Always-visible center label
-            const labelIcon = L.divIcon({
-              className: 'mr-metro-label',
-              html: `<div style="font-size:11px;font-weight:700;color:#075985;background:rgba(255,255,255,0.85);border:1px solid #bae6fd;padding:1px 6px;border-radius:8px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.05);">${g.displayName}</div>`,
-              iconSize: null, iconAnchor: [0, 0],
-            });
-            const labelMarker = L.marker([avgLat, avgLng], { icon: labelIcon, interactive: false, keyboard: false });
-            layerGroup.addLayer(labelMarker);
-          }
-          _msaLayer = layerGroup;
-          _msaLayer.addTo(_mapInstance);
-          if (_markerCluster) _markerCluster.bringToFront && _markerCluster.bringToFront();
-          console.log(`[mr] Metro overlay: ${metros.size} top-50 cities`);
-        } catch (e) {
-          console.warn('[mr] Metro overlay failed:', e.message || e);
-        }
-      })();
-
       // Fetch the full filtered set (paginated — PostgREST anon caps each call
       // at 1000 rows, so loop with offset until we have everything).
       const parts = _buildFilterQuery();
@@ -1685,6 +1630,55 @@
       }
       const withCoords = rows.filter(m => m.latitude != null && m.longitude != null);
       const withoutCoords = rows.filter(m => m.latitude == null || m.longitude == null);
+
+      // Metro overlay — derive centroids per nearest_top50_city from the
+      // markets themselves. Draws a 60-mile radius circle + label at each
+      // metro's center of mass. Runs AFTER withCoords is declared (moved here
+      // 2026-05-26 to fix the TDZ error from the address-search refactor).
+      try {
+        if (_msaLayer && _mapInstance) { try { _mapInstance.removeLayer(_msaLayer); } catch(_) {} }
+        const normalizeMetro = (s) => {
+          if (!s) return '';
+          return String(s).replace(/,\s*[A-Z]{2}\s*$/, '').trim();
+        };
+        const metros = new Map();
+        for (const m of withCoords) {
+          const raw = m.nearest_top50_city;
+          const key = normalizeMetro(raw);
+          if (!key) continue;
+          if (!metros.has(key)) metros.set(key, { lats: [], lngs: [], displayName: key });
+          const g = metros.get(key);
+          g.lats.push(parseFloat(m.latitude));
+          g.lngs.push(parseFloat(m.longitude));
+        }
+        const layerGroup = L.layerGroup();
+        for (const [name, g] of metros) {
+          if (g.lats.length < 2) continue;
+          const avgLat = g.lats.reduce((a, b) => a + b, 0) / g.lats.length;
+          const avgLng = g.lngs.reduce((a, b) => a + b, 0) / g.lngs.length;
+          const circle = L.circle([avgLat, avgLng], {
+            radius: 60 * 1609.34,
+            color: '#0ea5e9', weight: 2.5, opacity: 0.85,
+            fillColor: '#0ea5e9', fillOpacity: 0.08,
+            interactive: true,
+          });
+          circle.bindTooltip(`${g.displayName} (${g.lats.length} markets)`, { sticky: true, direction: 'top', opacity: 0.92 });
+          layerGroup.addLayer(circle);
+          const labelIcon = L.divIcon({
+            className: 'mr-metro-label',
+            html: `<div style="font-size:11px;font-weight:700;color:#075985;background:rgba(255,255,255,0.85);border:1px solid #bae6fd;padding:1px 6px;border-radius:8px;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,0.05);">${g.displayName}</div>`,
+            iconSize: null, iconAnchor: [0, 0],
+          });
+          const labelMarker = L.marker([avgLat, avgLng], { icon: labelIcon, interactive: false, keyboard: false });
+          layerGroup.addLayer(labelMarker);
+        }
+        _msaLayer = layerGroup;
+        _msaLayer.addTo(_mapInstance);
+        if (_markerCluster) _markerCluster.bringToFront && _markerCluster.bringToFront();
+        console.log(`[mr] Metro overlay: ${metros.size} top-50 cities`);
+      } catch (e) {
+        console.warn('[mr] Metro overlay failed:', e.message || e);
+      }
 
       // Tier 4 markers are hidden by default — toggled on via the "Show Tier 4 on map" checkbox
       const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6', 4: '#94a3b8' };
@@ -2440,21 +2434,13 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
   ];
 
   // ── PDF export ────────────────────────────────────────────
-  // One-click "Save as PDF" of the active market. Builds a clean, fixed-width
-  // PDF document FROM THE UNDERLYING DATA (thesis, summary, scores, metrics)
-  // with fully inline styles — does NOT screenshot the live UI (that caused
-  // unpredictable clipping because the detail view inherits a wide parent
-  // layout). Uses html2pdf.bundle (html2canvas + jsPDF) loaded lazily.
-  async function _ensureHtml2Pdf() {
-    if (window.html2pdf) return;
-    await new Promise((resolve, reject) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-      s.onload = () => resolve();
-      s.onerror = () => reject(new Error('Failed to load html2pdf'));
-      document.head.appendChild(s);
-    });
-  }
+  // Opens a new tab with a clean print-styled view of the active market and
+  // auto-triggers the browser's Print dialog so the user can Save as PDF.
+  // Earlier attempts used html2pdf.bundle (html2canvas + jsPDF), but the
+  // resulting PDFs were variously clipped or blank because html2canvas
+  // mishandled the off-screen wrapper. Native print is bulletproof: the
+  // browser's print engine renders the document perfectly with full CSS
+  // support, page breaks, and pagination.
   function _pdfMetricCard(label, value) {
     return `
       <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px;">
@@ -2471,12 +2457,9 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     else if (n >= 4) { bg = '#fef3c7'; fg = '#92400e'; }
     return `<span style="display:inline-block; background:${bg}; color:${fg}; font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px;">${scoreNum}</span>`;
   }
-  async function _exportMarketPDF() {
+  function _exportMarketPDF() {
     if (!_currentMarket) { _toast('Open a market first', true); return; }
     const m = _currentMarket;
-    _toast('Generating PDF…');
-    try { await _ensureHtml2Pdf(); }
-    catch (e) { _toast('Could not load PDF library', true); return; }
 
     const view = _scorecardView || _viewType || 'residential';
     const scoreByCriterion = {};
@@ -2607,64 +2590,74 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
       </div>
     `;
 
-    // Off-screen wrapper. CRITICAL: position:absolute + left:-10000px (NOT
-    // position:fixed) so the element stays in the document flow and actually
-    // gets painted — html2canvas needs that to render content. Fixed
-    // positioning with negative top produced a blank PDF.
-    const wrapper = document.createElement('div');
-    wrapper.style.cssText = `
-      position: absolute !important;
-      left: -10000px !important;
-      top: 0 !important;
-      width: 776px !important;
-      box-sizing: border-box !important;
-      padding: 24px 28px !important;
-      background: #ffffff !important;
-      color: #0f172a !important;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
-      font-size: 12px !important;
-      line-height: 1.5 !important;
-      visibility: visible !important;
-      opacity: 1 !important;
-      z-index: -1 !important;
-    `;
-    wrapper.innerHTML = html;
-    document.body.appendChild(wrapper);
-    // Let layout settle before snapshot (longer wait for paint completion)
-    await new Promise(r => setTimeout(r, 200));
-
+    // Wrap the report body in a full HTML document with print styles + a
+    // small floating toolbar (hidden in print) showing Print + Close buttons.
     const safeName = (m.name || 'market').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
-    const filename = `FMC_Market_${safeName}_${new Date().toISOString().slice(0,10)}.pdf`;
+    const docTitle = `FMC_Market_${safeName}_${new Date().toISOString().slice(0,10)}`;
+    const fullDoc = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${_esc(docTitle)}</title>
+<style>
+  @page { size: letter portrait; margin: 0.5in; }
+  html, body { margin: 0; padding: 0; background: #f1f5f9; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 12px; line-height: 1.5; color: #0f172a;
+  }
+  .page {
+    background: #ffffff;
+    max-width: 760px;
+    margin: 24px auto 80px;
+    padding: 36px 44px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 6px 24px rgba(0,0,0,0.05);
+    border-radius: 6px;
+  }
+  .toolbar {
+    position: fixed; top: 12px; right: 16px; z-index: 100;
+    display: flex; gap: 8px;
+  }
+  .toolbar button {
+    background: #0ea5e9; color: #fff; border: none;
+    padding: 9px 16px; border-radius: 6px; font-size: 13px;
+    font-weight: 600; cursor: pointer;
+    box-shadow: 0 2px 6px rgba(14,165,233,0.35);
+  }
+  .toolbar button.secondary { background: #fff; color: #1e293b; border: 1px solid #cbd5e1; box-shadow: none; }
+  .toolbar button:hover { filter: brightness(0.95); }
+  @media print {
+    html, body { background: #ffffff; }
+    .page { box-shadow: none; max-width: none; margin: 0; padding: 0; border-radius: 0; }
+    .toolbar, .no-print { display: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="toolbar no-print">
+  <button onclick="window.print()">🖨️ Print / Save as PDF</button>
+  <button class="secondary" onclick="window.close()">Close</button>
+</div>
+<div class="page">${html}</div>
+<script>
+  // Auto-trigger the print dialog once layout settles. Users can also click
+  // the Print button or hit Cmd/Ctrl+P. Save as PDF is a destination in the
+  // native print dialog.
+  document.title = ${JSON.stringify(docTitle)};
+  window.addEventListener('load', () => setTimeout(() => { try { window.print(); } catch(_) {} }, 250));
+</script>
+</body>
+</html>`;
 
-    // wrapper total width including padding = 776px
-    const opt = {
-      margin: [0.4, 0.4, 0.5, 0.4],
-      filename,
-      image: { type: 'jpeg', quality: 0.95 },
-      // NOTE: do NOT pass scrollX/scrollY/x/y — those override the element's
-      // bounding rect, which is at left:-10000px. Result was a 3KB blank PDF
-      // because html2canvas was capturing the empty area at (0,0). Let it
-      // read the wrapper's rect itself.
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff',
-        windowWidth: 776,
-      },
-      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait', compress: true },
-      pagebreak: { mode: ['css', 'legacy'] },
-    };
-
-    try {
-      await window.html2pdf().set(opt).from(wrapper).save();
-      _toast('PDF saved');
-    } catch (e) {
-      console.error('[mr] PDF export failed:', e);
-      _toast('PDF export failed: ' + (e.message || e), true);
-    } finally {
-      wrapper.remove();
+    const w = window.open('', '_blank', 'width=900,height=1100');
+    if (!w) {
+      _toast('Pop-up blocked — allow pop-ups for this site and try again', true);
+      return;
     }
+    w.document.open();
+    w.document.write(fullDoc);
+    w.document.close();
+    _toast('Save as PDF in the print dialog');
   }
 
   async function _deepResearch(id) {
