@@ -113,6 +113,28 @@
         flex-wrap: wrap; gap: 14px; margin-bottom: 20px;
       }
       #mrRoot .mr-actions { display: flex; gap: 8px; align-items: center; }
+      /* PDF export — hide interactive UI when html2pdf is snapshotting the detail view */
+      #mrRoot .mr-pdf-exporting .mr-back,
+      #mrRoot .mr-pdf-exporting .mr-actions,
+      #mrRoot .mr-pdf-exporting .mr-asset-toggle,
+      #mrRoot .mr-pdf-exporting button { display: none !important; }
+      #mrRoot .mr-pdf-exporting .mr-detail-header { page-break-after: avoid; }
+      #mrRoot .mr-pdf-exporting .mr-scorecard-section,
+      #mrRoot .mr-pdf-exporting .mr-narrative { page-break-inside: avoid; }
+      #mrRoot .mr-pdf-header {
+        display:flex; justify-content:space-between; align-items:flex-end;
+        padding: 4px 0 14px; border-bottom: 2px solid #0ea5e9; margin-bottom: 18px;
+      }
+      #mrRoot .mr-pdf-header .mr-pdf-eyebrow {
+        font-size: 10px; color: #64748b; letter-spacing: 0.08em;
+        text-transform: uppercase; font-weight: 700;
+      }
+      #mrRoot .mr-pdf-header .mr-pdf-title {
+        font-size: 22px; font-weight: 700; color: #0f172a; margin-top: 2px;
+      }
+      #mrRoot .mr-pdf-header .mr-pdf-date {
+        text-align: right; font-size: 10px; color: #64748b;
+      }
       #mrRoot .mr-btn {
         font-size: 12px; padding: 7px 14px; border: 1px solid #cbd5e1;
         background: #fff; color: #1e293b; border-radius: 8px; cursor: pointer;
@@ -1174,6 +1196,7 @@
             <button class="mr-btn mr-btn-deep" id="mrDetailDeepBtn" onclick="mrDeepResearchCurrent()">
               🔬 Deep Research
             </button>
+            <button class="mr-btn" onclick="mrExportPDF()" title="Export this market's full scorecard + thesis to a PDF">📄 Export PDF</button>
             <button class="mr-btn" onclick="mrEditMarket()">Edit Market</button>
             <button class="mr-btn" onclick="mrDeleteMarket()" style="color:#b91c1c;">Delete</button>
           </div>
@@ -2437,6 +2460,75 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     { label: 'FBI Uniform Crime Reporting', url: 'https://crime-data-explorer.fr.cloud.gov/' },
     { label: 'US Census ACS', url: 'https://data.census.gov/' },
   ];
+
+  // ── PDF export ────────────────────────────────────────────
+  // One-click "Save as PDF" of the active market detail view (header + thesis
+  // + summary + full scorecard). Uses html2pdf.bundle (html2canvas + jsPDF)
+  // loaded lazily from cdnjs on first invocation.
+  async function _ensureHtml2Pdf() {
+    if (window.html2pdf) return;
+    await new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('Failed to load html2pdf'));
+      document.head.appendChild(s);
+    });
+  }
+  async function _exportMarketPDF() {
+    if (!_currentMarket) { _toast('Open a market first', true); return; }
+    const m = _currentMarket;
+    _toast('Generating PDF…');
+    try {
+      await _ensureHtml2Pdf();
+    } catch (e) {
+      _toast('Could not load PDF library', true);
+      return;
+    }
+    const detail = document.getElementById('mrDetailView');
+    if (!detail) return;
+    // 1. Inject a brand header at the top
+    const header = document.createElement('div');
+    header.className = 'mr-pdf-header';
+    const tierLabel = m.tier ? `Tier ${m.tier}` : '';
+    const scoreLabel = (m.score != null) ? `Score ${Number(m.score).toFixed(1)}` : '';
+    const subtitle = [m.state, scoreLabel, tierLabel].filter(Boolean).join(' · ');
+    header.innerHTML = `
+      <div>
+        <div class="mr-pdf-eyebrow">First Mile Capital · Market Research</div>
+        <div class="mr-pdf-title">${_esc(m.name)}</div>
+        <div style="font-size:11px;color:#475569;margin-top:4px;">${_esc(subtitle)}</div>
+      </div>
+      <div class="mr-pdf-date">
+        <div>${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+        <div style="margin-top:2px;">admin.firstmilecap.com</div>
+      </div>`;
+    detail.insertBefore(header, detail.firstChild);
+    detail.classList.add('mr-pdf-exporting');
+
+    const safeName = (m.name || 'market').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
+    const filename = `FMC_Market_${safeName}_${new Date().toISOString().slice(0,10)}.pdf`;
+
+    const opt = {
+      margin: [0.45, 0.45, 0.55, 0.45],
+      filename,
+      image: { type: 'jpeg', quality: 0.95 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', windowWidth: 1100 },
+      jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait', compress: true },
+      pagebreak: { mode: ['css', 'legacy'], avoid: '.mr-scorecard-section, .mr-narrative' },
+    };
+
+    try {
+      await window.html2pdf().set(opt).from(detail).save();
+      _toast('PDF saved');
+    } catch (e) {
+      console.error('[mr] PDF export failed:', e);
+      _toast('PDF export failed: ' + (e.message || e), true);
+    } finally {
+      detail.classList.remove('mr-pdf-exporting');
+      header.remove();
+    }
+  }
 
   async function _deepResearch(id) {
     // Key chain: build-time substituted (deployed) → config.js (local dev)
@@ -3747,6 +3839,7 @@ Research this town now and produce the scoring JSON.`;
   window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
   window.mrDeepResearch = (id) => _deepResearch(id);
   window.mrDeepResearchCurrent = () => { if (_currentMarket) _deepResearch(_currentMarket.id); };
+  window.mrExportPDF = () => _exportMarketPDF();
   window.mrBulkPhase3 = () => _bulkPhase3();
   window.mrBulkPhase3Cancel = () => _bulkPhase3Cancel();
   window.mrEditSource = (criterionId) => {
