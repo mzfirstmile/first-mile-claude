@@ -31,6 +31,9 @@
   let _mapLeafletLoaded = false;
   let _mapBounds = null;          // { north, south, east, west } when user has zoomed/panned past the initial CONUS view
   let _mapBoundsSettling = false; // suppresses moveend during programmatic fitBounds on initial render
+  let _addressPin = null;         // { lat, lng, label } when user searched an address (Nominatim hit)
+  const _ADDRESS_RADIUS_MILES = 60; // "surrounding markets" window — matches the metro overlay radius
+  let _showTier4 = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_show_tier4') === '1'); // checkbox: render T4 dots on the map
   // Asset class — 'residential' or 'office'. Drives which score/tier/target/weight
   // columns get used everywhere (list, map, modals, sort, filter). Persisted to localStorage.
   let _viewType = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_type')) || 'residential';
@@ -1068,12 +1071,22 @@
         </div>
 
         <!-- Search bar -->
-        <div class="mr-search-wrap">
-          <svg class="mr-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input class="mr-search-input" id="mrSearchInput" type="text"
-                 placeholder="Search by town name or state…"
-                 oninput="mrSearch(this.value)">
-          <span class="mr-search-clear" id="mrSearchClear" onclick="mrSearch('')" title="Clear">×</span>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin: 8px 0 4px 0;">
+          <div class="mr-search-wrap" style="flex:1; min-width:320px; margin:0;">
+            <svg class="mr-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input class="mr-search-input" id="mrSearchInput" type="text"
+                   placeholder="Search by town name, state, or full address (street, city, zip…)"
+                   oninput="mrSearch(this.value)"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();mrSearchEnter(this.value);}">
+            <span class="mr-search-clear" id="mrSearchClear" onclick="mrSearch('')" title="Clear">×</span>
+          </div>
+          <label id="mrShowTier4Wrap" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#475569; white-space:nowrap; user-select:none; padding:6px 10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff;">
+            <input type="checkbox" id="mrShowTier4" onchange="mrToggleShowTier4(this.checked)" style="margin:0;" ${_showTier4 ? 'checked' : ''}>
+            Show Tier 4 on map (grey)
+          </label>
+        </div>
+        <div id="mrAddressHint" style="font-size:11px;color:#94a3b8;margin:-2px 0 4px 4px;display:none;">
+          📍 <span id="mrAddressHintText"></span>
         </div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
@@ -1215,7 +1228,11 @@
   function _buildFilterQuery() {
     const parts = [];
     const q = (_searchQuery || '').trim();
-    const isSearching = q.length > 0;
+    // When the user searches an address, _addressPin is set and _mapBounds is
+    // a box around the pin — so the name ILIKE on the raw address text would
+    // never match. Skip the text filter in that case; geographic bounds do the
+    // filtering instead.
+    const isNameSearching = q.length > 0 && !_addressPin;
     const hasTierFilter = _activeTiers && _activeTiers.size > 0;
     // Favorites chip always constrains when active; tier multi-select is the
     // primary surface for filtering the scored universe.
@@ -1224,7 +1241,7 @@
       const tiers = Array.from(_activeTiers).sort().join(',');
       parts.push(`${_tierCol()}=in.(${tiers})`);
     }
-    if (isSearching) {
+    if (isNameSearching) {
       const safe = q.replace(/[%*]/g, '');
       const enc = encodeURIComponent('*' + safe + '*');
       parts.push(`or=(name.ilike.${enc},state.ilike.${enc})`);
@@ -1365,9 +1382,11 @@
       const lastIdx = Math.min(total, (_page + 1) * PAGE_SIZE);
       const pageCountEl = document.querySelector('.mr-page-count');
       if (pageCountEl) {
-        const suffix = _mapBounds
-          ? ` <span style="color:#0369a1;font-weight:600;">· Filtered by map view</span> <button onclick="mrClearMapBounds()" style="margin-left:8px;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
-          : '';
+        const suffix = _addressPin
+          ? ` <span style="color:#b91c1c;font-weight:600;">· 📍 Within ${_ADDRESS_RADIUS_MILES}mi of ${_esc((_addressPin.label || '').split(',').slice(0,3).join(','))}</span> <button onclick="mrClearAddressSearch()" style="margin-left:8px;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
+          : _mapBounds
+            ? ` <span style="color:#0369a1;font-weight:600;">· Filtered by map view</span> <button onclick="mrClearMapBounds()" style="margin-left:8px;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
+            : '';
         pageCountEl.innerHTML = `Showing <strong>${firstIdx.toLocaleString()}–${lastIdx.toLocaleString()}</strong> of <strong>${total.toLocaleString()}</strong>${suffix}`;
       }
       // In full-map view there's no list pane to update — bail out without
@@ -1476,9 +1495,11 @@
     const firstIdx = total ? (_page * PAGE_SIZE) + 1 : 0;
     const lastIdx = Math.min(total, (_page + 1) * PAGE_SIZE);
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-    const boundsPill = _mapBounds
-      ? ` <span style="color:#0369a1;font-weight:600;">· Filtered by map view</span> <button onclick="mrClearMapBounds()" style="margin-left:8px;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
-      : '';
+    const boundsPill = _addressPin
+      ? ` <span style="color:#b91c1c;font-weight:600;">· 📍 Within ${_ADDRESS_RADIUS_MILES}mi of ${_esc((_addressPin.label || '').split(',').slice(0,3).join(','))}</span> <button onclick="mrClearAddressSearch()" style="margin-left:8px;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
+      : _mapBounds
+        ? ` <span style="color:#0369a1;font-weight:600;">· Filtered by map view</span> <button onclick="mrClearMapBounds()" style="margin-left:8px;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
+        : '';
     const header = `
       <div class="mr-page-header">
         <div class="mr-page-count">Showing <strong>${firstIdx.toLocaleString()}–${lastIdx.toLocaleString()}</strong> of <strong>${total.toLocaleString()}</strong>${boundsPill}</div>
@@ -1514,7 +1535,8 @@
           <div style="font-weight:700;color:#0f172a;margin-bottom:4px;">Tier</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;"></span> Tier 1</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;"></span> Tier 2</div>
-          <div style="display:flex;align-items:center;gap:6px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;"></span> Tier 3</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;"></span> Tier 3</div>
+          <div id="mrLegendT4Row" style="display:${_showTier4 ? 'flex' : 'none'};align-items:center;gap:6px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#94a3b8;opacity:0.7;"></span> Tier 4</div>
         </div>
       </div>
     `;
@@ -1652,17 +1674,21 @@
       const withCoords = rows.filter(m => m.latitude != null && m.longitude != null);
       const withoutCoords = rows.filter(m => m.latitude == null || m.longitude == null);
 
-      // Tier 4 markers are intentionally not drawn (the bottom band isn't useful)
-      const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6' };
+      // Tier 4 markers are hidden by default — toggled on via the "Show Tier 4 on map" checkbox
+      const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6', 4: '#94a3b8' };
       for (const m of withCoords) {
         const mTier = _viewType === 'office' ? m.office_tier : m.tier;
-        if (mTier === 4 || mTier == null) continue;
+        if (mTier == null) continue;
+        if (mTier === 4 && !_showTier4) continue;
         const color = tierColor[mTier] || '#94a3b8';
+        // T4 markers render slightly smaller + lower opacity so they don't visually dominate
+        const sz = mTier === 4 ? 10 : 14;
+        const op = mTier === 4 ? 0.7 : 1;
         const icon = L.divIcon({
           className: 'mr-marker',
-          html: `<div style="background:${color};width:14px;height:14px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.2);"></div>`,
-          iconSize: [14, 14],
-          iconAnchor: [7, 7],
+          html: `<div style="background:${color};width:${sz}px;height:${sz}px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,0.2);opacity:${op};"></div>`,
+          iconSize: [sz, sz],
+          iconAnchor: [sz/2, sz/2],
         });
         const marker = L.marker([m.latitude, m.longitude], { icon, title: m.name });
         const tierLabel = mTier ? `Tier ${mTier}` : '';
@@ -1678,11 +1704,38 @@
         );
         _markerCluster.addLayer(marker);
       }
-      // Fit to data — but default to the contiguous lower-48 even when HI/AK
-      // markers exist, so the map opens at a useful zoom. If the active filter
-      // only includes off-mainland towns (e.g. State=HI), fall back to fitting
-      // those so the dropdown still does its job.
-      if (withCoords.length > 0) {
+      // If the user searched an address, center on the pin + draw a radius
+      // circle. Otherwise, fit to the visible markers (defaulting to the
+      // contiguous lower-48 even when HI/AK markers exist).
+      if (_addressPin && isFinite(_addressPin.lat) && isFinite(_addressPin.lng)) {
+        _mapBoundsSettling = true;
+        // Radius circle (60mi dashed red — matches the address-pin color)
+        L.circle([_addressPin.lat, _addressPin.lng], {
+          radius: _ADDRESS_RADIUS_MILES * 1609.34,
+          color: '#dc2626', weight: 2, opacity: 0.55, dashArray: '6,5',
+          fillColor: '#dc2626', fillOpacity: 0.04,
+          interactive: false,
+        }).addTo(_mapInstance);
+        // Address pin
+        const pinIcon = L.divIcon({
+          className: 'mr-address-pin',
+          html: `<div style="width:18px;height:18px;border-radius:50%;background:#dc2626;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.45);"></div>`,
+          iconSize: [18, 18],
+          iconAnchor: [9, 9],
+        });
+        const pinMarker = L.marker([_addressPin.lat, _addressPin.lng], { icon: pinIcon, zIndexOffset: 2000 });
+        pinMarker.bindPopup(
+          `<div style="font-size:13px;max-width:240px;">
+            <div style="font-weight:700;margin-bottom:4px;color:#dc2626;">📍 Searched address</div>
+            <div style="color:#475569;line-height:1.4;">${_esc(_addressPin.label)}</div>
+            <div style="color:#94a3b8;margin-top:6px;font-size:11px;">Showing markets within ${_ADDRESS_RADIUS_MILES} miles</div>
+          </div>`
+        );
+        pinMarker.addTo(_mapInstance);
+        // Zoom level 9 ≈ ~60 mile radius visible — fits the dashed circle nicely
+        _mapInstance.setView([_addressPin.lat, _addressPin.lng], 9, { animate: false });
+        setTimeout(() => { _mapBoundsSettling = false; }, 600);
+      } else if (withCoords.length > 0) {
         // Loose contiguous-US bbox (drops HI, AK, PR/territories)
         const inCONUS = m => (m.latitude >= 24.5 && m.latitude <= 49.5
                               && m.longitude >= -125 && m.longitude <= -66);
@@ -3553,14 +3606,131 @@ Research this town now and produce the scoring JSON.`;
   window.mrCloseModal     = ()    => _closeModal();
   window.mrChatSubmit     = ()    => _chatSubmit();
   window.mrChatSuggest    = (t)   => _chatSuggest(t);
+  // ── Address search (Nominatim, free OSM geocoder, CORS-enabled) ──
+  function _looksLikeAddress(q) {
+    if (!q) return false;
+    // A number in the query → almost certainly an address (street # or zip).
+    // Pure town/state queries don't have digits.
+    return /\d/.test(q);
+  }
+  async function _geocodeAddress(q) {
+    try {
+      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&addressdetails=0&q=${encodeURIComponent(q)}`;
+      const r = await fetch(url, { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) return null;
+      const j = await r.json();
+      if (!Array.isArray(j) || j.length === 0) return null;
+      const hit = j[0];
+      const lat = parseFloat(hit.lat), lng = parseFloat(hit.lon);
+      if (!isFinite(lat) || !isFinite(lng)) return null;
+      return { lat, lng, label: hit.display_name || q };
+    } catch (e) {
+      console.warn('[mr] geocode failed:', e);
+      return null;
+    }
+  }
+  function _applyAddressBounds(pin) {
+    // Bounding box around the pin matching the dashed radius circle.
+    const latDelta = _ADDRESS_RADIUS_MILES / 69;
+    const lngDelta = _ADDRESS_RADIUS_MILES / (69 * Math.max(0.1, Math.cos(pin.lat * Math.PI / 180)));
+    _mapBounds = {
+      north: (pin.lat + latDelta).toFixed(4),
+      south: (pin.lat - latDelta).toFixed(4),
+      east:  (pin.lng + lngDelta).toFixed(4),
+      west:  (pin.lng - lngDelta).toFixed(4),
+    };
+  }
+  function _updateAddressHint(text) {
+    const wrap = document.getElementById('mrAddressHint');
+    const t = document.getElementById('mrAddressHintText');
+    if (!wrap || !t) return;
+    if (text) { t.textContent = text; wrap.style.display = 'block'; }
+    else { wrap.style.display = 'none'; }
+  }
+  function _syncShowTier4Checkbox() {
+    const cb = document.getElementById('mrShowTier4');
+    if (cb && cb.checked !== _showTier4) cb.checked = _showTier4;
+    const row = document.getElementById('mrLegendT4Row');
+    if (row) row.style.display = _showTier4 ? 'flex' : 'none';
+  }
+  async function _doAddressSearch(q) {
+    _updateAddressHint('Looking up address…');
+    const pin = await _geocodeAddress(q);
+    if (!pin) {
+      _addressPin = null;
+      _updateAddressHint('Couldn\'t find that address — try adding city/state, or check spelling.');
+      _toast('Address not found', true);
+      return;
+    }
+    _addressPin = pin;
+    _applyAddressBounds(pin);
+    // Auto-show T4 so all nearby markets surface around the pin
+    if (!_showTier4) {
+      _showTier4 = true;
+      try { localStorage.setItem('mr_show_tier4', '1'); } catch(_) {}
+    }
+    _updateAddressHint(`Showing markets within ${_ADDRESS_RADIUS_MILES} mi of ${pin.label}`);
+    _page = 0;
+    _refreshPage();
+    _syncShowTier4Checkbox();
+  }
   // Debounce search so typing doesn't fire a query per keystroke
   let _searchTimer = null;
   window.mrSearch = (q) => {
-    _searchQuery = q || '';
+    const next = q || '';
+    const prev = _searchQuery;
+    _searchQuery = next;
     const inp = document.getElementById('mrSearchInput');
     if (inp && inp.value !== _searchQuery) inp.value = _searchQuery;
     clearTimeout(_searchTimer);
+    // Empty input → clear any active address pin + bounds and refresh
+    if (!_searchQuery.trim()) {
+      _addressPin = null;
+      _mapBounds = null;
+      _updateAddressHint('');
+      _page = 0;
+      _refreshPage();
+      return;
+    }
+    // Address-looking input → wait for Enter (Nominatim politeness + clearer UX).
+    // Don't fire address geocode on every keystroke.
+    if (_looksLikeAddress(_searchQuery)) {
+      _updateAddressHint('Press Enter to search this address');
+      // If we had a name-based filter active from a prior search, clear text-only filter
+      // but keep the active address pin until Enter or explicit clear.
+      return;
+    }
+    // Name search path — clear any previous address pin/bounds first
+    if (_addressPin) { _addressPin = null; _mapBounds = null; _updateAddressHint(''); }
     _searchTimer = setTimeout(() => { _page = 0; _refreshPage(); }, 220);
+  };
+  window.mrSearchEnter = (q) => {
+    const v = (q || '').trim();
+    if (!v) return;
+    if (_looksLikeAddress(v)) {
+      _searchQuery = v;
+      _doAddressSearch(v);
+    } else {
+      _searchQuery = v;
+      _addressPin = null; _mapBounds = null; _updateAddressHint('');
+      _page = 0; _refreshPage();
+    }
+  };
+  window.mrClearAddressSearch = () => {
+    _addressPin = null;
+    _mapBounds = null;
+    _searchQuery = '';
+    const inp = document.getElementById('mrSearchInput');
+    if (inp) inp.value = '';
+    _updateAddressHint('');
+    _page = 0;
+    _refreshPage();
+  };
+  window.mrToggleShowTier4 = (on) => {
+    _showTier4 = !!on;
+    try { localStorage.setItem('mr_show_tier4', _showTier4 ? '1' : '0'); } catch(_) {}
+    // Re-render to add/remove T4 markers on the map
+    _renderGrid();
   };
   window.mrToggleFavorite = (id)  => _toggleFavorite(id);
   window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
