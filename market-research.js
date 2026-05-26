@@ -36,8 +36,9 @@
   let _showTier4 = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_show_tier4') === '1'); // checkbox: render T4 dots on the map
   // Asset class — 'residential' or 'office'. Drives which score/tier/target/weight
   // columns get used everywhere (list, map, modals, sort, filter). Persisted to localStorage.
-  let _viewType = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_type')) || 'residential';
-  if (!['residential', 'office'].includes(_viewType)) _viewType = 'residential';
+  // Defaults to 'office' on first visit (per Morris 2026-05-26).
+  let _viewType = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_type')) || 'office';
+  if (!['residential', 'office'].includes(_viewType)) _viewType = 'office';
   function _scoreCol() { return _viewType === 'office' ? 'office_score' : 'score'; }
   function _tierCol()  { return _viewType === 'office' ? 'office_tier'  : 'tier';  }
   let _msaGeoJson = null;         // cached CBSA GeoJSON once fetched (per-session)
