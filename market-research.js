@@ -2641,17 +2641,16 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
       margin: [0.4, 0.4, 0.5, 0.4],
       filename,
       image: { type: 'jpeg', quality: 0.95 },
+      // NOTE: do NOT pass scrollX/scrollY/x/y — those override the element's
+      // bounding rect, which is at left:-10000px. Result was a 3KB blank PDF
+      // because html2canvas was capturing the empty area at (0,0). Let it
+      // read the wrapper's rect itself.
       html2canvas: {
         scale: 2,
         useCORS: true,
         logging: false,
         backgroundColor: '#ffffff',
-        width: 776,
         windowWidth: 776,
-        scrollX: 0,
-        scrollY: 0,
-        x: 0,
-        y: 0,
       },
       jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait', compress: true },
       pagebreak: { mode: ['css', 'legacy'] },
