@@ -2506,12 +2506,16 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
         </div>
       </div>
 
-      <!-- Key metrics 2x2 grid -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:18px;">
-        ${_pdfMetricCard('Population', m.population ? Number(m.population).toLocaleString() : '—')}
-        ${_pdfMetricCard('Median Household Income', m.median_household_income ? '$' + Number(m.median_household_income).toLocaleString() : '—')}
-        ${_pdfMetricCard('Median Home Value', m.median_home_value ? '$' + Number(m.median_home_value).toLocaleString() : '—')}
-        ${_pdfMetricCard('Office Score · Tier', offScore + (m.office_tier ? ' · T' + m.office_tier : ''))}
+      <!-- Key metrics 2x2 (flexbox — html2canvas has poor CSS Grid support) -->
+      <div style="margin-bottom:18px;">
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+          <div style="flex:1;">${_pdfMetricCard('Population', m.population ? Number(m.population).toLocaleString() : '—')}</div>
+          <div style="flex:1;">${_pdfMetricCard('Median Household Income', m.median_household_income ? '$' + Number(m.median_household_income).toLocaleString() : '—')}</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <div style="flex:1;">${_pdfMetricCard('Median Home Value', m.median_home_value ? '$' + Number(m.median_home_value).toLocaleString() : '—')}</div>
+          <div style="flex:1;">${_pdfMetricCard('Office Score · Tier', offScore + (m.office_tier ? ' · T' + m.office_tier : ''))}</div>
+        </div>
       </div>
     `;
 
@@ -2603,30 +2607,52 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
       </div>
     `;
 
-    // Build off-screen wrapper at fixed letter-friendly width
+    // Off-screen wrapper. CRITICAL: position:absolute + left:-10000px (NOT
+    // position:fixed) so the element stays in the document flow and actually
+    // gets painted — html2canvas needs that to render content. Fixed
+    // positioning with negative top produced a blank PDF.
     const wrapper = document.createElement('div');
     wrapper.style.cssText = `
-      position: fixed; top: -10000px; left: 0;
-      width: 720px; padding: 24px 28px;
-      background: #ffffff; color: #0f172a;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      font-size: 12px; line-height: 1.5;
-      box-sizing: content-box;
+      position: absolute !important;
+      left: -10000px !important;
+      top: 0 !important;
+      width: 776px !important;
+      box-sizing: border-box !important;
+      padding: 24px 28px !important;
+      background: #ffffff !important;
+      color: #0f172a !important;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      z-index: -1 !important;
     `;
     wrapper.innerHTML = html;
     document.body.appendChild(wrapper);
-    // Let layout settle before snapshot
-    await new Promise(r => setTimeout(r, 80));
+    // Let layout settle before snapshot (longer wait for paint completion)
+    await new Promise(r => setTimeout(r, 200));
 
     const safeName = (m.name || 'market').replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_|_$/g, '');
     const filename = `FMC_Market_${safeName}_${new Date().toISOString().slice(0,10)}.pdf`;
 
-    // wrapper total width = 720 content + 28*2 padding = 776
+    // wrapper total width including padding = 776px
     const opt = {
       margin: [0.4, 0.4, 0.5, 0.4],
       filename,
       image: { type: 'jpeg', quality: 0.95 },
-      html2canvas: { scale: 2, useCORS: true, logging: false, backgroundColor: '#ffffff', width: 776, windowWidth: 776 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff',
+        width: 776,
+        windowWidth: 776,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+      },
       jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait', compress: true },
       pagebreak: { mode: ['css', 'legacy'] },
     };
