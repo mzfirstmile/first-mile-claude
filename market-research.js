@@ -37,6 +37,16 @@
   // Asset class — 'residential' or 'office'. Drives which score/tier/target/weight
   // columns get used everywhere (list, map, modals, sort, filter). Persisted to localStorage.
   // Defaults to 'office' on first visit (per Morris 2026-05-26).
+  // One-time migration: stale 'residential' from before the default flip gets
+  // reset to 'office'. Bumping MR_DEFAULT_VERSION re-applies the migration.
+  const MR_DEFAULT_VERSION = '2';
+  try {
+    if (typeof localStorage !== 'undefined'
+        && localStorage.getItem('mr_default_version') !== MR_DEFAULT_VERSION) {
+      localStorage.setItem('mr_view_type', 'office');
+      localStorage.setItem('mr_default_version', MR_DEFAULT_VERSION);
+    }
+  } catch (_) {}
   let _viewType = (typeof localStorage !== 'undefined' && localStorage.getItem('mr_view_type')) || 'office';
   if (!['residential', 'office'].includes(_viewType)) _viewType = 'office';
   function _scoreCol() { return _viewType === 'office' ? 'office_score' : 'score'; }
