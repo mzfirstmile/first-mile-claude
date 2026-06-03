@@ -183,7 +183,7 @@ function _injectCSS() {
   .upload-section h3 .badge { font-size:11px; font-weight:600; padding:2px 8px; border-radius:12px; }
   .upload-section h3 .badge.low { background:var(--orange-dim); color:var(--orange); }
   .upload-section h3 .badge.high { background:var(--green-dim); color:var(--green-dark); }
-  .upload-txn-row { display:grid; grid-template-columns:80px 1fr 160px 160px 120px; gap:8px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .upload-txn-row { display:grid; grid-template-columns:28px 70px minmax(280px, 1fr) 150px 150px auto 110px; gap:8px; align-items:center; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .upload-txn-row:last-child { border-bottom:none; }
   .upload-txn-row .txn-date { font-size:12px; color:var(--text-dim); white-space:nowrap; }
   .upload-txn-row .txn-desc { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; position:relative; cursor:help; }
@@ -203,7 +203,8 @@ function _injectCSS() {
   .upload-actions .btn-primary:hover { background:#0095b3; }
   .upload-actions .btn-primary:disabled { opacity:.4; cursor:default; }
   @media (max-width:900px) {
-    .upload-txn-row { grid-template-columns:60px 1fr 140px 100px; }
+    .upload-txn-row { grid-template-columns:24px 60px 1fr 130px 100px; }
+    .upload-txn-row > :nth-child(n+6) { display:none; }
     .upload-txn-row select:nth-of-type(2) { display:none; }
   }
 
@@ -3008,8 +3009,8 @@ function renderUploadTxnRow(t) {
     <select class="txn-cat-select" style="font-size:11px;" onchange="uploadChangeCategory(${t.idx}, this.value, this)">
       ${buildCategoryOptions(t.type)}
     </select>
-    ${linkDropdownHtml}
-    ${uploadSplitHtml}
+    ${linkDropdownHtml || '<div></div>'}
+    ${uploadSplitHtml || '<div></div>'}
     <div class="txn-amount ${amtClass}">${amtStr}</div>
   </div>`;
 }
