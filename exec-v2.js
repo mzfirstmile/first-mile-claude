@@ -767,6 +767,7 @@ const CAT_ICONS = {
   'Interest Expense': '💲',
   'Loan Out': '🏦',
   'Loan Payback': '🏦',
+  'Loan Proceeds': '💵',
   'Deposit': '🔒',
   'Marketing': '📣',
   'Contractors': '🔨',
@@ -783,7 +784,7 @@ const CATEGORY_GROUPS = [
     'PM Expenses', 'Wire Payments'
   ]},
   { label: '📊 Balance Sheet', items: [
-    'Owner Distributions', 'Investment Contributions', 'Loan Out', 'Loan Payback', 'Deposit'
+    'Owner Distributions', 'Investment Contributions', 'Loan Out', 'Loan Payback', 'Loan Proceeds', 'Deposit'
   ]},
   { label: '🔄 Other', items: [
     'AM Partner Payout', 'Internal Transfer', 'Payroll Reimbursement'
@@ -1026,12 +1027,14 @@ function categorize(record) {
     const isInvestment = oc === 'Investment Contributions' || oc === 'Investor Contribution (Pass-Through)';
     const isLoan = oc === 'Loan Out';
     const isLoanPayback = oc === 'Loan Payback';
+    const isLoanProceeds = oc === 'Loan Proceeds';
     const isDeposit = oc === 'Deposit';
     if (isExcluded) return { category: oc === 'Payroll Reimbursement' ? 'payroll_offset' : 'excluded', type: oc };
     if (isDistribution) return { category: 'distribution', type: oc };
     if (isInvestment) return { category: 'investment', type: 'Investment Contributions' };
     if (isLoan) return { category: 'loan', type: oc };
     if (isLoanPayback) return { category: 'loan_payback', type: oc };
+    if (isLoanProceeds) return { category: 'loan_proceeds', type: oc };
     if (isDeposit) return { category: 'deposit', type: oc };
     return { category: isIncome ? 'income' : 'expense', type: oc };
   }
@@ -1254,13 +1257,14 @@ function nextPeriod() {
 
 // ── Compute period financials ──
 function computePeriod(records, period) {
-  let totalIncome = 0, totalOpex = 0, totalDistributions = 0, totalInvestments = 0, totalLoans = 0, totalLoanPaybacks = 0, totalDeposits = 0, payrollReimb = 0, payrollSplitTotal = 0;
+  let totalIncome = 0, totalOpex = 0, totalDistributions = 0, totalInvestments = 0, totalLoans = 0, totalLoanPaybacks = 0, totalLoanProceeds = 0, totalDeposits = 0, payrollReimb = 0, payrollSplitTotal = 0;
   const incomeBuckets = {};
   const opexBuckets = {};       // Operating expenses
   const distroBuckets = {};     // Owner distributions
   const investBuckets = {};     // Investment contributions
   const loanBuckets = {};       // Loans out (balance sheet asset)
   const loanPaybackBuckets = {}; // Loan paybacks (not operating income)
+  const loanProceedsBuckets = {}; // Loan proceeds (balance sheet liability — incoming debt draw)
   const depositBuckets = {};    // Deposits (balance sheet asset)
   const excludedBuckets = {};
 
@@ -1325,6 +1329,12 @@ function computePeriod(records, period) {
       loanPaybackBuckets[type].total += amount;
       loanPaybackBuckets[type].count++;
       loanPaybackBuckets[type].records.push(r);
+    } else if (category === 'loan_proceeds') {
+      totalLoanProceeds += amount;
+      if (!loanProceedsBuckets[type]) loanProceedsBuckets[type] = { total: 0, count: 0, records: [] };
+      loanProceedsBuckets[type].total += amount;
+      loanProceedsBuckets[type].count++;
+      loanProceedsBuckets[type].records.push(r);
     } else if (category === 'deposit') {
       totalDeposits += amount;
       if (!depositBuckets[type]) depositBuckets[type] = { total: 0, count: 0, records: [] };
@@ -1349,15 +1359,16 @@ function computePeriod(records, period) {
   const netOpex = totalOpex + payrollReimb;
   // Net Income = Income - Operating Expenses
   const netIncome = totalIncome + netOpex;
-  // Cash Flow = Net Income - Distributions - Investments - Loans Out - Deposits + Loan Paybacks
-  const cashFlow = netIncome + totalDistributions + totalInvestments + totalLoans + totalDeposits + totalLoanPaybacks;
+  // Cash Flow = Net Income + Distributions + Investments + Loans Out + Deposits + Loan Paybacks + Loan Proceeds
+  // (all buckets carry their natural signs — outflows negative, inflows positive)
+  const cashFlow = netIncome + totalDistributions + totalInvestments + totalLoans + totalDeposits + totalLoanPaybacks + totalLoanProceeds;
 
   return {
     totalIncome, totalOpex: Math.abs(totalOpex), netOpex, payrollReimb, payrollSplitTotal,
     // Cash-flow buckets: raw signed values (positive = inflow, negative = outflow). Render dynamically.
-    totalDistributions, totalInvestments, totalLoans, totalLoanPaybacks, totalDeposits,
+    totalDistributions, totalInvestments, totalLoans, totalLoanPaybacks, totalLoanProceeds, totalDeposits,
     netIncome, cashFlow,
-    incomeBuckets, opexBuckets, distroBuckets, investBuckets, loanBuckets, loanPaybackBuckets, depositBuckets, excludedBuckets
+    incomeBuckets, opexBuckets, distroBuckets, investBuckets, loanBuckets, loanPaybackBuckets, loanProceedsBuckets, depositBuckets, excludedBuckets
   };
 }
 
@@ -2933,6 +2944,7 @@ function renderUploadTxnRow(t) {
   const isLinkableIncome = linkableIncome.includes(t.type);
   const isInvestmentIncome = t.type === 'Investment Income';
   const isInterestExpense = t.type === 'Interest Expense';
+  const isLoanProceeds = t.type === 'Loan Proceeds';
   const isInvestmentContrib = t.type === 'Investment Contributions';
   const isLoanOut = t.type === 'Loan Out';
   const isLoanPayback = t.type === 'Loan Payback';
@@ -2960,14 +2972,15 @@ function renderUploadTxnRow(t) {
     linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkInvestment(${t.idx}, this.value, this)">
       ${invOptions.join('')}
     </select>`;
-  } else if (isInterestExpense) {
-    // Liability dropdown
+  } else if (isInterestExpense || isLoanProceeds) {
+    // Liability dropdown — for Interest Expense (paying interest on FM debt) or Loan Proceeds (drawing on FM debt)
     const liabOptions = [`<option value="">— No Loan —</option>`];
     bsLiabilities.forEach(l => {
       const selected = t.liability_id === l.id ? 'selected' : '';
       liabOptions.push(`<option value="${l.id}" ${selected}>${l.lender} — ${l.relatedDeal || ''}</option>`);
     });
-    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkLiability(${t.idx}, this.value)">
+    if (isLoanProceeds) liabOptions.push(`<option value="__new__">+ Add New Liability…</option>`);
+    linkDropdownHtml = `<select class="txn-cat-select" style="max-width:140px;font-size:10px;" onchange="uploadLinkLiability(${t.idx}, this.value, this)">
       ${liabOptions.join('')}
     </select>`;
   } else if (isLoanOut || isLoanPayback) {
@@ -3121,7 +3134,25 @@ function uploadLinkInvestment(idx, investmentId, selectEl) {
   showToast(`Linked → ${invName}`);
 }
 
-function uploadLinkLiability(idx, liabilityId) {
+async function uploadLinkLiability(idx, liabilityId, selectEl) {
+  // Handle "+ Add New Liability…" path (Loan Proceeds only)
+  if (liabilityId === '__new__') {
+    const t = uploadReviewChoices[idx];
+    const fakeRec = { id: `upload-${idx}`, amount: t?.amount || 0 };
+    const newId = await createLiabilityFromTxn(fakeRec);
+    if (!newId) { if (selectEl) selectEl.value = uploadReviewChoices[idx].liability_id || ''; return; }
+    liabilityId = newId;
+    // Rebuild the select with the new option included + selected
+    if (selectEl) {
+      const newOpt = document.createElement('option');
+      const newLiab = bsLiabilities.find(l => l.id === newId);
+      newOpt.value = newId;
+      newOpt.textContent = `${newLiab?.lender || 'New'} — ${newLiab?.relatedDeal || ''}`;
+      // Insert before "+ Add New Liability…" option (last one)
+      selectEl.insertBefore(newOpt, selectEl.lastElementChild);
+      selectEl.value = newId;
+    }
+  }
   uploadReviewChoices[idx].liability_id = liabilityId || null;
   const liabName = liabilityId ? (bsLiabilities.find(l => l.id === liabilityId) || {}).lender : 'None';
   showToast(`Linked → ${liabName}`);
@@ -3303,7 +3334,7 @@ const GENERIC_CATEGORIES = new Set([
 // Categories that should be linked to a property, investment, or liability
 const LINKABLE_TO_PROPERTY = new Set(['Asset Management Fee Income', 'Property Management Fee Income', 'Development Fee Income', 'Acquisition Fee Income']);
 const LINKABLE_TO_INVESTMENT = new Set(['Investment Income']);
-const LINKABLE_TO_LIABILITY = new Set(['Interest Expense']);
+const LINKABLE_TO_LIABILITY = new Set(['Interest Expense', 'Loan Proceeds']);
 const LINKABLE_TO_LOAN = new Set(['Loan Payback']);
 
 function getExistingLoanNames() {
@@ -3495,7 +3526,9 @@ function buildReviewLinkDropdown(recordId, category) {
   } else if (LINKABLE_TO_LIABILITY.has(category)) {
     const liabOpts = [`<option value="">— Loan —</option>`];
     bsLiabilities.forEach(l => { liabOpts.push(`<option value="${l.id}">${l.lender}${l.relatedDeal ? ' — ' + l.relatedDeal : ''}</option>`); });
-    return `<select class="txn-cat-select review-link" onchange="reviewLinkLiability('${recordId}', this.value)">${liabOpts.join('')}</select>`;
+    // For Loan Proceeds, allow creating a new liability inline (drawing on a new loan)
+    if (category === 'Loan Proceeds') liabOpts.push(`<option value="__new__">+ Add New Liability…</option>`);
+    return `<select class="txn-cat-select review-link" onchange="reviewLinkLiability('${recordId}', this.value, this)">${liabOpts.join('')}</select>`;
   } else if (LINKABLE_TO_LOAN.has(category)) {
     const loanNames = getExistingLoanNames();
     const currentName = categoryNames[recordId] || '';
@@ -3578,13 +3611,65 @@ async function reviewLinkInvestment(recordId, investmentId) {
   catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
 }
 
-async function reviewLinkLiability(recordId, liabilityId) {
+async function reviewLinkLiability(recordId, liabilityId, selectEl) {
+  // Handle "+ Add New Liability…" path
+  if (liabilityId === '__new__') {
+    const rec = allRecords.find(r => r.id === recordId);
+    const newId = await createLiabilityFromTxn(rec);
+    if (!newId) { if (selectEl) selectEl.value = ''; return; }
+    liabilityId = newId;
+    // Refresh the dropdown options so the new liability appears + is selected
+    if (selectEl) {
+      const cat = categoryOverrides[recordId] || rec?.type;
+      selectEl.outerHTML = buildReviewLinkDropdown(recordId, cat);
+      const fresh = document.querySelector(`[data-link-for="${recordId}"] select`);
+      if (fresh) fresh.value = newId;
+    }
+  }
   if (liabilityId) liabilityLinks[recordId] = liabilityId;
   else delete liabilityLinks[recordId];
   showToast(liabilityId ? 'Linked to loan' : 'Unlinked');
   updateReviewBadge();
+  renderBalanceSheet();
   try { await supaWrite('exec_transactions', 'PATCH', { liability_id: liabilityId || null }, `?id=eq.${recordId}`); }
   catch(e) { showToast(`⚠️ Save failed: ${e.message}`, 'error'); }
+}
+
+// Create a new liability inline from a transaction (used by Loan Proceeds + Add New Liability flow)
+async function createLiabilityFromTxn(rec) {
+  const lender = prompt('Lender / note holder name (e.g. "Six Fields", "Webster Bank"):', '');
+  if (!lender || !lender.trim()) return null;
+  const relatedDeal = prompt('Related deal / property (optional):', '') || '';
+  const principalStr = prompt('Principal amount (USD; defaults to the transaction amount):', String(Math.abs(rec?.amount || 0)));
+  const principal = parseFloat((principalStr || '').replace(/[$,\s]/g, '')) || Math.abs(rec?.amount || 0);
+  const maturity = prompt('Maturity date (YYYY-MM-DD, optional):', '') || null;
+  const payload = {
+    lender: lender.trim(),
+    related_deal: relatedDeal.trim(),
+    principal,
+    currency: 'USD',
+    usd_equivalent: principal,
+    maturity_date: maturity && /^\d{4}-\d{2}-\d{2}$/.test(maturity) ? maturity : null,
+    status: 'Active',
+    notes: `Created from transaction ${rec?.id || ''} on ${new Date().toISOString().slice(0,10)}`,
+  };
+  try {
+    const result = await supaWrite('exec_liabilities', 'POST', payload, '?select=*');
+    if (!result || !result[0]) { showToast('⚠️ Failed to create liability', 'error'); return null; }
+    const created = result[0];
+    // Push into the in-memory list so the next renders see it
+    bsLiabilities.push({
+      id: created.id, lender: created.lender, relatedDeal: created.related_deal,
+      principal: created.principal, currency: created.currency,
+      usdEquivalent: created.usd_equivalent, maturityDate: created.maturity_date,
+      status: created.status, notes: created.notes,
+    });
+    showToast(`Created liability: ${lender.trim()}`);
+    return created.id;
+  } catch (e) {
+    showToast(`⚠️ Create failed: ${e.message}`, 'error');
+    return null;
+  }
 }
 
 async function reviewLinkLoan(recordId, loanName) {
@@ -4922,7 +5007,7 @@ const _exposeFns = {
   uploadLinkLiability, uploadLinkLoan, uploadLinkProperty, uploadSetPayrollSplit, setPayrollSplit,
   snapshotCurrentMonth, renderNetPositionChart,
   saveAssetValue, editAssetValue, editCapRate, editDistributed,
-  openEditInvestment, openEditLiability
+  openEditInvestment, openEditLiability, createLiabilityFromTxn
 };
 Object.entries(_exposeFns).forEach(([name, fn]) => { window[name] = fn; });
 
