@@ -81,6 +81,9 @@ function _injectCSS() {
   .summary-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
   .summary-grid.cf-grid { grid-template-columns:repeat(5,1fr); }
   .summary-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:18px 12px; text-align:center; position:relative; transition:box-shadow .15s; }
+  .summary-card .cf-sublabel { font-size:10px; font-weight:500; color:var(--text-dim); margin-top:4px; font-variant-numeric:tabular-nums; line-height:1.3; }
+  .summary-card .cf-sublabel .cf-in { color:var(--green-dark); }
+  .summary-card .cf-sublabel .cf-out { color:#e67e22; }
   .summary-card:hover { box-shadow:0 2px 8px rgba(0,0,0,0.06); }
   .summary-card .value { font-size:22px; font-weight:700; margin-bottom:4px; }
   .summary-card .value.green { color:var(--green-dark); }
@@ -575,7 +578,7 @@ function _injectHTML() {
     <div class="summary-grid cf-grid">
       <div class="summary-card"><div class="value orange" id="totalDistros">—</div><div class="label">Owner Distros</div></div>
       <div class="summary-card"><div class="value orange" id="totalInvest">—</div><div class="label">Investments</div></div>
-      <div class="summary-card"><div class="value orange" id="totalLoansNet">—</div><div class="label">Loans</div></div>
+      <div class="summary-card"><div class="value orange" id="totalLoansNet">—</div><div class="label">Loans (Net)</div><div class="cf-sublabel" id="totalLoansSublabel"></div></div>
       <div class="summary-card"><div class="value orange" id="totalDeposits">—</div><div class="label">Deposits</div><span class="cf-operator">=</span></div>
       <div class="summary-card highlight"><div class="value" id="cashFlow">—</div><div class="label">Cash Flow</div></div>
     </div>
@@ -1770,8 +1773,23 @@ function renderPeriodDashboard() {
   };
   setCfBox('totalDistros', comp.totalDistributions);
   setCfBox('totalInvest', comp.totalInvestments);
-  // Loans card consolidates Loans Out + Loan Paybacks — net signed value (negative = net out, positive = net in)
-  setCfBox('totalLoansNet', comp.totalLoans + comp.totalLoanPaybacks);
+  // Loans card consolidates Loans Out (outflow) + Loan Paybacks (inflow) + Loan Proceeds (inflow)
+  // Sublabel shows the in/out breakdown so Morris can see both sides at a glance.
+  const loansIn  = (comp.totalLoanPaybacks || 0) + (comp.totalLoanProceeds || 0);  // positive = cash in
+  const loansOut = comp.totalLoans || 0;                                            // negative = cash out
+  const loansNet = loansIn + loansOut;
+  setCfBox('totalLoansNet', loansNet);
+  const subEl = document.getElementById('totalLoansSublabel');
+  if (subEl) {
+    if (loansIn === 0 && loansOut === 0) {
+      subEl.innerHTML = '';
+    } else {
+      const parts = [];
+      if (loansIn !== 0)  parts.push(`<span class="cf-in">+${fmt(loansIn)} in</span>`);
+      if (loansOut !== 0) parts.push(`<span class="cf-out">${fmt(loansOut)} out</span>`);
+      subEl.innerHTML = parts.join(' · ');
+    }
+  }
   setCfBox('totalDeposits', comp.totalDeposits);
 
   const cfEl = document.getElementById('cashFlow');
@@ -1990,6 +2008,9 @@ function renderBsItems(comp) {
   }
   if (comp.totalLoanPaybacks !== 0) {
     items.push({ label: 'Loan Paybacks', icon: '↩️', amount: Math.abs(comp.totalLoanPaybacks), count: Object.values(comp.loanPaybackBuckets).reduce((s, b) => s + b.count, 0), drillType: 'Loan Payback', cssClass: comp.totalLoanPaybacks > 0 ? 'income' : 'expense' });
+  }
+  if (comp.totalLoanProceeds && comp.totalLoanProceeds !== 0) {
+    items.push({ label: 'Loan Proceeds', icon: '💵', amount: Math.abs(comp.totalLoanProceeds), count: Object.values(comp.loanProceedsBuckets || {}).reduce((s, b) => s + b.count, 0), drillType: 'Loan Proceeds', cssClass: comp.totalLoanProceeds > 0 ? 'income' : 'expense' });
   }
   const maxVal = items.length > 0 ? Math.max(...items.map(i => i.amount)) : 1;
   const totalAll = items.reduce((s, i) => s + i.amount, 0);
