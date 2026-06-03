@@ -2391,6 +2391,10 @@ async function handleCsvUpload(file) {
     const rawAmount = parseFloat((cols[colIdx['Amount']] || '0').replace(/"/g, '')) || 0;
     const textDesc = (cols[colIdx['Text']] || '').replace(/"/g, '');
     const bankRef = (cols[colIdx['Bank Reference']] || '').replace(/"/g, '');
+    // Chase BAI2 has a running ledger balance in the "Balance/Value Date" column.
+    // Read it so Cash on the balance sheet reflects post-upload balances.
+    const balanceRaw = (cols[colIdx['Balance/Value Date']] || '').replace(/[",]/g, '').trim();
+    const ledgerBalance = balanceRaw && !isNaN(parseFloat(balanceRaw)) ? parseFloat(balanceRaw) : null;
 
     if (!date || !acctNum) continue;
 
@@ -2401,7 +2405,7 @@ async function handleCsvUpload(file) {
     const acctName = ACCOUNT_NAME_MAP[acctNum] || `Account ${acctNum}`;
     const creditDebit = dataType === 'Credits' ? 'Credit' : 'Debit';
 
-    rows.push({ date, description, amount, acctNum, acctName, creditDebit, bankRef, shortDesc });
+    rows.push({ date, description, amount, acctNum, acctName, creditDebit, bankRef, shortDesc, ledgerBalance });
   }
 
   progressFill.style.width = '50%';
@@ -2758,7 +2762,7 @@ async function confirmImport() {
       date: txn.date,
       description: txn.description,
       amount: txn.amount,
-      ledger_balance: null,
+      ledger_balance: (txn.ledgerBalance != null && !isNaN(txn.ledgerBalance)) ? txn.ledgerBalance : null,
       transaction_type: txn.creditDebit === 'Credit' ? 'Credit' : 'Debit',
       credit_debit: txn.creditDebit,
       account_name: txn.acctName,
