@@ -78,6 +78,9 @@
     font-size:10px;display:flex;align-items:center;justify-content:center}
   .lbl:hover{border-color:var(--accent);background:rgba(15,42,51,.95)}
   .lbl .cost{color:var(--green);font-weight:700;margin-left:2px}
+  .lbl.focus{transform:translate(-50%,-100%) scale(1.45);background:rgba(8,64,80,.97);
+    border:2px solid var(--accent);box-shadow:0 0 26px rgba(34,211,238,.55);font-weight:700}
+  .lbl.dimmed{filter:grayscale(.9)}
   .lbl.act{background:rgba(8,58,74,.94);border:1.5px solid var(--accent);color:#d9f6fc;
     font-weight:700;padding:5px 12px}
   .lbl.act:hover{background:rgba(12,84,104,.98)}
@@ -216,7 +219,7 @@ var COMPONENTS = [
   {
     id:'power', num:2, name:'Power Density Upgrade — 12–15 W/SF', short:'Power Upgrade',
     cost:'$180K – $300K', costShort:'$180–300K', unit:'$18–$30/SF across 10,080 RSF: panelboard, bus duct, power track',
-    pos:[42,11.6,30],
+    pos:[42,10,32],
     desc:'Upgrade from the traditional 5–7 W/SF to 12–15 W/SF: new panelboard, overhead plug-in bus duct spine, and metered whips to pods, racks and the Matrix Room. The single biggest unlock for AI-ready leasing.',
     why:'Edge servers, immersive walls, spatial-computing rigs — every AI amenity stacks watts. Power headroom becomes the first question on an AI tenant’s tour checklist; buildings stuck at 5–7 W/SF simply can’t compete for them.',
     vendors:[['Eaton (gear)','https://www.eaton.com'],['Starline (bus track)','https://www.starlinepower.com'],['Legrand','https://www.legrand.us']],
@@ -225,7 +228,7 @@ var COMPONENTS = [
   {
     id:'acoustic', num:5, name:'High-STC Acoustic Shell (Mass Timber)', short:'Acoustic Shell',
     cost:'$140K – $260K', costShort:'$140–260K', unit:'STC 55+ demising & lids, $20–$35/SF of assembly',
-    pos:[40,9.6,67.5],
+    pos:[37,10.6,70.9],
     desc:'Mass-timber battens over high-STC assemblies (resilient channel, damped drywall, acoustic ceiling) on demising walls, so continuous voice-prompting never bleeds between suites or floors.',
     why:'When the whole floor talks to AI all day, sound bleed isn’t just noise — it’s a data leak. Spoken prompts are confidential corporate information; STC 55+ demising is the physical layer of prompt security between tenants.',
     vendors:[['QuietRock (PABCO)','https://www.quietrock.com'],['Kinetics Noise Control','https://kineticsnoise.com'],['StructureCraft (mass timber)','https://structurecraft.com']],
@@ -279,7 +282,7 @@ var COMPONENTS = [
   {
     id:'connectivity', num:3, name:'Connectivity Backbone (Fiber + Private 5G / Wi-Fi 7)', short:'Connectivity',
     cost:'$70K – $160K', costShort:'$70–160K', unit:'Diverse-path dark fiber x-connects, Wi-Fi 7 APs, private 5G, roof riser rights',
-    pos:[30,11.4,24],
+    pos:[45.5,11.2,36],
     desc:'Two diverse-path dark-fiber entries into the suite, Wi-Fi 7 ceiling grid, and a private 5G small-cell layer. Roof rights reserved for satellite backup. Bandwidth headroom audited and marketed as a lease datapoint.',
     why:'Agents live on bandwidth — every workflow is a round-trip to models local and remote, and latency is now a productivity number. Diverse fiber paths plus wireless failover keep the tenant’s digital twin online through any single cut.',
     vendors:[['Corning','https://www.corning.com/optical-communications'],['CommScope','https://www.commscope.com'],['Celona (private 5G)','https://www.celona.io'],['Cisco Meraki','https://meraki.cisco.com']],
@@ -288,7 +291,7 @@ var COMPONENTS = [
   {
     id:'sensors', num:10, name:'Sensor Mesh & Building OS', short:'Sensor Mesh / OS',
     cost:'$60K – $130K', costShort:'$60–130K', unit:'mmWave presence + IAQ sensors, automation & booking layer',
-    pos:[48,11.5,30],
+    pos:[103,11.2,30],
     desc:'Anonymous mmWave occupancy sensors and air-quality monitors on a ceiling mesh, feeding a building OS that drives the smart glass, HVAC setpoints, kinetic-wall presets and hourly space booking from one app.',
     why:'Core-and-spoke leasing only works if the building knows — in real time — what’s occupied, and can bill by the hour. The sensor mesh is the ground truth the tenant’s AI and your leasing model both read; it’s the “automated building app” layer.',
     vendors:[['VergeSense','https://www.vergesense.com'],['Butlr','https://www.butlr.com'],['Kaiterra (IAQ)','https://www.kaiterra.com'],['Honeywell','https://buildings.honeywell.com']],
@@ -1093,7 +1096,7 @@ pointLite(68,9,8,0xfff2d9,0.6,50);
 });
 
 /* ---------- 14. connectivity: Wi-Fi 7 / 5G ceiling APs ---------- */
-[[22,30],[30,24],[48,12],[75,33],[95,26],[75,14],[115,30],[130,12],[40,56]].forEach(function(p){
+[[22,30],[30,24],[42,36],[48,12],[75,33],[95,26],[75,14],[115,30],[130,12],[40,56]].forEach(function(p){
   cyl(0.55,0.14,M.white, p[0], CH-0.42, p[1]);
 });
 /* ---------- 15. sensor mesh pucks + building OS wall panel ---------- */
@@ -1483,8 +1486,8 @@ document.getElementById('btnWalls').onclick = toggleWalls;
 
 /* in-scene action buttons, anchored on the components themselves */
 [
-  {t:'◧ Toggle Smart Glass', p:[126, 9.5, 20], fn:toggleGlass},
-  {t:'◧ Toggle Smart Glass', p:[126, 9.5, 34], fn:toggleGlass},
+  {t:'◧ Toggle Smart Glass', p:[128, 9, 14.5], fn:toggleGlass},
+  {t:'◧ Toggle Smart Glass', p:[128, 9, 39.5], fn:toggleGlass},
   {t:'⇄ Move Kinetic Walls', p:[86, 11.5, 20], fn:toggleWalls},
   {t:'⇄ Move Kinetic Walls', p:[85, 11.5, 40], fn:toggleWalls}
 ].forEach(function(a){
@@ -1501,16 +1504,16 @@ var TOUR = ['reception','power','connectivity','pods','acoustic','cooling','netw
             'matrix','glass','sensors','audio','huddles','offices','kinetic'];
 /* curated eye-level viewpoints per stop: e = where you stand, l = what you look at */
 var TOUR_VIEWS = {
-  reception:    {e:[6, 5.8, 9], l:[16, 4.5, 19]},   // one direct glide in through the entry doors
-  power:        {w:[[8,5.8,29],[26,5.8,31]], e:[27, 5.8, 22], l:[45, 10.6, 30]},   // back around the north end
-  connectivity: {e:[22, 5.8, 17],  l:[30, 11.2, 24]},
-  pods:         {w:[[46,5.8,38],[46,5.8,59]], e:[30, 5.8, 59], l:[31, 5, 66.5]},   // up the side, along the north corridor
-  acoustic:     {e:[42, 5.8, 59.5], l:[40, 7.5, 68]},                              // battens behind the west pods
+  reception:    {w:[[-10,5.8,9]], e:[7, 5.8, 9], l:[16, 4.5, 19]},  // line up with the doors, walk straight in
+  power:        {w:[[3.5,5.8,31]], e:[22, 5.8, 33], l:[42, 10.7, 30]},  // one turn round the wall, up the duct line
+  connectivity: {e:[34, 5.8, 32],  l:[42, 11.2, 36]},   // AP right of the power bus, on the way to the pods
+  pods:         {w:[[48,5.8,40]], e:[46, 5.8, 61.5], l:[31, 5.5, 67]},   // clear corridor view of the pod row
+  acoustic:     {e:[36, 5.8, 51], l:[37, 9.5, 71]},   // stand back so the batten wall reads above the pod line
   cooling:      {w:[[80,5.8,58.5]], e:[125, 5.8, 55.5], l:[125, 4.5, 66.5]},       // north corridor to the server glass
   network:      {e:[131, 5.8, 55.5], l:[136.5, 4, 66.5]},
-  matrix:       {w:[[112,5.8,55],[110,5.8,34]], e:[106, 5.8, 30], l:[126, 5, 24]}, // down the glass front, looking in
+  matrix:       {w:[[112,5.8,55]], e:[110, 5.8, 38.6], l:[131, 5.5, 39]}, // Room B (nearer the server rooms), head-on at its entrance
   glass:        {e:[110, 5.8, 38], l:[121, 6, 27]},
-  sensors:      {e:[44, 5.8, 39],  l:[48, 11.3, 30]},
+  sensors:      {e:[104, 5.8, 37], l:[100, 11.3, 30]},   // anchored to the ceiling puck by the Matrix rooms
   audio:        {w:[[114,5.8,38.5]], e:[120, 5.8, 37], l:[126, 10.6, 30]},         // in through Room B's door
   huddles:      {w:[[114,5.8,38.5],[108,5.8,25]], e:[100.5, 5.8, 18], l:[104, 4.5, 7]}, // back out, over to the huddles
   offices:      {e:[62, 5.8, 21],  l:[62, 4, 6]},
@@ -1518,6 +1521,7 @@ var TOUR_VIEWS = {
 };
 var tourQueue = [];
 var tourTimer = null;
+var kineticDemo = null;
 var tourIdx = -1, touring = false;
 function tourName(i){
   var c = COMPONENTS.find(function(x){ return x.id === TOUR[i]; });
@@ -1535,6 +1539,14 @@ function goTour(i){
   tourIdx = i;
   var id = TOUR[i];
   selectComponent(id, false);                 // open the card, no generic fly
+  if(id === 'glass') glassOpaque = true;      // auto-demo the display walls on this stop
+  if(id === 'matrix') glassOpaque = false;    // clear glass when first viewing the rooms
+  /* kinetic stop: demo the walls sliding back and forth */
+  clearInterval(kineticDemo); kineticDemo = null;
+  if(id === 'kinetic'){
+    wallsOpen = true;
+    kineticDemo = setInterval(function(){ wallsOpen = !wallsOpen; }, 4200);
+  }
   var v = TOUR_VIEWS[id];
   tourQueue = [];
   if(v){
@@ -1562,6 +1574,8 @@ function stopTour(){
   if(!touring) return;
   touring = false;
   clearTimeout(tourTimer);
+  clearInterval(kineticDemo); kineticDemo = null;
+  wallsOpen = false;
   tourQueue.length = 0;
   document.getElementById('tourNav').classList.remove('show');
   document.getElementById('btnTour').textContent = '▶ Start AI Tour';
@@ -1617,6 +1631,7 @@ var _frame = 0;
 /* ---------- animate ---------- */
 var clock = new THREE.Clock();
 var tmpV = new THREE.Vector3();
+var _walkV = new THREE.Vector3();
 
 function animate(){
   requestAnimationFrame(animate);
@@ -1625,15 +1640,26 @@ function animate(){
 
   /* fly-to easing */
   if(camTarget){
-    var fs = touring ? 0.9 : 3.2;             // touring = slow, purposeful walking pace
+    var fs = touring ? 0.9 : 3.2;
     flyT = Math.min(1, flyT + dt*1.1);
-    camPos.lerp(camTarget.pos, Math.min(1, dt*fs));
+    if(touring){
+      /* constant walking speed — no deceleration at waypoints, one continuous stride */
+      var step = 13*dt;
+      _walkV.subVectors(camTarget.pos, camPos);
+      var wd = _walkV.length();
+      if(wd > step) camPos.addScaledVector(_walkV.normalize(), step);
+      else camPos.copy(camTarget.pos);
+    } else {
+      camPos.lerp(camTarget.pos, Math.min(1, dt*fs));
+    }
     var dy = camTarget.yaw - yaw;
     while(dy>Math.PI) dy-=2*Math.PI;
     while(dy<-Math.PI) dy+=2*Math.PI;
     yaw += dy*Math.min(1, dt*fs*1.4);
     pitch += (camTarget.pitch-pitch)*Math.min(1, dt*fs*1.4);
-    if(camPos.distanceTo(camTarget.pos)<0.8){
+    /* waypoints chain early (4 ft out) so the walk keeps its momentum; final stop settles precisely */
+    var arriveDist = tourQueue.length ? 4.0 : 0.8;
+    if(camPos.distanceTo(camTarget.pos) < arriveDist){
       camTarget = null;
       if(tourQueue.length){ var nx = tourQueue.shift(); flyToLookAt(nx.e, nx.l); }
     }
@@ -1711,8 +1737,16 @@ function animate(){
       L.el.style.left = x+'px';
       L.el.style.top = y+'px';
       var d = camera.position.distanceTo(L.pos);
-      L.el.style.opacity = d>170 ? 0.35 : 1;
-      L.el.style.zIndex = Math.round(1000 - d);
+      /* tour focus: current stop's tag is big and bright, the rest grey out (still clickable) */
+      var isFocus = touring && L.comp && L.comp.id === TOUR[tourIdx];
+      /* on the Matrix / Smart Glass steps, the in-room toggle buttons get the spotlight too */
+      var actBig = L.act && touring && (TOUR[tourIdx]==='glass' || TOUR[tourIdx]==='matrix');
+      L.el.classList.toggle('focus', !!isFocus || !!actBig);
+      L.el.classList.toggle('dimmed', touring && !isFocus && !L.act);
+      var op = d>170 ? 0.35 : 1;
+      if(touring && !isFocus && !L.act) op = Math.min(op, 0.22);
+      L.el.style.opacity = op;
+      L.el.style.zIndex = isFocus ? 2000 : Math.round(1000 - d);
     }
   });
 }
