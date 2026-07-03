@@ -1313,6 +1313,14 @@
     const detail = document.getElementById('initDetailView');
     detail.classList.add('show');
 
+    // Always open the detail view at the top (header + link buttons visible)
+    window.scrollTo(0, 0);
+    let scrollEl = document.getElementById('initRoot');
+    while (scrollEl) {
+      if (scrollEl.scrollTop) scrollEl.scrollTop = 0;
+      scrollEl = scrollEl.parentElement;
+    }
+
     document.getElementById('initDetailTitle').textContent = _currentInitiative.name;
     document.getElementById('initDetailSummary').textContent = _currentInitiative.summary || '';
     _updateStatusActionBtn();
