@@ -645,10 +645,7 @@ for(var ge=0; ge<7; ge++){
 }
 box(0.6,CH,0.5,M.track, SX-0.2, CH/2, 70);
 box(1.2,0.5,SZ,M.track, SX-0.3, CH-0.25, SZ/2);
-/* structural drywall-wrapped columns — 30' grid */
-[[25,24],[55,24],[85,24],[115,24],[25,48],[55,48],[85,48]].forEach(function(c){
-  box(1.6,CH,1.6,M.white, c[0], CH/2, c[1]);
-});
+/* columns omitted — clear sightlines across the floor plate */
 
 /* slab edge below the suite so the floating floor reads as a building slab */
 box(SX+2, 1.6, SZ+2, M.slab, SX/2, -1.15, SZ/2, 0, true);
@@ -995,8 +992,6 @@ box(12,0.06,8,M.rug, 8.5, 0.06, 15.5).castShadow=false;
 sofa(4.5, 15.5, 4.5, Math.PI/2);   // faces east
 tableLegs(8.5, 15.5, 2.8, 2.8, 1.2, M.timberDark);
 sofa(15, 4.8, 6.5, 0);             // window bench seat, east of the entry path
-sofa(6.5, 7, 4.5, Math.PI/2);      // moved to the west side — facing the wall + carousel screen
-sofa(6.5, 12.6, 4.5, Math.PI/2);   // adjacent pair, same orientation
 plantPot(15.5, 5.5, 1.15);
 plantPot(2.5, 27, 1.0);
 
@@ -1506,7 +1501,7 @@ var TOUR = ['reception','power','connectivity','pods','acoustic','cooling','netw
             'matrix','glass','sensors','audio','huddles','offices','kinetic'];
 /* curated eye-level viewpoints per stop: e = where you stand, l = what you look at */
 var TOUR_VIEWS = {
-  reception:    {w:[[26,5.8,31],[6,5.8,29]], e:[3, 5.8, 9], l:[16, 4.5, 19]},      // around the wall's north end
+  reception:    {e:[6, 5.8, 9], l:[16, 4.5, 19]},   // one direct glide in through the entry doors
   power:        {w:[[8,5.8,29],[26,5.8,31]], e:[27, 5.8, 22], l:[45, 10.6, 30]},   // back around the north end
   connectivity: {e:[22, 5.8, 17],  l:[30, 11.2, 24]},
   pods:         {w:[[46,5.8,38],[46,5.8,59]], e:[30, 5.8, 59], l:[31, 5, 66.5]},   // up the side, along the north corridor
