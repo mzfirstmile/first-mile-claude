@@ -183,7 +183,7 @@ var COMPONENTS = [
   {
     id:'kinetic', num:14, name:'Kinetic Modular Wall System', short:'Kinetic Walls',
     cost:'$240K – $400K', costShort:'$240–400K', unit:'~200 LF @ $1,200–$2,000/LF w/ integrated power track',
-    pos:[86,7,20],
+    pos:[84,7.5,27.6],
     desc:'Ceiling-track movable wall panels with integrated power. Floor reconfigures from 20 deep-work pods to one collaboration hall in under 10 minutes — no construction crew, no permits, no downtime.',
     why:'AI lets a company scale a project team up or down in days, so rigid layouts (and rigid 10-year leases) become obsolete. Space that reconfigures at software speed is what keeps the elastic core-and-spoke tenant in your building.',
     vendors:[['DIRTT','https://www.dirtt.com'],['Skyfold','https://www.skyfold.com'],['Modernfold','https://www.modernfold.com'],['Hufcor','https://www.hufcor.com']],
@@ -1507,9 +1507,9 @@ var TOUR_VIEWS = {
   reception:    {w:[[-10,5.8,9]], e:[7, 5.8, 9], l:[16, 4.5, 19]},  // line up with the doors, walk straight in
   power:        {w:[[3.5,5.8,31]], e:[22, 5.8, 33], l:[42, 10.7, 30]},  // one turn round the wall, up the duct line
   connectivity: {e:[34, 5.8, 32],  l:[42, 11.2, 36]},   // AP right of the power bus, on the way to the pods
-  pods:         {w:[[48,5.8,40]], e:[46, 5.8, 61.5], l:[31, 5.5, 67]},   // clear corridor view of the pod row
-  acoustic:     {e:[36, 5.8, 51], l:[37, 9.5, 71]},   // stand back so the batten wall reads above the pod line
-  cooling:      {w:[[80,5.8,58.5]], e:[125, 5.8, 55.5], l:[125, 4.5, 66.5]},       // north corridor to the server glass
+  pods:         {e:[36, 5.8, 36], l:[36, 6.5, 66]},   // pulled back — full pod row framed head-on
+  acoustic:     {e:[36, 5.8, 40], l:[37, 10.2, 71]},  // step forward, look up at the batten wall
+  cooling:      {w:[[46,5.8,42],[46,5.8,60],[120,5.8,60]], e:[125.5, 5.8, 57], l:[125.5, 4.5, 67]}, // up by the pods, straight past the restrooms, spin to the closet
   network:      {e:[131, 5.8, 55.5], l:[136.5, 4, 66.5]},
   matrix:       {w:[[112,5.8,55]], e:[110, 5.8, 38.6], l:[131, 5.5, 39]}, // Room B (nearer the server rooms), head-on at its entrance
   glass:        {e:[110, 5.8, 38], l:[121, 6, 27]},
@@ -1517,7 +1517,7 @@ var TOUR_VIEWS = {
   audio:        {w:[[114,5.8,38.5]], e:[120, 5.8, 37], l:[126, 10.6, 30]},         // in through Room B's door
   huddles:      {w:[[114,5.8,38.5],[108,5.8,25]], e:[100.5, 5.8, 18], l:[104, 4.5, 7]}, // back out, over to the huddles
   offices:      {e:[62, 5.8, 21],  l:[62, 4, 6]},
-  kinetic:      {w:[[81,5.8,26],[81,5.8,31]], e:[86, 5.8, 34], l:[86, 7, 19]}      // through the gap between panels
+  kinetic:      {e:[84, 5.8, 17], l:[84, 7.5, 27.6]}   // straight over from the offices, facing the panel run
 };
 var tourQueue = [];
 var tourTimer = null;
@@ -1556,19 +1556,23 @@ function goTour(i){
       tourQueue.push({e:new THREE.Vector3(pts[k][0],pts[k][1],pts[k][2]),
                       l:new THREE.Vector3(nxt[0],nxt[1],nxt[2])});
     }
-    tourQueue.push({e:new THREE.Vector3(v.e[0],v.e[1],v.e[2]),
-                    l:new THREE.Vector3(v.l[0],v.l[1],v.l[2])});
+    /* final approach: keep facing the direction of travel… */
+    var e3 = new THREE.Vector3(v.e[0],v.e[1],v.e[2]);
+    var from = pts.length ? new THREE.Vector3(pts[pts.length-1][0],pts[pts.length-1][1],pts[pts.length-1][2]) : camPos.clone();
+    var ahead = e3.clone().sub(from); ahead.y = 0;
+    if(ahead.length() < 0.1) ahead.set(0,0,1);
+    ahead.normalize();
+    var lookAhead = e3.clone().addScaledVector(ahead, 12); lookAhead.y = e3.y;
+    tourQueue.push({e:e3, l:lookAhead});
+    /* …then, once arrived, turn in place to face the element head-on */
+    tourQueue.push({e:e3.clone(), l:new THREE.Vector3(v.l[0],v.l[1],v.l[2])});
     var first = tourQueue.shift();
     flyToLookAt(first.e, first.l);
   }
   updateTourNav();
-  /* idle auto-advance: if the user doesn't hit Next within 60s, walk on */
+  /* idle countdown is armed on ARRIVAL (see animate), not when the walk starts */
   clearTimeout(tourTimer);
-  tourTimer = setTimeout(function(){
-    if(!touring) return;
-    if(tourIdx < TOUR.length-1) goTour(tourIdx+1);
-    else { stopTour(); closeCard(); }
-  }, 60000);
+  tourTimer = null;
 }
 function stopTour(){
   if(!touring) return;
@@ -1657,11 +1661,24 @@ function animate(){
     while(dy<-Math.PI) dy+=2*Math.PI;
     yaw += dy*Math.min(1, dt*fs*1.4);
     pitch += (camTarget.pitch-pitch)*Math.min(1, dt*fs*1.4);
-    /* waypoints chain early (4 ft out) so the walk keeps its momentum; final stop settles precisely */
+    /* waypoints chain early (4 ft out) so the walk keeps its momentum;
+       the final stop settles in place, then completes its turn before finishing */
+    var dyr = camTarget.yaw - yaw;
+    while(dyr>Math.PI) dyr-=2*Math.PI;
+    while(dyr<-Math.PI) dyr+=2*Math.PI;
+    var aligned = Math.abs(dyr) < 0.05 && Math.abs(camTarget.pitch - pitch) < 0.04;
     var arriveDist = tourQueue.length ? 4.0 : 0.8;
-    if(camPos.distanceTo(camTarget.pos) < arriveDist){
+    if(camPos.distanceTo(camTarget.pos) < arriveDist && (tourQueue.length || aligned)){
       camTarget = null;
       if(tourQueue.length){ var nx = tourQueue.shift(); flyToLookAt(nx.e, nx.l); }
+      else if(touring && !tourTimer){
+        /* arrived + settled: give a full minute of viewing before walking on / ending */
+        tourTimer = setTimeout(function(){
+          if(!touring) return;
+          if(tourIdx < TOUR.length-1) goTour(tourIdx+1);
+          else { stopTour(); closeCard(); }
+        }, 60000);
+      }
     }
   }
 
