@@ -82,6 +82,24 @@
     font-weight:700;padding:5px 12px}
   .lbl.act:hover{background:rgba(12,84,104,.98)}
 
+  /* prominent tour launcher — top center */
+  #btnTour{position:fixed;top:54px;left:50%;transform:translateX(-50%);z-index:26;
+    background:linear-gradient(135deg,#0891b2,#6366f1);border:1.5px solid var(--accent);color:#fff;
+    border-radius:12px;padding:12px 28px;font-size:16px;font-weight:800;cursor:pointer;
+    letter-spacing:.3px;box-shadow:0 4px 24px rgba(34,211,238,.4)}
+  #btnTour:hover{filter:brightness(1.15)}
+
+  /* guided tour navigation */
+  #tourNav{position:fixed;left:50%;bottom:66px;transform:translateX(-50%);z-index:25;display:none;align-items:center;gap:12px}
+  #tourNav.show{display:flex}
+  .tour-btn{background:rgba(8,58,74,.95);border:1.5px solid var(--accent);color:#d9f6fc;border-radius:12px;
+    padding:13px 22px;font-size:15px;font-weight:700;cursor:pointer;min-width:210px;text-align:center}
+  .tour-btn small{display:block;font-size:10px;letter-spacing:1.2px;color:#8fd8e8;font-weight:700;margin-bottom:2px}
+  .tour-btn:hover{background:rgba(12,84,104,1)}
+  .tour-btn.disabled{opacity:.3;pointer-events:none}
+  #tourCount{font-size:12px;color:var(--muted);background:var(--panel);border:1px solid var(--border);
+    padding:6px 12px;border-radius:8px;white-space:nowrap}
+
   /* dimension tags */
   .dim{position:fixed;z-index:9;transform:translate(-50%,-50%);background:rgba(35,42,52,.85);border:1px dashed rgba(255,255,255,.4);
     color:#eef2f6;border-radius:6px;padding:2px 8px;font-size:10.5px;white-space:nowrap;pointer-events:none;font-weight:600;letter-spacing:.3px}
@@ -106,8 +124,15 @@
 <div id="list"><h3>Suite Components</h3></div>
 <div id="card"></div>
 
+<button id="btnTour">▶ Start AI Tour</button>
+
+<div id="tourNav">
+  <button class="tour-btn" id="tourPrev"><small>◀ PREVIOUS</small><span>—</span></button>
+  <div id="tourCount">Stop 1 / 14</div>
+  <button class="tour-btn" id="tourNext"><small>NEXT ▶</small><span>—</span></button>
+</div>
+
 <div id="bar">
-  <button class="btn primary" id="btnTour">▶ Auto Tour</button>
   <button class="btn" id="btnWalk">🚶 Walk View</button>
   <button class="btn" id="btnTop">🗺 Plan View</button>
   <button class="btn" id="btnGlass">◧ Toggle Smart Glass</button>
@@ -126,8 +151,8 @@
 
 var COMPONENTS = [
   {
-    id:'pods', num:1, name:'Voice-Prompting Acoustic Pods', short:'Acoustic Pods',
-    cost:'$144K – $240K', costShort:'$144–240K', unit:'8 pods @ $18K–$30K ea, installed (STC 40+)',
+    id:'pods', num:4, name:'Voice-Prompting Acoustic Pods', short:'Acoustic Pods',
+    cost:'$126K – $210K', costShort:'$126–210K', unit:'7 pods @ $18K–$30K ea, installed (STC 40+)',
     pos:[30,7,67.5],
     desc:'Micro-acoustic pods for continuous voice dictation to AI agents. Replaces open-plan desking. Each pod is ventilated, power/data fed from the ceiling track, and rated STC 40+ so simultaneous prompting sessions don’t bleed.',
     why:'As keyboards fade, work becomes talking to your agents all day. An open plan with 30 people dictating simultaneously is unusable — pods deliver clean voice capture for accurate transcription and keep every prompt stream confidential.',
@@ -135,36 +160,36 @@ var COMPONENTS = [
     installers:['MillerKnoll / Knoll dealers','Commercial furniture dealers (e.g. Empire Office, Arenson NYC)']
   },
   {
-    id:'matrix', num:2, name:'Immersive Matrix Rooms (×2)', short:'Matrix Rooms',
-    cost:'$495K – $940K', costShort:'$495–940K', unit:'2 rooms @ ~530 SF on the window line; LED cross-walls + daylight east glass',
-    pos:[127,7,38],
-    desc:'Replaces the boardroom. 270° micro-LED / projection wall renders live data pipelines, agent dashboards and market feeds while a team directs a room of AI agents. Dedicated 30A circuits + reinforced wall backing.',
+    id:'matrix', num:8, name:'Immersive Matrix Rooms (×2)', short:'Matrix Rooms',
+    cost:'$495K – $940K', costShort:'$495–940K', unit:'2 rooms @ ~600 SF anchoring the SE glass corner; smart-glass display cross-walls',
+    pos:[127,7,27],
+    desc:'Two rooms side by side on the east window line — daylight through the exterior curtain wall, and cross-walls of transparent-display smart glass that toggle from clear to full display mode (try the Toggle Smart Glass button). Live data pipelines, agent dashboards and market feeds render at wall scale. Dedicated 30A circuits + reinforced backing.',
     why:'Post-Fable AI runs dozens of parallel execution layers a single projector can’t show. When five humans orchestrate a thousand agents, the room itself becomes the monitor — the org’s digital twin rendered at wall scale.',
     vendors:[['LG (MAGNIT)','https://www.lg.com/global/business/led-signage'],['Samsung (The Wall)','https://www.samsung.com/us/business/displays/the-wall/'],['Barco','https://www.barco.com'],['Planar','https://www.planar.com']],
     installers:['AVI-SPL','Diversified','McCann Systems (NY/NJ)']
   },
   {
-    id:'audio', num:3, name:'Spatial Audio Array', short:'Spatial Audio',
+    id:'audio', num:11, name:'Spatial Audio Array', short:'Spatial Audio',
     cost:'$45K – $120K', costShort:'$45–120K', unit:'Beam-steered ceiling array, Matrix Room + collab hall',
-    pos:[127,11.4,38],
+    pos:[127,11.4,27],
     desc:'Beam-forming spatial audio so virtual AI avatars are heard positionally, and voice capture stays zoned per user. Ceiling-integrated array with acoustic DSP tuned to the room.',
     why:'Meetings will mix humans and AI avatars. Positional audio lets people instinctively track which agent is “speaking,” and zoned capture keeps each person’s commands routed to their own AI instead of a garbled shared feed.',
     vendors:[['Holoplot','https://holoplot.com'],['L-Acoustics','https://www.l-acoustics.com'],['QSC / Q-SYS','https://www.qsys.com'],['Shure (MXA)','https://www.shure.com']],
     installers:['Same AV integrators — AVI-SPL, Diversified, McCann']
   },
   {
-    id:'kinetic', num:4, name:'Kinetic Modular Wall System', short:'Kinetic Walls',
+    id:'kinetic', num:14, name:'Kinetic Modular Wall System', short:'Kinetic Walls',
     cost:'$240K – $400K', costShort:'$240–400K', unit:'~200 LF @ $1,200–$2,000/LF w/ integrated power track',
-    pos:[41,7,20],
+    pos:[86,7,20],
     desc:'Ceiling-track movable wall panels with integrated power. Floor reconfigures from 20 deep-work pods to one collaboration hall in under 10 minutes — no construction crew, no permits, no downtime.',
     why:'AI lets a company scale a project team up or down in days, so rigid layouts (and rigid 10-year leases) become obsolete. Space that reconfigures at software speed is what keeps the elastic core-and-spoke tenant in your building.',
     vendors:[['DIRTT','https://www.dirtt.com'],['Skyfold','https://www.skyfold.com'],['Modernfold','https://www.modernfold.com'],['Hufcor','https://www.hufcor.com']],
     installers:['Manufacturer-certified dealers + commercial GC (e.g. JRM, Structure Tone for tie-in)']
   },
   {
-    id:'glass', num:5, name:'Electrochromic Smart Glass', short:'Smart Glass',
+    id:'glass', num:9, name:'Electrochromic Smart Glass', short:'Smart Glass',
     cost:'$65K – $115K', costShort:'$65–115K', unit:'~750 SF glazing @ $85–$150/SF installed',
-    pos:[116,6,38],
+    pos:[116,6,27],
     desc:'Privacy-on-demand glazing on the Matrix Room and exec zone. Occupant sensors flip the glass opaque the moment sensitive AI-generated financials go up on the wall. Use the Toggle Smart Glass button to demo.',
     why:'AI puts sensitive output — live financials, legal drafts, M&A models — on every surface, on demand. Privacy has to be as instant and automated as the content itself; sensor-linked glass opaques the moment an executive walks in.',
     vendors:[['SageGlass (Saint-Gobain)','https://www.sageglass.com'],['Halio','https://halioglass.com'],['Gauzy','https://www.gauzy.com'],['Smartglass International','https://www.smartglassinternational.com']],
@@ -172,8 +197,8 @@ var COMPONENTS = [
   },
   {
     id:'cooling', num:6, name:'Liquid-Cooled Edge-AI Server Closet', short:'Liquid-Cooled Closet',
-    cost:'$95K – $210K', costShort:'$95–210K', unit:'2–4 racks, closed-loop liquid cooling, leak detection',
-    pos:[129.5,7,66],
+    cost:'$120K – $260K', costShort:'$120–260K', unit:'8-rack showcase room: D2C liquid cooling, CDU, overhead manifold, leak detection',
+    pos:[125,7,66],
     desc:'In-suite compute room for tenant edge-AI servers running local models continuously. Closed-loop direct-to-chip liquid cooling rejects heat to the building riser — the premium-rent amenity of the AI era.',
     why:'Tenants will run local models 24/7 for data sovereignty and latency — their digital twin lives here, not in someone else’s cloud. High-density racks emit heat air systems can’t move; pre-built liquid cooling is what commands the rent premium.',
     vendors:[['Vertiv','https://www.vertiv.com'],['CoolIT Systems','https://www.coolitsystems.com'],['LiquidStack','https://liquidstack.com'],['JetCool','https://jetcool.com']],
@@ -189,25 +214,25 @@ var COMPONENTS = [
     installers:['Structured cabling / IT infrastructure firms (Align, Black Box, IVCi)']
   },
   {
-    id:'power', num:8, name:'Power Density Upgrade — 12–15 W/SF', short:'Power Upgrade',
+    id:'power', num:2, name:'Power Density Upgrade — 12–15 W/SF', short:'Power Upgrade',
     cost:'$180K – $300K', costShort:'$180–300K', unit:'$18–$30/SF across 10,080 RSF: panelboard, bus duct, power track',
-    pos:[70,11.6,18],
+    pos:[42,11.6,30],
     desc:'Upgrade from the traditional 5–7 W/SF to 12–15 W/SF: new panelboard, overhead plug-in bus duct spine, and metered whips to pods, racks and the Matrix Room. The single biggest unlock for AI-ready leasing.',
     why:'Edge servers, immersive walls, spatial-computing rigs — every AI amenity stacks watts. Power headroom becomes the first question on an AI tenant’s tour checklist; buildings stuck at 5–7 W/SF simply can’t compete for them.',
     vendors:[['Eaton (gear)','https://www.eaton.com'],['Starline (bus track)','https://www.starlinepower.com'],['Legrand','https://www.legrand.us']],
     installers:['EMCOR','E-J Electric (NYC)','ABM','Licensed local electrical contractors']
   },
   {
-    id:'acoustic', num:9, name:'High-STC Acoustic Shell (Mass Timber)', short:'Acoustic Shell',
+    id:'acoustic', num:5, name:'High-STC Acoustic Shell (Mass Timber)', short:'Acoustic Shell',
     cost:'$140K – $260K', costShort:'$140–260K', unit:'STC 55+ demising & lids, $20–$35/SF of assembly',
-    pos:[108,9.6,67.5],
+    pos:[40,9.6,67.5],
     desc:'Mass-timber battens over high-STC assemblies (resilient channel, damped drywall, acoustic ceiling) on demising walls, so continuous voice-prompting never bleeds between suites or floors.',
     why:'When the whole floor talks to AI all day, sound bleed isn’t just noise — it’s a data leak. Spoken prompts are confidential corporate information; STC 55+ demising is the physical layer of prompt security between tenants.',
     vendors:[['QuietRock (PABCO)','https://www.quietrock.com'],['Kinetics Noise Control','https://kineticsnoise.com'],['StructureCraft (mass timber)','https://structurecraft.com']],
     installers:['Acoustic consultants (Longman Lindsey, Cerami) + drywall/carpentry subs']
   },
   {
-    id:'pantry', num:10, name:'Wet Pantry / Café', short:'Wet Pantry',
+    id:'pantry', num:15, name:'Wet Pantry / Café', short:'Wet Pantry',
     cost:'$45K – $90K', costShort:'$45–90K', unit:'Millwork run + island, sink plumbing tie-in, appliances',
     pos:[8,7,63],
     desc:'Full wet pantry: stone-top millwork run with sink and dishwasher, island with seating, panel-front fridge, coffee program. Plumbing tied into the wet stack; the everyday social anchor of the suite.',
@@ -216,16 +241,16 @@ var COMPONENTS = [
     installers:['GC + licensed plumber (wet stack tie-in) + electrician']
   },
   {
-    id:'offices', num:11, name:'Executive Offices (Glass Front)', short:'Exec Offices',
-    cost:'$185K – $330K', costShort:'$185–330K', unit:'5 inline (12′×13′) + 1 corner office, ~120 LF demountable fronts',
+    id:'offices', num:13, name:'Executive Offices (Glass Front)', short:'Exec Offices',
+    cost:'$150K – $265K', costShort:'$150–265K', unit:'4 offices 12′×13′ on the south glass, ~95 LF demountable fronts',
     pos:[68,7,8],
-    desc:'Three windowed executive offices with full-height demountable glass fronts, wall-mounted displays and credenzas. Demountable systems depreciate as furniture (not leasehold) and relocate when the kinetic plan changes.',
+    desc:'Four 12′×13′ windowed offices on the south glass line with full-height demountable glass fronts, dual displays and credenzas. Execs sit back-to-window facing the door. Demountable systems depreciate as furniture (not leasehold) and relocate when the kinetic plan changes.',
     why:'The AI-era office is run by a few human directors managing digital workflows. They need private rooms to review confidential agent output and take calls — with displays streaming live agent dashboards and glass keeping the floor connected.',
     vendors:[['DIRTT','https://www.dirtt.com'],['Maars Living Walls','https://www.maarslivingwalls.com'],['Teknion (Tek Vue)','https://www.teknion.com'],['Transwall','https://transwall.com']],
     installers:['Partition dealer + GC; AV integrator for office displays']
   },
   {
-    id:'reception', num:12, name:'Reception & Entry', short:'Reception',
+    id:'reception', num:1, name:'Reception & Entry', short:'Reception',
     cost:'$45K – $85K', costShort:'$45–85K', unit:'Glass entry doors, millwork desk, logo feature wall, lounge',
     pos:[10,7,19],
     desc:'Double glass entry doors into a reception lounge: millwork desk, back-lit logo feature wall, soft seating. First impression for tenants touring the AI-ready program.',
@@ -234,7 +259,7 @@ var COMPONENTS = [
     installers:['GC + glazing contractor + signage fabricator']
   },
   {
-    id:'restrooms', num:13, name:'Restrooms (M/W, ADA)', short:'Restrooms',
+    id:'restrooms', num:16, name:'Restrooms (M/W, ADA)', short:'Restrooms',
     cost:'$90K – $180K', costShort:'$90–180K', unit:'Two 12′×10′ ADA restrooms: 2 stalls + double vanity each',
     pos:[70,11.6,64],
     desc:'In-suite men’s and women’s ADA restrooms: wet-stack plumbing tie-in, porcelain tile, stone-top vanities, touchless fixtures. In-suite restrooms are a signature of premium full-floor and spec-suite product.',
@@ -243,25 +268,25 @@ var COMPONENTS = [
     installers:['Licensed plumber + GC + tile sub']
   },
   {
-    id:'huddles', num:17, name:'AI Huddle Rooms (×2, 2–4 person)', short:'AI Huddles',
+    id:'huddles', num:12, name:'AI Huddle Rooms (×2, 2–4 person)', short:'AI Huddles',
     cost:'$50K – $90K', costShort:'$50–90K', unit:'2 glass rooms @ 10′×10′: display wall, voice puck, AV',
-    pos:[114,7,7],
+    pos:[100,7,7],
     desc:'Three glass huddle rooms sized for the most common AI work session: two to four humans steering a set of agents on a shared display wall, with a ceiling voice puck for zoned capture. Bookable by the hour through the building OS.',
     why:'Most agent-orchestration sessions aren’t boardroom events — they’re 2–4 people iterating with AI for an hour. Right-sized huddles keep the Matrix Room free, give voice privacy without a full office, and monetize as on-demand “spoke” inventory.',
     vendors:[['Framery (Q Flow)','https://frameryacoustics.com'],['DIRTT','https://www.dirtt.com'],['Logitech (huddle AV)','https://www.logitech.com/en-us/video-collaboration'],['Neat','https://neat.no']],
     installers:['Partition dealer + AV integrator (AVI-SPL, Diversified)']
   },
   {
-    id:'connectivity', num:14, name:'Connectivity Backbone (Fiber + Private 5G / Wi-Fi 7)', short:'Connectivity',
+    id:'connectivity', num:3, name:'Connectivity Backbone (Fiber + Private 5G / Wi-Fi 7)', short:'Connectivity',
     cost:'$70K – $160K', costShort:'$70–160K', unit:'Diverse-path dark fiber x-connects, Wi-Fi 7 APs, private 5G, roof riser rights',
-    pos:[75,11.4,14],
+    pos:[30,11.4,24],
     desc:'Two diverse-path dark-fiber entries into the suite, Wi-Fi 7 ceiling grid, and a private 5G small-cell layer. Roof rights reserved for satellite backup. Bandwidth headroom audited and marketed as a lease datapoint.',
     why:'Agents live on bandwidth — every workflow is a round-trip to models local and remote, and latency is now a productivity number. Diverse fiber paths plus wireless failover keep the tenant’s digital twin online through any single cut.',
     vendors:[['Corning','https://www.corning.com/optical-communications'],['CommScope','https://www.commscope.com'],['Celona (private 5G)','https://www.celona.io'],['Cisco Meraki','https://meraki.cisco.com']],
     installers:['Structured cabling firms (Align, Black Box) + carrier coordination']
   },
   {
-    id:'sensors', num:15, name:'Sensor Mesh & Building OS', short:'Sensor Mesh / OS',
+    id:'sensors', num:10, name:'Sensor Mesh & Building OS', short:'Sensor Mesh / OS',
     cost:'$60K – $130K', costShort:'$60–130K', unit:'mmWave presence + IAQ sensors, automation & booking layer',
     pos:[48,11.5,30],
     desc:'Anonymous mmWave occupancy sensors and air-quality monitors on a ceiling mesh, feeding a building OS that drives the smart glass, HVAC setpoints, kinetic-wall presets and hourly space booking from one app.',
@@ -270,7 +295,7 @@ var COMPONENTS = [
     installers:['BMS / controls integrator + low-voltage contractor']
   },
   {
-    id:'ups', num:16, name:'Resilient Power (UPS + Generator Riser)', short:'Resilient Power',
+    id:'ups', num:17, name:'Resilient Power (UPS + Generator Riser)', short:'Resilient Power',
     cost:'$35K – $80K', costShort:'$35–80K', unit:'Rack UPS in edge closet + generator riser tap, N+1 on compute',
     pos:[131.5,7,69.5],
     desc:'Line-interactive rack UPS backing the edge-AI closet and network core, tied to a building generator riser tap. Compute, cooling pumps and access control ride through utility events.',
@@ -279,6 +304,8 @@ var COMPONENTS = [
     installers:['Electrical contractor + commissioning agent']
   }
 ];
+
+COMPONENTS.sort(function(a,b){ return a.num - b.num; });   // list follows the tour order
 
 /* ---------- renderer / scene ---------- */
 var canvas = document.getElementById('c');
@@ -321,7 +348,7 @@ function pointLite(x,y,z,color,intensity,dist){
 pointLite(127,10,27,0x66e0ff,0.9,40);  // matrix room A glow
 pointLite(127,10,49,0x66e0ff,0.9,40);  // matrix room B glow
 pointLite(30,10,66,0xffffff,0.8,45);   // pods
-pointLite(129.5,9,66,0x33ccff,1.0,30); // server room
+pointLite(125,9,66,0x33ccff,1.1,34);   // server room
 pointLite(136.5,9,66,0x34d399,0.8,25); // network room
 pointLite(30,10,18,0xfff2d9,0.9,60);   // collab
 pointLite(75,10,12,0xfff2d9,0.7,55);   // corridor east
@@ -654,46 +681,94 @@ function pod(x){
   box(0.1,0.6,0.1,M.track, x, 3.95, 69.3);
   return g;
 }
-[22,31,40,49,90,99,108,117].forEach(pod);   // west cluster + east cluster between RRs and IT
+[22,31,40,49,90,99,108].forEach(pod);   // west cluster + east cluster (pod 117 removed for server room)
 
 /* ---------- 2. immersive matrix room ---------- */
 /* room: x 60→90, z 25→48 */
 /* TWO Matrix Rooms side by side on the east window line (x116-140):
    east wall = exterior curtain wall (daylight), screens on the cross walls,
    toggleable smart glass along the west front (x=116) */
+/* dummy agent-dashboard texture shown on the display walls when smart glass activates */
+var chartsTex = canvasTex(1024,512,function(ctx,w,h){
+  ctx.fillStyle='#0b1320'; ctx.fillRect(0,0,w,h);
+  function panel(x,y,pw,ph){ ctx.fillStyle='#101c2e'; ctx.fillRect(x,y,pw,ph); ctx.strokeStyle='#1d3550'; ctx.strokeRect(x,y,pw,ph); }
+  /* line chart */
+  panel(20,20,300,220);
+  ctx.strokeStyle='#22d3ee'; ctx.lineWidth=3; ctx.beginPath();
+  for(var i=0;i<=20;i++){ var x=35+i*13.5, y=200-Math.abs(Math.sin(i*0.7))*120-i*2; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  ctx.stroke();
+  ctx.strokeStyle='#34d399'; ctx.lineWidth=2; ctx.beginPath();
+  for(var i=0;i<=20;i++){ var x=35+i*13.5, y=210-Math.abs(Math.cos(i*0.5))*80; i?ctx.lineTo(x,y):ctx.moveTo(x,y); }
+  ctx.stroke();
+  /* bar chart */
+  panel(340,20,300,220);
+  for(var b=0;b<9;b++){ var bh=40+Math.abs(Math.sin(b*1.3))*140;
+    ctx.fillStyle=b%3?'#f0b429':'#22d3ee'; ctx.fillRect(355+b*31, 225-bh, 20, bh); }
+  /* donut */
+  panel(660,20,160,220);
+  var segs=[[0,2.1,'#22d3ee'],[2.1,3.9,'#34d399'],[3.9,5.2,'#f0b429'],[5.2,6.28,'#7a5bd8']];
+  segs.forEach(function(s){ ctx.strokeStyle=s[2]; ctx.lineWidth=26; ctx.beginPath(); ctx.arc(740,130,55,s[0],s[1]); ctx.stroke(); });
+  /* KPI tiles */
+  panel(840,20,164,220);
+  ctx.fillStyle='#22d3ee'; ctx.font='bold 44px Arial'; ctx.fillText('94%',860,80);
+  ctx.fillStyle='#34d399'; ctx.fillText('1.2k',860,150);
+  ctx.fillStyle='#f0b429'; ctx.fillText('37ms',860,220);
+  ctx.fillStyle='#5b708a'; ctx.font='12px Arial';
+  ctx.fillText('AGENT UPTIME',860,96); ctx.fillText('TASKS / HR',860,166); ctx.fillText('LATENCY',860,236);
+  /* agent activity rows */
+  panel(20,260,984,230);
+  for(var r=0;r<6;r++){
+    ctx.fillStyle='#16263c'; ctx.fillRect(35,275+r*36,950,26);
+    ctx.fillStyle=['#22d3ee','#34d399','#f0b429','#22d3ee','#7a5bd8','#34d399'][r];
+    ctx.fillRect(35,275+r*36,(0.25+Math.abs(Math.sin(r*2.1))*0.7)*950,26);
+    ctx.fillStyle='#0b1320'; ctx.font='bold 14px Arial'; ctx.fillText('AGENT-0'+(r+1)+' · pipeline '+(r*7+3)+' running',45,293+r*36);
+  }
+},1,1);
+M.smart.map = chartsTex;
+M.smart.emissive = new THREE.Color(0xffffff);
+M.smart.emissiveMap = chartsTex;
+M.smart.emissiveIntensity = 0;
+M.smart.needsUpdate = true;
+
+/* cross-walls are transparent-display smart glass: clear by default, toggle to display mode */
 var matrixWalls = [];
-matrixWalls.push(box(24,CH-1,0.6,M.screen, 128, (CH-1)/2, 16.3));        // Room A south screen
-matrixWalls.push(box(24,CH-1,0.6,M.screenSide, 128, (CH-1)/2, 38));      // shared divider screen
-matrixWalls.push(box(24,CH-1,0.6,M.screen, 128, (CH-1)/2, 59.7));        // Room B north screen
-/* west front = smart glass (toggleable), both rooms */
+matrixWalls.push(box(24,CH-1,0.6,M.smart, 128, (CH-1)/2, 2.3, 0, true));    // Room A south wall (corner)
+matrixWalls.push(box(24,CH-1,0.6,M.smart, 128, (CH-1)/2, 27, 0, true));     // shared divider
+matrixWalls.push(box(24,CH-1,0.6,M.smart, 128, (CH-1)/2, 51.7, 0, true));   // Room B north wall
+/* west front / entrance wall = static clear glass (NOT toggled), one door per room */
 var smartPanes = [];
-for(var sp=0; sp<7; sp++){
-  smartPanes.push(box(5.6,CH-2,0.25,M.smart, 116, (CH-2)/2+0.4, 19.2+sp*5.9, 0, true));
-}
-box(0.8,0.8,44,M.track, 116, CH-0.6, 38);
+[6.2,12,20,26,34.5,42.5,48.4].forEach(function(zc){
+  box(5.5,CH-2,0.25,M.glassClear, 116, (CH-2)/2+0.4, zc, 0, true);
+});
+[14.75,17.25,37.25,39.75].forEach(function(dz){
+  box(0.3,CH-2,0.4,M.track, 116, (CH-2)/2, dz);
+});
+box(0.12,9.2,2.4,M.podGlass, 115.7, 4.65, 16.1, 0.4, true);   // Room A door, ajar
+box(0.12,9.2,2.4,M.podGlass, 115.7, 4.65, 38.6, 0.4, true);   // Room B door, ajar
+box(0.8,0.8,50,M.track, 116, CH-0.6, 27);
 /* conference tables + task chairs (one per room) */
-tableLegs(127, 27, 5, 13, 2.6, M.timberDark);
-tableLegs(127, 49, 5, 13, 2.6, M.timberDark);
+tableLegs(127, 14.5, 5, 13, 2.6, M.timberDark);
+tableLegs(127, 39.5, 5, 13, 2.6, M.timberDark);
 for(var ch=0; ch<4; ch++){
-  chairT(124.2, 22.5+ch*3, -Math.PI/2);
-  chairT(129.8, 22.5+ch*3, Math.PI/2);
-  chairT(124.2, 44.5+ch*3, -Math.PI/2);
-  chairT(129.8, 44.5+ch*3, Math.PI/2);
+  chairT(124.2, 10+ch*3, -Math.PI/2);
+  chairT(129.8, 10+ch*3, Math.PI/2);
+  chairT(124.2, 35+ch*3, -Math.PI/2);
+  chairT(129.8, 35+ch*3, Math.PI/2);
 }
 /* ---------- 3. spatial audio array (ceiling of matrix room) ---------- */
 for(var ax=0; ax<3; ax++){
   for(var az=0; az<3; az++){
-    cyl(0.55,0.5,M.speaker, 120+ax*8, CH-0.8, 21+az*6);
-    cyl(0.55,0.5,M.speaker, 120+ax*8, CH-0.8, 43+az*6);
+    cyl(0.55,0.5,M.speaker, 120+ax*8, CH-0.8, 8+az*6.5);
+    cyl(0.55,0.5,M.speaker, 120+ax*8, CH-0.8, 33+az*6.5);
   }
 }
-box(22,0.25,19,new THREE.MeshStandardMaterial({color:0x1b232d,roughness:.8}), 128, CH-0.5, 27, 0, true);
-box(22,0.25,19,new THREE.MeshStandardMaterial({color:0x1b232d,roughness:.8}), 128, CH-0.5, 49, 0, true);
+box(22,0.25,21,new THREE.MeshStandardMaterial({color:0x1b232d,roughness:.8}), 128, CH-0.5, 14.5, 0, true);
+box(22,0.25,21,new THREE.MeshStandardMaterial({color:0x1b232d,roughness:.8}), 128, CH-0.5, 39.5, 0, true);
 
 /* ---------- 4. kinetic wall zone (collab hall) ---------- */
 /* ceiling tracks */
-box(56,0.35,0.6,M.track, 41, CH-0.5, 16.5);
-box(56,0.35,0.6,M.track, 41, CH-0.5, 28);
+box(50,0.35,0.6,M.track, 86, CH-0.5, 16.5);
+box(50,0.35,0.6,M.track, 86, CH-0.5, 28);
 /* movable panels — animated group */
 var kineticPanels = [];
 function kpanel(x,z){
@@ -708,10 +783,10 @@ function kpanel(x,z){
   kineticPanels.push({g:g, homeX:x, outX:x-14- (z===20?4:0)});
   return g;
 }
-kpanel(24,16.5); kpanel(32,16.5); kpanel(40,16.5); kpanel(48,16.5);
-kpanel(24,28); kpanel(32,28); kpanel(40,28); kpanel(48,28);
-/* collab furniture — single band between the kinetic runs */
-[26,38,52,64].forEach(function(tx){
+kpanel(66,16.5); kpanel(76,16.5); kpanel(86,16.5); kpanel(96,16.5);
+kpanel(66,28); kpanel(76,28); kpanel(86,28); kpanel(96,28);
+/* collab furniture — single band between the kinetic runs, beside the Matrix rooms */
+[66,78,92,104].forEach(function(tx){
   tableLegs(tx, 22, 9, 3.5, 2.5, M.timberDark);
   for(var cf=0; cf<3; cf++){
     chairT(tx-2.6+cf*2.6, 19.8, 0);
@@ -727,11 +802,11 @@ plantPot(35.5, 3.5, 1.1);
 /* ---------- 5. smart glass — handled above (smartPanes) ---------- */
 
 /* ---------- 6. liquid-cooled server closet (x 92→100, z 0→10) ---------- */
-/* interior IT block, NE corner: server (x126-133) + network (x133-140), glass fronts */
-box(0.5,CH-1,10,M.glassClear, 126,(CH-1)/2,67, 0, true);
+/* interior IT block, NE: expanded showcase server room (x118-133) + network (x133-140) */
+box(0.5,CH-1,10,M.glassClear, 118,(CH-1)/2,67, 0, true);
 box(0.5,CH-1,10,M.glassClear, 133,(CH-1)/2,67, 0, true);
-box(13.6,CH-1,0.4,M.glassClear, 132.8,(CH-1)/2,62, 0, true);
-box(0.4,CH-1,0.5,M.track, 126,(CH-1)/2,62);
+box(21.6,CH-1,0.4,M.glassClear, 129,(CH-1)/2,62, 0, true);
+box(0.4,CH-1,0.5,M.track, 118,(CH-1)/2,62);
 box(0.4,CH-1,0.5,M.track, 133,(CH-1)/2,62);
 box(0.4,CH-1,0.5,M.track, 139.5,(CH-1)/2,62);
 var rackLeds = [];
@@ -742,14 +817,56 @@ function rack(x,z){
     rackLeds.push(led);
   }
 }
-rack(128, 66.5); rack(131, 66.5); rack(128, 69.8); rack(131, 69.8);
-/* coolant loop pipes */
-cyl(0.28,8,M.pipeCold, 126.7, CH-1.4, 66, Math.PI/2).rotation.x = Math.PI/2;
-cyl(0.28,8,M.pipeHot, 127.3, CH-0.8, 66, Math.PI/2).rotation.x = Math.PI/2;
-cyl(0.28,4,M.pipeCold, 126.7, 9.6, 70.5, 0);
-cyl(0.28,4,M.pipeHot, 127.3, 9.9, 70.5, 0);
-box(2,2.4,2,M.track, 127.3, 1.2, 70.2);   // CDU
-box(14,0.5,10,M.floorAccent, 133, 0.05, 67).castShadow=false;
+/* 8-rack showcase: two hot/cold rows, CDU, overhead coolant manifold, status display */
+rack(119.5, 66.5); rack(122.7, 66.5); rack(125.9, 66.5); rack(129.1, 66.5);
+rack(119.5, 69.8); rack(122.7, 69.8); rack(125.9, 69.8); rack(129.1, 69.8);
+/* coolant loop: vertical drops + x-run manifold across the rack rows */
+cyl(0.28,8,M.pipeCold, 118.7, CH-1.4, 66, Math.PI/2).rotation.x = Math.PI/2;
+cyl(0.28,8,M.pipeHot, 119.3, CH-0.8, 66, Math.PI/2).rotation.x = Math.PI/2;
+cyl(0.28,4,M.pipeCold, 118.7, 9.6, 70.5, 0);
+cyl(0.28,4,M.pipeHot, 119.3, 9.9, 70.5, 0);
+cyl(0.24,13,M.pipeCold, 125.5, CH-1.35, 68.2, Math.PI/2);
+cyl(0.24,13,M.pipeHot, 125.5, CH-0.78, 68.2, Math.PI/2);
+[120.5,123.7,126.9,130.1].forEach(function(px){
+  cyl(0.12,1.4,M.pipeCold, px, CH-2.1, 68.2, 0);
+});
+box(2,2.4,2,M.track, 131.6, 1.2, 64.6);   // CDU
+box(3.2,1.8,0.1,M.tv, 121, 6.3, 62.6);    // live telemetry display behind the glass
+box(22,0.5,10,M.floorAccent, 129, 0.05, 67).castShadow=false;
+/* liquid-cooling coils (stacked tori), rack supply hoses, cable tray + wiring */
+for(var ci=0; ci<4; ci++){
+  var coil = new THREE.Mesh(new THREE.TorusGeometry(0.42,0.07,8,18), ci%2 ? M.pipeHot : M.pipeCold);
+  coil.position.set(118.9, 6.4+ci*0.19, 69.7); coil.rotation.x = Math.PI/2; coil.castShadow = true; scene.add(coil);
+  var coil2 = new THREE.Mesh(new THREE.TorusGeometry(0.36,0.06,8,18), ci%2 ? M.pipeCold : M.pipeHot);
+  coil2.position.set(131.6, 2.8+ci*0.17, 63.3); coil2.rotation.x = Math.PI/2; coil2.castShadow = true; scene.add(coil2);
+}
+[119.5,122.7,125.9,129.1].forEach(function(px){
+  [66.5,69.8].forEach(function(pz,zi){
+    var hose = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,2.3,8), zi ? M.pipeHot : M.pipeCold);
+    hose.position.set(px+0.55, 8.35, (pz+68.2)/2);
+    hose.rotation.x = Math.atan2(68.2-pz, 2.0);
+    scene.add(hose);
+  });
+});
+/* overhead ladder cable tray + colored cable runs + drops to racks */
+box(13,0.15,1.2,M.track, 125.5, CH-2.05, 64.5);
+[[0x2b2f36,-0.38],[0x6a4630,-0.13],[0x2b3b5a,0.13],[0x3a3f45,0.38]].forEach(function(cb){
+  var cable = new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,13,6),
+    new THREE.MeshStandardMaterial({color:cb[0], roughness:0.6}));
+  cable.rotation.z = Math.PI/2;
+  cable.position.set(125.5, CH-1.9, 64.5+cb[1]);
+  scene.add(cable);
+});
+var wireMat = new THREE.MeshStandardMaterial({color:0x22262c, roughness:0.6});
+[119.5,122.7,125.9,129.1].forEach(function(px,i){
+  cyl(0.05,2.0,wireMat, px, 6.95, 64.5, 0);                         // wiring drop to rack top
+  box(0.7,0.09,0.07,new THREE.MeshStandardMaterial({color:[0x2f6fbf,0xd7b13c,0x3f9f5f,0xc75146][i], roughness:0.5}),
+      px-0.6, 4.2, 64.95);                                          // patch cords
+  cyl(0.15,0.08,M.kineticEdge, px, 0.1, 68.15);                     // leak-detection pucks
+});
+[120.5,123.7,126.9].forEach(function(px){
+  box(2.8,0.06,2.6,M.dark, px, 0.09, 68.15);                        // perforated floor tiles
+});
 
 /* ---------- 7. zero-trust network closet (x 92→100, z 12→20) ---------- */
 /* containerized cage (network room, x133-140) */
@@ -762,17 +879,17 @@ for(var nr=0;nr<4;nr++){
 }
 
 /* ---------- 8. power spine: overhead bus duct ---------- */
-box(114,0.9,1.1,M.busduct, 72, CH-1.2, 18);
-box(0.9,0.9,44,M.busduct, 113.5, CH-1.2, 40);   // riser toward NE IT block
+box(104,0.9,1.1,M.busduct, 74, CH-1.2, 30);   // main spine through the center, starts at reception
+box(0.9,0.9,32,M.busduct, 127, CH-1.2, 46);   // riser to NE IT block
 for(var bd=0; bd<8; bd++){
-  box(0.35,1.6,0.35,M.track, 22+bd*13, CH-2.3, 18);
+  box(0.35,1.6,0.35,M.track, 26+bd*13, CH-2.3, 30);
 }
 /* panelboard inside network room */
 box(3,4.5,0.5,new THREE.MeshStandardMaterial({color:0xb8bec7,roughness:.4,metalness:.3}), 137, 4.5, 70.9);
 
-/* ---------- 9. acoustic shell — expressed on the north demising wall (timber battens) ---------- */
-for(var ts=0; ts<10; ts++){
-  box(1.6,CH-1,0.35,M.timberDark, 88+ts*2.4, (CH-1)/2, SZ-0.7);
+/* ---------- 5. acoustic shell — timber battens behind the west pod group, by the pantry ---------- */
+for(var ts=0; ts<14; ts++){
+  box(1.6,CH-1,0.35,M.timberDark, 20+ts*2.4, (CH-1)/2, SZ-0.7);
 }
 
 /* ---------- 12. reception & front entrance (west wall) ---------- */
@@ -796,16 +913,90 @@ box(7.5,3.4,2.4,M.timber, 10, 1.7, 23);
 box(8.1,0.3,3.0,M.timberDark, 10, 3.55, 23);
 box(2.2,2.6,4.5,M.timber, 13.4, 1.3, 25.2);
 chairT(10, 25.7, Math.PI);      // receptionist chair faces the desk + entry
-/* back-lit logo feature wall behind the desk */
-box(0.6,9,13,M.timberDark, 19.5, 4.5, 21);
-box(0.15,0.9,6,M.logo, 19.15, 5.8, 21);
+/* back-lit logo feature wall behind the desk — runs all the way to the south window line */
+box(0.6,9,27.5,M.timberDark, 19.5, 4.5, 13.75);
+/* living plant-wall feature on the reception face */
+var recGreenTex = canvasTex(256,256,function(ctx,w,h){
+  ctx.fillStyle='#3d6742'; ctx.fillRect(0,0,w,h);
+  var gs = ['#2f5d3a','#4d7d4f','#5d8f56','#35543a','#6a9a5f'];
+  for(var i=0;i<520;i++){
+    ctx.fillStyle = gs[i%5];
+    ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, 2+Math.random()*5, 0, 7); ctx.fill();
+  }
+},2,1);
+box(0.14,6.4,6.6,M.timberDark, 19.12, 5.6, 21.5);
+var recGreen = new THREE.Mesh(new THREE.BoxGeometry(0.14,6,6.2),
+  new THREE.MeshStandardMaterial({map:recGreenTex, roughness:1}));
+recGreen.position.set(19.02, 5.6, 21.5); recGreen.castShadow = true; scene.add(recGreen);
+/* big screen on the reception face — rotating news / marketing carousel */
+function bodyLines(ctx, x, y, w2, n, gap){
+  ctx.fillStyle = '#8a93a0';
+  for(var i=0;i<n;i++) ctx.fillRect(x, y+i*gap, w2*(i===n-1?0.6:1), 6);
+}
+var recSlides = [
+  canvasTex(1024,512,function(ctx,w,h){          // slide 1 — news
+    ctx.fillStyle='#f4f2ec'; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#1a1a1a'; ctx.font='bold 30px Georgia'; ctx.fillText('FIRST MILE WIRE', 40, 56);
+    ctx.fillRect(40,70,944,3);
+    ctx.font='bold 52px Georgia'; ctx.fillText('AI Tenants Drive Record', 40, 150);
+    ctx.fillText('Demand for Wired Suites', 40, 208);
+    ctx.font='20px Georgia'; ctx.fillStyle='#555';
+    ctx.fillText('Power density and private compute now top the tour checklist', 40, 244);
+    bodyLines(ctx, 40, 280, 420, 9, 22);
+    ctx.fillStyle='#c9d4de'; ctx.fillRect(520, 270, 464, 200);
+    ctx.fillStyle='#7fa6bd'; ctx.fillRect(560, 300, 180, 140); ctx.fillRect(770, 320, 160, 120);
+  },1,1),
+  canvasTex(1024,512,function(ctx,w,h){          // slide 2 — leasing / marketing
+    var g = ctx.createLinearGradient(0,0,w,h);
+    g.addColorStop(0,'#0891b2'); g.addColorStop(1,'#6366f1');
+    ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#fff'; ctx.font='bold 64px Arial';
+    ctx.fillText('AI-READY SUITES', 60, 140);
+    ctx.fillText('NOW LEASING', 60, 216);
+    ctx.font='26px Arial';
+    ctx.fillText('10,000 RSF corner prototype · 12–15 W/SF · private 5G', 60, 280);
+    ctx.fillText('Liquid-cooled compute · zero-trust network · Matrix Rooms', 60, 318);
+    ctx.fillStyle='rgba(255,255,255,.18)'; ctx.fillRect(60, 370, 420, 70);
+    ctx.fillStyle='#fff'; ctx.font='bold 30px Arial'; ctx.fillText('BOOK A TOUR →', 84, 415);
+  },1,1),
+  canvasTex(1024,512,function(ctx,w,h){          // slide 3 — today in the building
+    ctx.fillStyle='#101822'; ctx.fillRect(0,0,w,h);
+    ctx.fillStyle='#22d3ee'; ctx.font='bold 26px Arial'; ctx.fillText('TODAY IN THE BUILDING', 50, 60);
+    ctx.fillStyle='#fff'; ctx.font='bold 40px Arial'; ctx.fillText('Friday, July 3', 50, 112);
+    [['9:00','Agent Ops standup','Matrix Room A'],
+     ['11:30','Tenant lounge — espresso tasting','Wet Pantry'],
+     ['2:00','AI workflow clinic (open)','Huddle 2'],
+     ['4:30','Sunset social','South Lounge']].forEach(function(ev,i){
+      ctx.fillStyle='#182636'; ctx.fillRect(50, 140+i*84, 924, 68);
+      ctx.fillStyle='#22d3ee'; ctx.font='bold 26px Arial'; ctx.fillText(ev[0], 70, 183+i*84);
+      ctx.fillStyle='#fff'; ctx.fillText(ev[1], 180, 183+i*84);
+      ctx.fillStyle='#7d8998'; ctx.font='22px Arial'; ctx.fillText(ev[2], 720, 183+i*84);
+    });
+  },1,1)
+];
+box(0.16,6.2,11.2,M.dark, 19.14, 6, 9.5);
+var recDashMat = new THREE.MeshStandardMaterial({map:recSlides[0], emissive:0xffffff,
+  emissiveMap:recSlides[0], emissiveIntensity:0.8, roughness:0.4});
+var recDash = new THREE.Mesh(new THREE.PlaneGeometry(10.6,5.6), recDashMat);
+recDash.rotation.y = -Math.PI/2;
+recDash.position.set(19.04, 6, 9.5);
+scene.add(recDash);
+var recSlideIdx = 0;
+setInterval(function(){
+  recSlideIdx = (recSlideIdx+1) % recSlides.length;
+  recDashMat.map = recSlides[recSlideIdx];
+  recDashMat.emissiveMap = recSlides[recSlideIdx];
+  recDashMat.needsUpdate = true;
+}, 6000);
+plantPot(18.2, 26, 0.95);
+plantPot(18.2, 2.4, 0.8);
 /* visitor waiting — between the doors and the desk, so guests sit before the desk */
 box(12,0.06,8,M.rug, 8.5, 0.06, 15.5).castShadow=false;
 sofa(4.5, 15.5, 4.5, Math.PI/2);   // faces east
-sofa(12.5, 15.5, 4.5, -Math.PI/2); // faces west — conversational pair
 tableLegs(8.5, 15.5, 2.8, 2.8, 1.2, M.timberDark);
 sofa(15, 4.8, 6.5, 0);             // window bench seat, east of the entry path
-sofa(17.6, 15.5, 4.5, -Math.PI/2); // back against the wood logo wall, faces the table
+sofa(6.5, 7, 4.5, Math.PI/2);      // moved to the west side — facing the wall + carousel screen
+sofa(6.5, 12.6, 4.5, Math.PI/2);   // adjacent pair, same orientation
 plantPot(15.5, 5.5, 1.15);
 plantPot(2.5, 27, 1.0);
 
@@ -865,7 +1056,7 @@ box(0.5,CH-1,10,M.wall, 82,(CH-1)/2,67);
 });
 
 /* ---------- 11. executive offices (south glass line, x 38-98, 12'x13') ---------- */
-for(var oi=0; oi<5; oi++){
+for(var oi=0; oi<4; oi++){
   var x0 = 38 + oi*12, cx = x0 + 6;
   /* demising + end walls */
   if(oi===0) box(0.3,CH-1,13,M.glassClear, x0, (CH-1)/2, 8.5, 0, true);
@@ -907,7 +1098,7 @@ pointLite(68,9,8,0xfff2d9,0.6,50);
 });
 
 /* ---------- 14. connectivity: Wi-Fi 7 / 5G ceiling APs ---------- */
-[[22,30],[48,12],[75,33],[95,26],[75,14],[115,30],[130,12],[40,56]].forEach(function(p){
+[[22,30],[30,24],[48,12],[75,33],[95,26],[75,14],[115,30],[130,12],[40,56]].forEach(function(p){
   cyl(0.55,0.14,M.white, p[0], CH-0.42, p[1]);
 });
 /* ---------- 15. sensor mesh pucks + building OS wall panel ---------- */
@@ -935,8 +1126,8 @@ function art(tex,x,z,w2,h2){
   var cnv = new THREE.Mesh(new THREE.PlaneGeometry(w2,h2), new THREE.MeshStandardMaterial({map:tex, roughness:0.85}));
   cnv.position.set(x, 6.4, z-0.09); cnv.rotation.y = Math.PI; scene.add(cnv);
 }
-art(artTex1, 30, 71.5, 4.2, 3.1);
-art(artTex2, 40, 71.5, 4.2, 3.1);
+art(artTex1, 94, 71.5, 4.2, 3.1);
+art(artTex2, 104, 71.5, 4.2, 3.1);
 art(artTex1, 73, 61.55, 4.2, 3.1);   // on the restroom front wall
 
 /* ---------- living green wall on the north drywall ---------- */
@@ -979,32 +1170,32 @@ bowl.scale.y = 0.42; bowl.position.set(10.8, 3.4, 63); bowl.castShadow=true; sce
 });
 plantPot(18, 30, 0.95);
 plantPot(73, 33, 1.0);
-plantPot(126, 8, 1.0);
+plantPot(100.5, 4, 1.0);
 plantPot(15.5, 55, 0.9);
 plantPot(93, 64, 0.95);
 
 /* ---------- people (sparse, staged) ---------- */
 person(10, 25.8, Math.PI, 0x7a3b3b, true);      // receptionist at desk, facing the entry
 person(63, 4.0, 0, 0x2f4a66, true);             // exec office 1 — back to window, facing door
-person(94, 4.3, 0.7, 0x555e68, false);          // exec office 4 — standing at window
+person(83, 4.3, 0.7, 0x555e68, false);          // exec office 4 — standing at window
 person(22, 67.3, 0, 0x4a6b48, true);            // acoustic pod 1 — prompting
 person(31, 67.3, 0, 0x39506b, true);            // acoustic pod 3 — prompting
-person(124.2, 49, -Math.PI/2, 0x6e6a75, true);  // matrix room B — directing agents
+person(124.2, 38, -Math.PI/2, 0x6e6a75, true);   // matrix room B — directing agents
 person(5.4, 63, -Math.PI/2, 0x51606f, false);   // pantry — standing at island
-person(28.6, 19.8, 0, 0x63534a, true);          // collab table
+person(78, 19.8, 0, 0x63534a, true);            // collab table
 
 /* ---------- clean sky outside — no clutter ---------- */
 plantPot(55.5, 3.5, 1.0);
 plantPot(89.5, 21.5, 1.0);
 plantPot(100, 3.5, 1.1);
 plantPot(133, 30, 1.1);
-/* SE zone: 2 glass AI huddle rooms — 2-4 person agent-steering rooms, bookable hourly */
-[104,114,124].forEach(function(wx){
+/* 2 glass AI huddle rooms — one in the office row (x87-97), one at x104-114 */
+[87,97,104,114].forEach(function(wx){
   box(0.25,CH-2,10,M.glassClear, wx, (CH-2)/2, 7, 0, true);
   box(0.35,CH-2,0.35,M.track, wx, (CH-2)/2, 2.2);
   box(0.35,CH-2,0.35,M.track, wx, (CH-2)/2, 11.8);
 });
-[104,114].forEach(function(x0,hi){
+[87,104].forEach(function(x0,hi){
   var cx = x0+5;
   /* corridor front glass with door gap */
   box(6.6,CH-2,0.2,M.glassClear, x0+6.5, (CH-2)/2, 12, 0, true);
@@ -1021,27 +1212,9 @@ plantPot(133, 30, 1.1);
   cyl(0.32,0.12,M.tv, cx, CH-0.45, 7);
   box(7,0.05,7,M.rug, cx, 0.09, 7).castShadow = false;
 });
-person(117.2, 7, -Math.PI/2, 0x5b4a63, true);   // huddle 2 — pair working with agents
-person(119, 4.6, 0, 0x3f6258, true);
+person(107.2, 7, -Math.PI/2, 0x5b4a63, true);   // huddle 2 — pair working with agents
+person(109, 4.6, 0, 0x3f6258, true);
 box(10,0.06,6,M.rug, 31, 0.06, 5.5).castShadow=false;
-
-/* ---------- corner exec office on the prime SE glass corner ---------- */
-box(0.3,CH-1,15,M.glassClear, 127, (CH-1)/2, 8.5, 0, true);      // west glass wall
-box(0.4,CH-1,0.4,M.track, 127, (CH-1)/2, 1.2);
-box(13,CH-1,0.3,M.glassClear, 133.5, (CH-1)/2, 16, 0, true);     // north glass wall
-box(0.3,CH-1,0.4,M.track, 133.5, (CH-1)/2, 16);
-box(2.9,9.3,0.12,M.podGlass, 129.2, 4.7, 15.7, 0.45, true);      // ajar door leaf
-box(8,0.05,9,M.rug, 134, 0.09, 8).castShadow = false;
-tableLegs(134, 8, 6.5, 2.8, 2.6, M.timberDark);
-chairT(134, 5.3, 0);                     // corner exec: back to the S window, faces the door
-chairT(132.2, 10.8, Math.PI);
-chairT(135.8, 10.8, Math.PI);
-box(4.5,2.0,1.3,M.furnLight, 130.8, 1.0, 14.9);
-box(3.8,2.2,0.12,M.tv, 135.5, 6, 15.6);
-box(1.9,1.15,0.07,M.tv, 133, 3.65, 8.9);
-box(1.9,1.15,0.07,M.tv, 135, 3.65, 8.9);
-plantPot(128.6, 13.2, 0.8);
-person(134, 5.4, 0, 0x44586e, true);            // corner exec at desk, facing the door
 
 /* ---------- flex desking neighborhood — kinetic ring converts it to a conference room ---------- */
 box(28,0.06,18,M.floorAccent, 85, 0.035, 48).castShadow=false;
@@ -1059,14 +1232,14 @@ kpanel(74.5, 56); kpanel(82, 56); kpanel(89.5, 56);
 person(85, 41.9, 0, 0x71564a, true);            // flex desk occupant
 
 /* ---------- second open desking cluster — in line with the tenant lounge ---------- */
-[[52,46],[52,52],[60,46],[60,52],[68,46],[68,52]].forEach(function(dp){
+[[52,44],[52,50],[60,44],[60,50],[68,44],[68,50]].forEach(function(dp){
   tableLegs(dp[0], dp[1], 5, 2.2, 2.5, M.furnLight);
   chairT(dp[0], dp[1]-2.1, 0);
   chairT(dp[0], dp[1]+2.1, Math.PI);
   box(1.7,1.05,0.06,M.tv, dp[0]-1.1, 3.4, dp[1]);
   box(1.7,1.05,0.06,M.tv, dp[0]+1.1, 3.4, dp[1]);
 });
-person(60, 43.9, 0, 0x4f5d52, true);
+person(60, 41.9, 0, 0x4f5d52, true);
 
 /* ---------- tenant lounge — glass-walled, adjacent to the wet pantry ---------- */
 /* south glass wall (z=42) with door gap, east glass wall (x=44) */
@@ -1120,18 +1293,17 @@ COMPONENTS.forEach(function(c){
 /* ---------- dimension tags ---------- */
 var DIMS = [
   {t:'SUITE 140′ × 72′ — 10,080 RSF', p:[70,0.9,36], big:true},
-  {t:'Matrix Rooms 24′ × 22′ ea (×2)', p:[127,3,38]},
-  {t:'Exec Offices 12′ × 13′ · 156 SF ea (×5)', p:[68,3,7]},
+  {t:'Matrix Rooms 24′ × 25′ ea (×2)', p:[127,3,27]},
+  {t:'Exec Offices 12′ × 13′ · 156 SF ea (×4)', p:[62,3,7]},
   {t:'Acoustic Pods 7′ × 6′ ea (×8)', p:[34,3,66.5]},
   {t:'Wet Pantry 15′ × 18′ · ~270 SF', p:[7,3,63]},
   {t:'Reception 22′ × 28′ · ~620 SF', p:[9,3,14]},
-  {t:'Collab Hall 56′ × 13′ · ~730 SF', p:[41,3,22]},
-  {t:'Server Room 7′ × 10′', p:[129.5,3,66]},
+  {t:'Collab Hall 50′ × 13′ · ~650 SF', p:[86,3,22]},
+  {t:'Server Room 15′ × 10′ · 8 racks', p:[125,3,66]},
   {t:'Network Room 7′ × 10′', p:[136.5,3,66]},
   {t:'Men’s RR 12′ × 10′ · 2 stalls', p:[64,3,66.5]},
   {t:'Women’s RR 12′ × 10′ · 2 stalls', p:[76,3,66.5]},
-  {t:'AI Huddles 10′ × 10′ ea (×2)', p:[114,3,7]},
-  {t:'Corner Exec Office 13′ × 14′', p:[134,3,8]},
+  {t:'AI Huddles 10′ × 10′ ea (×2)', p:[100,3,7]},
   {t:'Flex Desking → Kinetic Conf 26′ × 16′', p:[85,3,48]},
   {t:'Tenant Lounge 24′ × 16′', p:[32,3,50]}
 ];
@@ -1154,18 +1326,18 @@ var LDIMS = [
   {a:[0,0],     b:[0,72],    o:[-7,0],   t:'72′-0″'},
   {a:[0,72],    b:[140,72],  o:[0,7],    t:'140′-0″'},
   /* interior components */
-  {a:[38,15],   b:[98,15],   o:[0,3],    t:'60′-0″ · 5 exec offices @ 12′'},
+  {a:[38,15],   b:[86,15],   o:[0,3],    t:'48′-0″ · 4 exec offices @ 12′'},
   {a:[98,2],    b:[98,15],   o:[3,0],    t:'13′-0″'},
-  {a:[116,16],  b:[116,60],  o:[-3,0],   t:'44′-0″ · 2 Matrix Rooms @ 22′'},
-  {a:[13,16.5], b:[69,16.5], o:[0,2],    t:'56′-0″ · Collab Hall'},
+  {a:[116,2],   b:[116,52],  o:[-3,0],   t:'50′-0″ · 2 Matrix Rooms @ 25′'},
+  {a:[61,16.5], b:[111,16.5],o:[0,2],    t:'50′-0″ · Collab Hall'},
   {a:[18.5,64.6],b:[52.5,64.6],o:[0,-3], t:'34′-0″ · 4 acoustic pods'},
-  {a:[86.5,64.6],b:[120.5,64.6],o:[0,-3],t:'34′-0″ · 4 acoustic pods'},
+  {a:[86.5,64.6],b:[111.5,64.6],o:[0,-3],t:'25′-0″ · 3 acoustic pods'},
   {a:[1,55],    b:[16,55],   o:[0,-2.5], t:'15′-0″ · Wet Pantry'},
   {a:[0.4,28],  b:[22,28],   o:[0,2.5],  t:'21′-6″ · Reception'},
   {a:[58,62],   b:[82,62],   o:[0,-3],   t:'24′-0″ · 2 restrooms @ 12′'},
-  {a:[126,62],  b:[140,62],  o:[0,-3],   t:'14′-0″ · Server + Network'},
-  {a:[104,12],  b:[124,12],  o:[0,3],    t:'20′-0″ · 2 AI huddles @ 10′'},
-  {a:[127,16],  b:[140,16],  o:[0,3],    t:'13′-0″ · Corner exec office'},
+  {a:[118,62],  b:[140,62],  o:[0,-3],   t:'22′-0″ · Server + Network'},
+  {a:[87,12],   b:[97,12],   o:[0,3],    t:'10′-0″ · AI huddle'},
+  {a:[104,12],  b:[114,12],  o:[0,3],    t:'10′-0″ · AI huddle'},
   {a:[72,40],   b:[98,40],   o:[0,-2.5], t:'26′-0″ · Flex desking / kinetic conf'},
   {a:[20,42],   b:[44,42],   o:[0,-3],   t:'24′-0″ · Tenant lounge'}
 ];
@@ -1262,7 +1434,7 @@ document.addEventListener('keydown', function(e){ keys[e.code]=true; });
 document.addEventListener('keyup', function(e){ keys[e.code]=false; });
 
 var dragging=false, lx=0, ly=0;
-canvas.addEventListener('mousedown', function(e){ dragging=true; lx=e.clientX; ly=e.clientY; camTarget=null; stopTour(); });
+canvas.addEventListener('mousedown', function(e){ dragging=true; lx=e.clientX; ly=e.clientY; camTarget=null; });
 window.addEventListener('mouseup', function(){ dragging=false; });
 window.addEventListener('mousemove', function(e){
   if(!dragging) return;
@@ -1272,14 +1444,14 @@ window.addEventListener('mousemove', function(e){
   lx=e.clientX; ly=e.clientY;
 });
 canvas.addEventListener('wheel', function(e){
-  e.preventDefault(); camTarget=null; stopTour();
+  e.preventDefault(); camTarget=null;
   var f = forwardVec();
   camPos.addScaledVector(f, -e.deltaY*0.02);
 }, {passive:false});
 
 /* touch */
 var tX=0,tY=0;
-canvas.addEventListener('touchstart', function(e){ if(e.touches.length){tX=e.touches[0].clientX;tY=e.touches[0].clientY; camTarget=null; stopTour();} },{passive:true});
+canvas.addEventListener('touchstart', function(e){ if(e.touches.length){tX=e.touches[0].clientX;tY=e.touches[0].clientY; camTarget=null;} },{passive:true});
 canvas.addEventListener('touchmove', function(e){
   if(!e.touches.length) return;
   yaw -= (e.touches[0].clientX-tX)*0.004;
@@ -1316,8 +1488,9 @@ document.getElementById('btnWalls').onclick = toggleWalls;
 
 /* in-scene action buttons, anchored on the components themselves */
 [
-  {t:'◧ Toggle Smart Glass', p:[114, 10.5, 38], fn:toggleGlass},
-  {t:'⇄ Move Kinetic Walls', p:[33, 11.5, 20], fn:toggleWalls},
+  {t:'◧ Toggle Smart Glass', p:[126, 9.5, 20], fn:toggleGlass},
+  {t:'◧ Toggle Smart Glass', p:[126, 9.5, 34], fn:toggleGlass},
+  {t:'⇄ Move Kinetic Walls', p:[86, 11.5, 20], fn:toggleWalls},
   {t:'⇄ Move Kinetic Walls', p:[85, 11.5, 40], fn:toggleWalls}
 ].forEach(function(a){
   var el = document.createElement('div');
@@ -1328,22 +1501,90 @@ document.getElementById('btnWalls').onclick = toggleWalls;
   labels.push({el:el, pos:new THREE.Vector3(a.p[0], a.p[1], a.p[2]), act:true});
 });
 
-/* ---------- auto tour ---------- */
-var tourIdx = -1, tourTimer = null, touring=false;
-function stopTour(){ touring=false; if(tourTimer){clearTimeout(tourTimer); tourTimer=null;}
-  document.getElementById('btnTour').textContent='▶ Auto Tour'; }
+/* ---------- guided AI tour: manual Next / Previous stepping ---------- */
+var TOUR = ['reception','power','connectivity','pods','acoustic','cooling','network',
+            'matrix','glass','sensors','audio','huddles','offices','kinetic'];
+/* curated eye-level viewpoints per stop: e = where you stand, l = what you look at */
+var TOUR_VIEWS = {
+  reception:    {w:[[26,5.8,31],[6,5.8,29]], e:[3, 5.8, 9], l:[16, 4.5, 19]},      // around the wall's north end
+  power:        {w:[[8,5.8,29],[26,5.8,31]], e:[27, 5.8, 22], l:[45, 10.6, 30]},   // back around the north end
+  connectivity: {e:[22, 5.8, 17],  l:[30, 11.2, 24]},
+  pods:         {w:[[46,5.8,38],[46,5.8,59]], e:[30, 5.8, 59], l:[31, 5, 66.5]},   // up the side, along the north corridor
+  acoustic:     {e:[42, 5.8, 59.5], l:[40, 7.5, 68]},                              // battens behind the west pods
+  cooling:      {w:[[80,5.8,58.5]], e:[125, 5.8, 55.5], l:[125, 4.5, 66.5]},       // north corridor to the server glass
+  network:      {e:[131, 5.8, 55.5], l:[136.5, 4, 66.5]},
+  matrix:       {w:[[112,5.8,55],[110,5.8,34]], e:[106, 5.8, 30], l:[126, 5, 24]}, // down the glass front, looking in
+  glass:        {e:[110, 5.8, 38], l:[121, 6, 27]},
+  sensors:      {e:[44, 5.8, 39],  l:[48, 11.3, 30]},
+  audio:        {w:[[114,5.8,38.5]], e:[120, 5.8, 37], l:[126, 10.6, 30]},         // in through Room B's door
+  huddles:      {w:[[114,5.8,38.5],[108,5.8,25]], e:[100.5, 5.8, 18], l:[104, 4.5, 7]}, // back out, over to the huddles
+  offices:      {e:[62, 5.8, 21],  l:[62, 4, 6]},
+  kinetic:      {w:[[81,5.8,26],[81,5.8,31]], e:[86, 5.8, 34], l:[86, 7, 19]}      // through the gap between panels
+};
+var tourQueue = [];
+var tourTimer = null;
+var tourIdx = -1, touring = false;
+function tourName(i){
+  var c = COMPONENTS.find(function(x){ return x.id === TOUR[i]; });
+  return c ? c.short : '';
+}
+function updateTourNav(){
+  var prev = document.getElementById('tourPrev'), next = document.getElementById('tourNext');
+  document.getElementById('tourCount').textContent = 'Stop ' + (tourIdx+1) + ' / ' + TOUR.length;
+  if(tourIdx <= 0){ prev.classList.add('disabled'); prev.querySelector('span').textContent = '—'; }
+  else { prev.classList.remove('disabled'); prev.querySelector('span').textContent = tourName(tourIdx-1); }
+  if(tourIdx >= TOUR.length-1){ next.querySelector('small').textContent = 'FINISH TOUR'; next.querySelector('span').textContent = '✓ Done'; }
+  else { next.querySelector('small').textContent = 'NEXT ▶'; next.querySelector('span').textContent = tourName(tourIdx+1); }
+}
+function goTour(i){
+  tourIdx = i;
+  var id = TOUR[i];
+  selectComponent(id, false);                 // open the card, no generic fly
+  var v = TOUR_VIEWS[id];
+  tourQueue = [];
+  if(v){
+    var pts = (v.w || []);
+    for(var k=0; k<pts.length; k++){
+      var nxt = (k+1 < pts.length) ? pts[k+1] : v.e;   // look toward where we're headed
+      tourQueue.push({e:new THREE.Vector3(pts[k][0],pts[k][1],pts[k][2]),
+                      l:new THREE.Vector3(nxt[0],nxt[1],nxt[2])});
+    }
+    tourQueue.push({e:new THREE.Vector3(v.e[0],v.e[1],v.e[2]),
+                    l:new THREE.Vector3(v.l[0],v.l[1],v.l[2])});
+    var first = tourQueue.shift();
+    flyToLookAt(first.e, first.l);
+  }
+  updateTourNav();
+  /* idle auto-advance: if the user doesn't hit Next within 60s, walk on */
+  clearTimeout(tourTimer);
+  tourTimer = setTimeout(function(){
+    if(!touring) return;
+    if(tourIdx < TOUR.length-1) goTour(tourIdx+1);
+    else { stopTour(); closeCard(); }
+  }, 60000);
+}
+function stopTour(){
+  if(!touring) return;
+  touring = false;
+  clearTimeout(tourTimer);
+  tourQueue.length = 0;
+  document.getElementById('tourNav').classList.remove('show');
+  document.getElementById('btnTour').textContent = '▶ Start AI Tour';
+}
 document.getElementById('btnTour').onclick = function(){
   if(touring){ stopTour(); return; }
-  touring = true; tourIdx = -1;
-  document.getElementById('btnTour').textContent='⏸ Stop Tour';
-  nextStop();
+  touring = true;
+  document.getElementById('btnTour').textContent = '⏹ End Tour';
+  document.getElementById('tourNav').classList.add('show');
+  goTour(0);
 };
-function nextStop(){
-  if(!touring) return;
-  tourIdx = (tourIdx+1) % COMPONENTS.length;
-  selectComponent(COMPONENTS[tourIdx].id, true);
-  tourTimer = setTimeout(nextStop, 6000);
-}
+document.getElementById('tourNext').onclick = function(){
+  if(tourIdx >= TOUR.length-1){ stopTour(); closeCard(); return; }
+  goTour(tourIdx+1);
+};
+document.getElementById('tourPrev').onclick = function(){
+  if(tourIdx > 0) goTour(tourIdx-1);
+};
 
 /* ---------- resize ---------- */
 function resize(){
@@ -1389,15 +1630,18 @@ function animate(){
 
   /* fly-to easing */
   if(camTarget){
+    var fs = touring ? 0.9 : 3.2;             // touring = slow, purposeful walking pace
     flyT = Math.min(1, flyT + dt*1.1);
-    var e = flyT<0.5 ? 2*flyT*flyT : 1-Math.pow(-2*flyT+2,2)/2;
-    camPos.lerp(camTarget.pos, Math.min(1, dt*3.2));
+    camPos.lerp(camTarget.pos, Math.min(1, dt*fs));
     var dy = camTarget.yaw - yaw;
     while(dy>Math.PI) dy-=2*Math.PI;
     while(dy<-Math.PI) dy+=2*Math.PI;
-    yaw += dy*Math.min(1, dt*3.2);
-    pitch += (camTarget.pitch-pitch)*Math.min(1, dt*3.2);
-    if(flyT>=1 && camPos.distanceTo(camTarget.pos)<0.3) camTarget=null;
+    yaw += dy*Math.min(1, dt*fs*1.4);
+    pitch += (camTarget.pitch-pitch)*Math.min(1, dt*fs*1.4);
+    if(camPos.distanceTo(camTarget.pos)<0.8){
+      camTarget = null;
+      if(tourQueue.length){ var nx = tourQueue.shift(); flyToLookAt(nx.e, nx.l); }
+    }
   }
 
   /* WASD walking */
@@ -1409,7 +1653,7 @@ function animate(){
   if(keys['KeyS']||keys['ArrowDown']){ camPos.addScaledVector(f,-spd*dt); moved=true; }
   if(keys['KeyA']||keys['ArrowLeft']){ camPos.addScaledVector(r,-spd*dt); moved=true; }
   if(keys['KeyD']||keys['ArrowRight']){ camPos.addScaledVector(r, spd*dt); moved=true; }
-  if(moved){ camTarget=null; stopTour(); if(camPos.y<4.5) camPos.y=5.5; }
+  if(moved){ camTarget=null; tourQueue.length=0; if(camPos.y<4.5) camPos.y=5.5; }
   if(keys['KeyQ']) camPos.y -= spd*dt*0.6;
   if(keys['KeyE']) camPos.y += spd*dt*0.6;
   camPos.y = Math.max(2.5, Math.min(110, camPos.y));
@@ -1418,13 +1662,12 @@ function animate(){
   tmpV.set(camPos.x - Math.sin(yaw)*Math.cos(pitch), camPos.y + Math.sin(pitch), camPos.z - Math.cos(yaw)*Math.cos(pitch));
   camera.lookAt(tmpV);
 
-  /* smart glass animation */
-  var targetOp = glassOpaque ? 0.92 : 0.16;
-  smartPanes.forEach(function(p){
-    p.material = M.smart;
-  });
+  /* smart glass animation — display walls fade from clear glass to agent dashboards */
+  var targetOp = glassOpaque ? 1.0 : 0.16;
+  var targetEm = glassOpaque ? 0.95 : 0;
   M.smart.opacity += (targetOp - M.smart.opacity)*Math.min(1, dt*4);
-  M.smart.color.setHex(glassOpaque ? 0x5a6b7a : 0xaee6f2);
+  M.smart.emissiveIntensity += (targetEm - M.smart.emissiveIntensity)*Math.min(1, dt*4);
+  M.smart.color.setHex(glassOpaque ? 0xffffff : 0xaee6f2);
 
   /* kinetic wall animation */
   kineticPanels.forEach(function(k,i){
