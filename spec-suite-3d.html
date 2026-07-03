@@ -1,0 +1,1487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI-Ready Spec Suite — 3D Test Fit | First Mile Capital</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#111823; --panel2:#0e141d; --border:#1e2a3a;
+    --text:#e6edf3; --muted:#8b98a8; --accent:#22d3ee; --green:#34d399; --amber:#fbbf24;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+  #c{position:fixed;inset:0;display:block;width:100%;height:100%}
+
+  /* Header */
+  #hdr{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;align-items:center;gap:14px;
+    padding:10px 16px;background:linear-gradient(180deg,rgba(11,15,20,.95),rgba(11,15,20,.72) 75%,transparent);pointer-events:none}
+  #hdr .brand{font-weight:700;font-size:15px;letter-spacing:.2px;pointer-events:auto}
+  #hdr .brand small{display:block;font-weight:500;color:var(--muted);font-size:11px;margin-top:2px}
+  #hdr .chips{display:flex;gap:8px;margin-left:auto;pointer-events:auto;flex-wrap:wrap;justify-content:flex-end}
+  .chip{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;color:var(--muted);white-space:nowrap}
+  .chip b{color:var(--accent);font-size:12px;display:block}
+
+  /* Left component list */
+  #list{position:fixed;left:12px;top:76px;z-index:20;width:238px;max-height:calc(100% - 170px);
+    overflow-y:auto;background:rgba(17,24,35,.92);border:1px solid var(--border);border-radius:12px;padding:10px;backdrop-filter:blur(6px)}
+  #list h3{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin:2px 4px 8px}
+  .item{display:flex;gap:9px;align-items:center;padding:7px 8px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+  .item:hover{background:#16202e}
+  .item.active{background:#0f2a33;border-color:rgba(34,211,238,.4)}
+  .item .n{flex:0 0 22px;height:22px;border-radius:50%;background:var(--accent);color:#062126;
+    font-weight:800;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .item .t{font-size:12px;line-height:1.25}
+  .item .t small{display:block;color:var(--muted);font-size:10.5px}
+
+  /* Info card */
+  #card{position:fixed;right:12px;top:76px;z-index:20;width:340px;max-height:calc(100% - 170px);overflow-y:auto;
+    background:rgba(17,24,35,.95);border:1px solid var(--border);border-radius:12px;padding:16px;backdrop-filter:blur(6px);display:none}
+  #card.show{display:block}
+  #card .num{display:inline-flex;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#062126;
+    font-weight:800;font-size:13px;align-items:center;justify-content:center;margin-right:8px}
+  #card h2{font-size:16px;display:flex;align-items:center;margin-bottom:8px}
+  #card p{font-size:12.5px;color:#c3cfdd;line-height:1.5;margin-bottom:12px}
+  #card .row{display:flex;gap:8px;margin-bottom:12px}
+  #card .stat{flex:1;background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px 10px}
+  #card .stat label{font-size:9.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);display:block;margin-bottom:3px}
+  #card .stat span{font-size:13px;font-weight:700;color:var(--green)}
+  #card h4{font-size:10.5px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+  #card .why{background:#0d2129;border-left:3px solid var(--accent);border-radius:6px;padding:9px 11px;margin-bottom:12px}
+  #card .why h4{color:var(--accent);margin-bottom:4px}
+  #card .why p{margin:0;font-size:12px;color:#bfe9f2;line-height:1.5}
+  .vend{display:inline-block;background:#0f2a33;border:1px solid rgba(34,211,238,.3);color:#9be8f5;
+    border-radius:6px;padding:3px 8px;font-size:11px;margin:0 4px 5px 0}
+  a.vend{text-decoration:none;cursor:pointer}
+  a.vend:hover{border-color:var(--accent);color:#fff;background:#134152}
+  .inst{display:inline-block;background:#1a2410;border:1px solid rgba(52,211,153,.3);color:#a7e8c8;
+    border-radius:6px;padding:3px 8px;font-size:11px;margin:0 4px 5px 0}
+  #card .close{position:absolute;top:10px;right:12px;background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer}
+  #card .note{font-size:10px;color:var(--muted);border-top:1px solid var(--border);padding-top:8px;margin-top:4px}
+
+  /* Bottom bar */
+  #bar{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;align-items:center;gap:10px;padding:10px 16px;
+    background:linear-gradient(0deg,rgba(11,15,20,.95),transparent);flex-wrap:wrap}
+  .btn{background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:8px;
+    padding:8px 14px;font-size:12px;cursor:pointer;font-weight:600}
+  .btn:hover{border-color:var(--accent);color:var(--accent)}
+  .btn.primary{background:#0f2a33;border-color:rgba(34,211,238,.5);color:var(--accent)}
+  #hint{margin-left:auto;font-size:11px;color:var(--muted);text-align:right}
+  #hint b{color:#c3cfdd}
+
+  /* Floating labels */
+  .lbl{position:fixed;z-index:10;transform:translate(-50%,-100%);pointer-events:auto;cursor:pointer;
+    display:flex;align-items:center;gap:6px;background:rgba(13,20,29,.85);border:1px solid rgba(34,211,238,.45);
+    border-radius:20px;padding:3px 10px 3px 3px;font-size:11px;white-space:nowrap;backdrop-filter:blur(4px);user-select:none}
+  .lbl .n{width:18px;height:18px;border-radius:50%;background:var(--accent);color:#062126;font-weight:800;
+    font-size:10px;display:flex;align-items:center;justify-content:center}
+  .lbl:hover{border-color:var(--accent);background:rgba(15,42,51,.95)}
+  .lbl .cost{color:var(--green);font-weight:700;margin-left:2px}
+  .lbl.act{background:rgba(8,58,74,.94);border:1.5px solid var(--accent);color:#d9f6fc;
+    font-weight:700;padding:5px 12px}
+  .lbl.act:hover{background:rgba(12,84,104,.98)}
+
+  /* dimension tags */
+  .dim{position:fixed;z-index:9;transform:translate(-50%,-50%);background:rgba(35,42,52,.85);border:1px dashed rgba(255,255,255,.4);
+    color:#eef2f6;border-radius:6px;padding:2px 8px;font-size:10.5px;white-space:nowrap;pointer-events:none;font-weight:600;letter-spacing:.3px}
+  .dim.big{font-size:12.5px;border:1px dashed var(--accent);color:#bfeffa;background:rgba(15,42,51,.9)}
+
+  @media (max-width:900px){ #list{display:none} #card{width:min(340px,calc(100vw - 24px))} }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="hdr">
+  <div class="brand">FIRST MILE CAPITAL — AI-Ready Spec Suite<small>3D Test Fit v1 &middot; ~10,000 RSF corner prototype &middot; concept for portfolio-wide retrofit program</small></div>
+  <div class="chips">
+    <div class="chip">Suite Size<b>~10,000 RSF</b></div>
+    <div class="chip">Power Target<b>12–15 W/SF</b></div>
+    <div class="chip">Est. Fit-Out<b>$2.0M – $3.8M</b></div>
+    <div class="chip">Est. $/SF<b>$200 – $380</b></div>
+  </div>
+</div>
+
+<div id="list"><h3>Suite Components</h3></div>
+<div id="card"></div>
+
+<div id="bar">
+  <button class="btn primary" id="btnTour">▶ Auto Tour</button>
+  <button class="btn" id="btnWalk">🚶 Walk View</button>
+  <button class="btn" id="btnTop">🗺 Plan View</button>
+  <button class="btn" id="btnGlass">◧ Toggle Smart Glass</button>
+  <button class="btn" id="btnWalls">⇄ Move Kinetic Walls</button>
+  <button class="btn" id="btnDims">📐 Dimensions</button>
+  <div id="hint"><b>Drag</b> to look &middot; <b>W A S D</b> / arrows to walk &middot; <b>Scroll</b> to dolly &middot; click any <b>tag</b> for cost + vendors</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+/* ============================================================
+   AI-Ready Spec Suite — 3D annotated test fit
+   Units: 1 unit = 1 ft. Suite: 100ft x 50ft, 12ft clear ceiling.
+   ============================================================ */
+
+var COMPONENTS = [
+  {
+    id:'pods', num:1, name:'Voice-Prompting Acoustic Pods', short:'Acoustic Pods',
+    cost:'$144K – $240K', costShort:'$144–240K', unit:'8 pods @ $18K–$30K ea, installed (STC 40+)',
+    pos:[30,7,67.5],
+    desc:'Micro-acoustic pods for continuous voice dictation to AI agents. Replaces open-plan desking. Each pod is ventilated, power/data fed from the ceiling track, and rated STC 40+ so simultaneous prompting sessions don’t bleed.',
+    why:'As keyboards fade, work becomes talking to your agents all day. An open plan with 30 people dictating simultaneously is unusable — pods deliver clean voice capture for accurate transcription and keep every prompt stream confidential.',
+    vendors:[['Framery','https://frameryacoustics.com/en/products/'],['ROOM','https://room.com'],['Zenbooth','https://zenbooth.net'],['Jabbrrbox','https://jabbrrbox.com']],
+    installers:['MillerKnoll / Knoll dealers','Commercial furniture dealers (e.g. Empire Office, Arenson NYC)']
+  },
+  {
+    id:'matrix', num:2, name:'Immersive Matrix Rooms (×2)', short:'Matrix Rooms',
+    cost:'$495K – $940K', costShort:'$495–940K', unit:'2 rooms @ ~530 SF on the window line; LED cross-walls + daylight east glass',
+    pos:[127,7,38],
+    desc:'Replaces the boardroom. 270° micro-LED / projection wall renders live data pipelines, agent dashboards and market feeds while a team directs a room of AI agents. Dedicated 30A circuits + reinforced wall backing.',
+    why:'Post-Fable AI runs dozens of parallel execution layers a single projector can’t show. When five humans orchestrate a thousand agents, the room itself becomes the monitor — the org’s digital twin rendered at wall scale.',
+    vendors:[['LG (MAGNIT)','https://www.lg.com/global/business/led-signage'],['Samsung (The Wall)','https://www.samsung.com/us/business/displays/the-wall/'],['Barco','https://www.barco.com'],['Planar','https://www.planar.com']],
+    installers:['AVI-SPL','Diversified','McCann Systems (NY/NJ)']
+  },
+  {
+    id:'audio', num:3, name:'Spatial Audio Array', short:'Spatial Audio',
+    cost:'$45K – $120K', costShort:'$45–120K', unit:'Beam-steered ceiling array, Matrix Room + collab hall',
+    pos:[127,11.4,38],
+    desc:'Beam-forming spatial audio so virtual AI avatars are heard positionally, and voice capture stays zoned per user. Ceiling-integrated array with acoustic DSP tuned to the room.',
+    why:'Meetings will mix humans and AI avatars. Positional audio lets people instinctively track which agent is “speaking,” and zoned capture keeps each person’s commands routed to their own AI instead of a garbled shared feed.',
+    vendors:[['Holoplot','https://holoplot.com'],['L-Acoustics','https://www.l-acoustics.com'],['QSC / Q-SYS','https://www.qsys.com'],['Shure (MXA)','https://www.shure.com']],
+    installers:['Same AV integrators — AVI-SPL, Diversified, McCann']
+  },
+  {
+    id:'kinetic', num:4, name:'Kinetic Modular Wall System', short:'Kinetic Walls',
+    cost:'$240K – $400K', costShort:'$240–400K', unit:'~200 LF @ $1,200–$2,000/LF w/ integrated power track',
+    pos:[41,7,20],
+    desc:'Ceiling-track movable wall panels with integrated power. Floor reconfigures from 20 deep-work pods to one collaboration hall in under 10 minutes — no construction crew, no permits, no downtime.',
+    why:'AI lets a company scale a project team up or down in days, so rigid layouts (and rigid 10-year leases) become obsolete. Space that reconfigures at software speed is what keeps the elastic core-and-spoke tenant in your building.',
+    vendors:[['DIRTT','https://www.dirtt.com'],['Skyfold','https://www.skyfold.com'],['Modernfold','https://www.modernfold.com'],['Hufcor','https://www.hufcor.com']],
+    installers:['Manufacturer-certified dealers + commercial GC (e.g. JRM, Structure Tone for tie-in)']
+  },
+  {
+    id:'glass', num:5, name:'Electrochromic Smart Glass', short:'Smart Glass',
+    cost:'$65K – $115K', costShort:'$65–115K', unit:'~750 SF glazing @ $85–$150/SF installed',
+    pos:[116,6,38],
+    desc:'Privacy-on-demand glazing on the Matrix Room and exec zone. Occupant sensors flip the glass opaque the moment sensitive AI-generated financials go up on the wall. Use the Toggle Smart Glass button to demo.',
+    why:'AI puts sensitive output — live financials, legal drafts, M&A models — on every surface, on demand. Privacy has to be as instant and automated as the content itself; sensor-linked glass opaques the moment an executive walks in.',
+    vendors:[['SageGlass (Saint-Gobain)','https://www.sageglass.com'],['Halio','https://halioglass.com'],['Gauzy','https://www.gauzy.com'],['Smartglass International','https://www.smartglassinternational.com']],
+    installers:['Commercial glazing contractors (e.g. W&W Glass, Tower Glass) + low-voltage electrician']
+  },
+  {
+    id:'cooling', num:6, name:'Liquid-Cooled Edge-AI Server Closet', short:'Liquid-Cooled Closet',
+    cost:'$95K – $210K', costShort:'$95–210K', unit:'2–4 racks, closed-loop liquid cooling, leak detection',
+    pos:[129.5,7,66],
+    desc:'In-suite compute room for tenant edge-AI servers running local models continuously. Closed-loop direct-to-chip liquid cooling rejects heat to the building riser — the premium-rent amenity of the AI era.',
+    why:'Tenants will run local models 24/7 for data sovereignty and latency — their digital twin lives here, not in someone else’s cloud. High-density racks emit heat air systems can’t move; pre-built liquid cooling is what commands the rent premium.',
+    vendors:[['Vertiv','https://www.vertiv.com'],['CoolIT Systems','https://www.coolitsystems.com'],['LiquidStack','https://liquidstack.com'],['JetCool','https://jetcool.com']],
+    installers:['MEP engineer + mechanical contractor; data-center integrators (Align, EYP MCF)']
+  },
+  {
+    id:'network', num:7, name:'Zero-Trust Network Closet', short:'Zero-Trust Closet',
+    cost:'$45K – $95K', costShort:'$45–95K', unit:'Air-gapped, containerized, per-tenant physical routing',
+    pos:[136.5,7,66],
+    desc:'Physically air-gapped, containerized network closet per tenant. Guarantees a tenant’s AI digital twin can never ingest a neighbor’s data — marketable as building-level data sovereignty.',
+    why:'A digital twin ingests everything it can reach. Corporate tenants are terrified a shared network lets their AI read a neighbor’s files — or vice versa. Physical air-gapping is the only guarantee software can’t break, and the landlord owns it.',
+    vendors:[['Cisco','https://www.cisco.com'],['Fortinet','https://www.fortinet.com'],['Palo Alto Networks','https://www.paloaltonetworks.com'],['Chatsworth (enclosures)','https://www.chatsworth.com']],
+    installers:['Structured cabling / IT infrastructure firms (Align, Black Box, IVCi)']
+  },
+  {
+    id:'power', num:8, name:'Power Density Upgrade — 12–15 W/SF', short:'Power Upgrade',
+    cost:'$180K – $300K', costShort:'$180–300K', unit:'$18–$30/SF across 10,080 RSF: panelboard, bus duct, power track',
+    pos:[70,11.6,18],
+    desc:'Upgrade from the traditional 5–7 W/SF to 12–15 W/SF: new panelboard, overhead plug-in bus duct spine, and metered whips to pods, racks and the Matrix Room. The single biggest unlock for AI-ready leasing.',
+    why:'Edge servers, immersive walls, spatial-computing rigs — every AI amenity stacks watts. Power headroom becomes the first question on an AI tenant’s tour checklist; buildings stuck at 5–7 W/SF simply can’t compete for them.',
+    vendors:[['Eaton (gear)','https://www.eaton.com'],['Starline (bus track)','https://www.starlinepower.com'],['Legrand','https://www.legrand.us']],
+    installers:['EMCOR','E-J Electric (NYC)','ABM','Licensed local electrical contractors']
+  },
+  {
+    id:'acoustic', num:9, name:'High-STC Acoustic Shell (Mass Timber)', short:'Acoustic Shell',
+    cost:'$140K – $260K', costShort:'$140–260K', unit:'STC 55+ demising & lids, $20–$35/SF of assembly',
+    pos:[108,9.6,67.5],
+    desc:'Mass-timber battens over high-STC assemblies (resilient channel, damped drywall, acoustic ceiling) on demising walls, so continuous voice-prompting never bleeds between suites or floors.',
+    why:'When the whole floor talks to AI all day, sound bleed isn’t just noise — it’s a data leak. Spoken prompts are confidential corporate information; STC 55+ demising is the physical layer of prompt security between tenants.',
+    vendors:[['QuietRock (PABCO)','https://www.quietrock.com'],['Kinetics Noise Control','https://kineticsnoise.com'],['StructureCraft (mass timber)','https://structurecraft.com']],
+    installers:['Acoustic consultants (Longman Lindsey, Cerami) + drywall/carpentry subs']
+  },
+  {
+    id:'pantry', num:10, name:'Wet Pantry / Café', short:'Wet Pantry',
+    cost:'$45K – $90K', costShort:'$45–90K', unit:'Millwork run + island, sink plumbing tie-in, appliances',
+    pos:[8,7,63],
+    desc:'Full wet pantry: stone-top millwork run with sink and dishwasher, island with seating, panel-front fridge, coffee program. Plumbing tied into the wet stack; the everyday social anchor of the suite.',
+    why:'AI shrinks headcount but raises the stakes of the days humans do gather. When people don’t have to come in, hospitality is the draw — the pantry is where the smaller, senior team actually collaborates between agent sessions.',
+    vendors:[['Local millwork / casework shops',null],['Caesarstone (tops)','https://www.caesarstoneus.com'],['Sub-Zero / Bosch (appliances)','https://www.subzero-wolf.com'],['Elkay (sink)','https://www.elkay.com']],
+    installers:['GC + licensed plumber (wet stack tie-in) + electrician']
+  },
+  {
+    id:'offices', num:11, name:'Executive Offices (Glass Front)', short:'Exec Offices',
+    cost:'$185K – $330K', costShort:'$185–330K', unit:'5 inline (12′×13′) + 1 corner office, ~120 LF demountable fronts',
+    pos:[68,7,8],
+    desc:'Three windowed executive offices with full-height demountable glass fronts, wall-mounted displays and credenzas. Demountable systems depreciate as furniture (not leasehold) and relocate when the kinetic plan changes.',
+    why:'The AI-era office is run by a few human directors managing digital workflows. They need private rooms to review confidential agent output and take calls — with displays streaming live agent dashboards and glass keeping the floor connected.',
+    vendors:[['DIRTT','https://www.dirtt.com'],['Maars Living Walls','https://www.maarslivingwalls.com'],['Teknion (Tek Vue)','https://www.teknion.com'],['Transwall','https://transwall.com']],
+    installers:['Partition dealer + GC; AV integrator for office displays']
+  },
+  {
+    id:'reception', num:12, name:'Reception & Entry', short:'Reception',
+    cost:'$45K – $85K', costShort:'$45–85K', unit:'Glass entry doors, millwork desk, logo feature wall, lounge',
+    pos:[10,7,19],
+    desc:'Double glass entry doors into a reception lounge: millwork desk, back-lit logo feature wall, soft seating. First impression for tenants touring the AI-ready program.',
+    why:'With fewer daily commuters, visits skew to what matters: clients, investors, board days, tours. The entry is where the AI-ready story gets sold in the first ten seconds — and where the building app checks visitors into hourly “spoke” spaces.',
+    vendors:[['Millwork shops',null],['ASSA ABLOY / Dorma (glass entry)','https://www.assaabloyentrance.com'],['MillerKnoll (lounge)','https://www.millerknoll.com']],
+    installers:['GC + glazing contractor + signage fabricator']
+  },
+  {
+    id:'restrooms', num:13, name:'Restrooms (M/W, ADA)', short:'Restrooms',
+    cost:'$90K – $180K', costShort:'$90–180K', unit:'Two 12′×10′ ADA restrooms: 2 stalls + double vanity each',
+    pos:[70,11.6,64],
+    desc:'In-suite men’s and women’s ADA restrooms: wet-stack plumbing tie-in, porcelain tile, stone-top vanities, touchless fixtures. In-suite restrooms are a signature of premium full-floor and spec-suite product.',
+    why:'Elastic, hourly “spoke” usage means visitors and rotating teams who’ve never seen the floor before — nobody should wander the core to find a restroom. In-suite RRs make the suite self-contained and bookable like a hospitality product.',
+    vendors:[['Kohler','https://www.kohler.com'],['TOTO','https://www.totousa.com'],['Sloan (touchless)','https://www.sloan.com'],['Daltile','https://www.daltile.com']],
+    installers:['Licensed plumber + GC + tile sub']
+  },
+  {
+    id:'huddles', num:17, name:'AI Huddle Rooms (×2, 2–4 person)', short:'AI Huddles',
+    cost:'$50K – $90K', costShort:'$50–90K', unit:'2 glass rooms @ 10′×10′: display wall, voice puck, AV',
+    pos:[114,7,7],
+    desc:'Three glass huddle rooms sized for the most common AI work session: two to four humans steering a set of agents on a shared display wall, with a ceiling voice puck for zoned capture. Bookable by the hour through the building OS.',
+    why:'Most agent-orchestration sessions aren’t boardroom events — they’re 2–4 people iterating with AI for an hour. Right-sized huddles keep the Matrix Room free, give voice privacy without a full office, and monetize as on-demand “spoke” inventory.',
+    vendors:[['Framery (Q Flow)','https://frameryacoustics.com'],['DIRTT','https://www.dirtt.com'],['Logitech (huddle AV)','https://www.logitech.com/en-us/video-collaboration'],['Neat','https://neat.no']],
+    installers:['Partition dealer + AV integrator (AVI-SPL, Diversified)']
+  },
+  {
+    id:'connectivity', num:14, name:'Connectivity Backbone (Fiber + Private 5G / Wi-Fi 7)', short:'Connectivity',
+    cost:'$70K – $160K', costShort:'$70–160K', unit:'Diverse-path dark fiber x-connects, Wi-Fi 7 APs, private 5G, roof riser rights',
+    pos:[75,11.4,14],
+    desc:'Two diverse-path dark-fiber entries into the suite, Wi-Fi 7 ceiling grid, and a private 5G small-cell layer. Roof rights reserved for satellite backup. Bandwidth headroom audited and marketed as a lease datapoint.',
+    why:'Agents live on bandwidth — every workflow is a round-trip to models local and remote, and latency is now a productivity number. Diverse fiber paths plus wireless failover keep the tenant’s digital twin online through any single cut.',
+    vendors:[['Corning','https://www.corning.com/optical-communications'],['CommScope','https://www.commscope.com'],['Celona (private 5G)','https://www.celona.io'],['Cisco Meraki','https://meraki.cisco.com']],
+    installers:['Structured cabling firms (Align, Black Box) + carrier coordination']
+  },
+  {
+    id:'sensors', num:15, name:'Sensor Mesh & Building OS', short:'Sensor Mesh / OS',
+    cost:'$60K – $130K', costShort:'$60–130K', unit:'mmWave presence + IAQ sensors, automation & booking layer',
+    pos:[48,11.5,30],
+    desc:'Anonymous mmWave occupancy sensors and air-quality monitors on a ceiling mesh, feeding a building OS that drives the smart glass, HVAC setpoints, kinetic-wall presets and hourly space booking from one app.',
+    why:'Core-and-spoke leasing only works if the building knows — in real time — what’s occupied, and can bill by the hour. The sensor mesh is the ground truth the tenant’s AI and your leasing model both read; it’s the “automated building app” layer.',
+    vendors:[['VergeSense','https://www.vergesense.com'],['Butlr','https://www.butlr.com'],['Kaiterra (IAQ)','https://www.kaiterra.com'],['Honeywell','https://buildings.honeywell.com']],
+    installers:['BMS / controls integrator + low-voltage contractor']
+  },
+  {
+    id:'ups', num:16, name:'Resilient Power (UPS + Generator Riser)', short:'Resilient Power',
+    cost:'$35K – $80K', costShort:'$35–80K', unit:'Rack UPS in edge closet + generator riser tap, N+1 on compute',
+    pos:[131.5,7,69.5],
+    desc:'Line-interactive rack UPS backing the edge-AI closet and network core, tied to a building generator riser tap. Compute, cooling pumps and access control ride through utility events.',
+    why:'Tenant AI runs 24/7 — a power blip that kills a local model mid-execution is now a business outage, not an inconvenience. N+1 power is what lets you lease the closet as mission-critical space at data-center-adjacent rents.',
+    vendors:[['Vertiv (Liebert)','https://www.vertiv.com'],['Eaton','https://www.eaton.com'],['Schneider / APC','https://www.apc.com']],
+    installers:['Electrical contractor + commissioning agent']
+  }
+];
+
+/* ---------- renderer / scene ---------- */
+var canvas = document.getElementById('c');
+var renderer = new THREE.WebGLRenderer({canvas:canvas, antialias:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.92;
+
+var scene = new THREE.Scene();
+scene.background = new THREE.Color(0xbfd2e0);   // replaced by sky gradient below
+scene.fog = new THREE.Fog(0xc6d3df, 220, 620);
+
+var camera = new THREE.PerspectiveCamera(60, 2, 0.1, 600);
+
+/* camera rig state */
+var yaw = -2.14, pitch = -0.32;
+var camPos = new THREE.Vector3(-100, 66, -80);
+var camTarget = null;   // {pos, yaw, pitch} for fly-to
+var flyT = 1;
+
+/* ---------- lights ---------- */
+scene.add(new THREE.AmbientLight(0x8fa3b8, 0.4));
+scene.add(new THREE.HemisphereLight(0xcfe0ec, 0x3a444f, 0.9));
+var sun = new THREE.DirectionalLight(0xfff3e0, 1.0);
+sun.position.set(150, 130, -100);
+sun.castShadow = true;
+sun.shadow.radius = 5;
+sun.shadow.mapSize.set(2048,2048);
+sun.shadow.camera.left=-190; sun.shadow.camera.right=190;
+sun.shadow.camera.top=190; sun.shadow.camera.bottom=-190;
+scene.add(sun);
+
+function pointLite(x,y,z,color,intensity,dist){
+  var p = new THREE.PointLight(color,intensity,dist);
+  p.position.set(x,y,z); scene.add(p); return p;
+}
+pointLite(127,10,27,0x66e0ff,0.9,40);  // matrix room A glow
+pointLite(127,10,49,0x66e0ff,0.9,40);  // matrix room B glow
+pointLite(30,10,66,0xffffff,0.8,45);   // pods
+pointLite(129.5,9,66,0x33ccff,1.0,30); // server room
+pointLite(136.5,9,66,0x34d399,0.8,25); // network room
+pointLite(30,10,18,0xfff2d9,0.9,60);   // collab
+pointLite(75,10,12,0xfff2d9,0.7,55);   // corridor east
+pointLite(12,10,32,0xfff2d9,0.6,45);   // west zone
+pointLite(75,10,45,0xfff2d9,0.7,55);   // mid floor
+pointLite(120,10,20,0xfff2d9,0.6,45);  // SE open zone
+
+/* ---------- procedural textures (no external assets) ---------- */
+function canvasTex(w,h,draw,rx,ry){
+  var c = document.createElement('canvas'); c.width=w; c.height=h;
+  draw(c.getContext('2d'), w, h);
+  var t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx||1, ry||1);
+  return t;
+}
+function grain(ctx,w,h,base,amp){
+  ctx.fillStyle=base; ctx.fillRect(0,0,w,h);
+  var img=ctx.getImageData(0,0,w,h), d=img.data;
+  for(var i=0;i<d.length;i+=4){ var n=(Math.random()-0.5)*amp; d[i]+=n; d[i+1]+=n; d[i+2]+=n; }
+  ctx.putImageData(img,0,0);
+}
+var woodTex = canvasTex(512,512,function(ctx,w,h){
+  ctx.fillStyle='#b08a5e'; ctx.fillRect(0,0,w,h);
+  for(var i=0;i<240;i++){
+    ctx.strokeStyle='rgba(74,50,26,'+(0.05+Math.random()*0.10)+')';
+    ctx.lineWidth=0.8+Math.random()*2.4;
+    ctx.beginPath(); var y=Math.random()*h; ctx.moveTo(0,y);
+    for(var x=0;x<=w;x+=28){ ctx.lineTo(x, y + Math.sin(x*0.02+i*1.7)*2.4 + (Math.random()-0.5)*3); }
+    ctx.stroke();
+  }
+  for(var p=0;p<8;p++){ ctx.fillStyle='rgba(58,38,20,0.4)'; ctx.fillRect(0, p*h/8, w, 2); }
+},2,2);
+var carpetTex = canvasTex(256,256,function(ctx,w,h){ grain(ctx,w,h,'#8b9098',34); },14,7);
+var carpetTex2 = canvasTex(256,256,function(ctx,w,h){ grain(ctx,w,h,'#767c85',30); },5,3);
+var fabricTex = canvasTex(128,128,function(ctx,w,h){ grain(ctx,w,h,'#5a616b',24); },2,2);
+var plasterTex = canvasTex(256,256,function(ctx,w,h){ grain(ctx,w,h,'#eef0f2',7); },4,2);
+
+/* environment map — soft studio gradient, gives real reflections */
+var _pmrem = new THREE.PMREMGenerator(renderer);
+var _envScene = new THREE.Scene();
+var _envTex = canvasTex(64,128,function(ctx,w,h){
+  var g = ctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#e8eef5'); g.addColorStop(0.45,'#9aa5b1'); g.addColorStop(1,'#2e3742');
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+},1,1);
+_envScene.add(new THREE.Mesh(new THREE.SphereGeometry(60,16,16), new THREE.MeshBasicMaterial({map:_envTex, side:THREE.BackSide})));
+scene.environment = _pmrem.fromScene(_envScene).texture;
+
+/* daytime sky gradient background */
+var skyTex = canvasTex(64,256,function(ctx,w,h){
+  var g = ctx.createLinearGradient(0,0,0,h);
+  g.addColorStop(0,'#7fb2dd'); g.addColorStop(0.55,'#b9d2e6'); g.addColorStop(0.8,'#dce8f0'); g.addColorStop(1,'#e8eef2');
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+},1,1);
+skyTex.mapping = THREE.EquirectangularReflectionMapping;
+scene.background = skyTex;
+
+/* ---------- materials ---------- */
+var M = {
+  floor: new THREE.MeshStandardMaterial({map:carpetTex, color:0x9aa1a9, roughness:0.96}),
+  floorAccent: new THREE.MeshStandardMaterial({map:carpetTex2, color:0xa9b1ba, roughness:0.94}),
+  wall: new THREE.MeshStandardMaterial({map:plasterTex, color:0xf0f1f3, roughness:0.95}),
+  timber: new THREE.MeshStandardMaterial({map:woodTex, color:0xd7bb96, roughness:0.62}),
+  timberDark: new THREE.MeshStandardMaterial({map:woodTex, color:0xa2825f, roughness:0.66}),
+  white: new THREE.MeshStandardMaterial({color:0xf4f5f7, roughness:0.45}),
+  podShell: new THREE.MeshStandardMaterial({color:0x5d656f, roughness:0.5, metalness:0.15}),
+  podGlass: new THREE.MeshStandardMaterial({color:0x9fd8e8, transparent:true, opacity:0.30, roughness:0.1, metalness:0.1}),
+  glassClear: new THREE.MeshStandardMaterial({color:0xaee6f2, transparent:true, opacity:0.16, roughness:0.05}),
+  smart: new THREE.MeshStandardMaterial({color:0xaee6f2, transparent:true, opacity:0.16, roughness:0.05}),
+  screen: new THREE.MeshStandardMaterial({color:0x0a2a3a, emissive:0x0898c8, emissiveIntensity:0.9, roughness:0.4}),
+  screenSide: new THREE.MeshStandardMaterial({color:0x0a2a3a, emissive:0x7a3fd8, emissiveIntensity:0.7, roughness:0.4}),
+  rack: new THREE.MeshStandardMaterial({color:0x1a1f26, roughness:0.3, metalness:0.7}),
+  rackLED: new THREE.MeshStandardMaterial({color:0x001a10, emissive:0x22ff99, emissiveIntensity:1.2}),
+  pipeCold: new THREE.MeshStandardMaterial({color:0x1479c9, emissive:0x0a4a80, emissiveIntensity:0.5, roughness:0.3}),
+  pipeHot: new THREE.MeshStandardMaterial({color:0xd97a1e, emissive:0x7a3c00, emissiveIntensity:0.4, roughness:0.3}),
+  track: new THREE.MeshStandardMaterial({color:0x454a52, roughness:0.3, metalness:0.85}),
+  busduct: new THREE.MeshStandardMaterial({color:0xb99a35, roughness:0.45, metalness:0.6}),
+  kinetic: new THREE.MeshStandardMaterial({color:0xdfeaf2, transparent:true, opacity:0.5, roughness:0.15, metalness:0.1}),
+  kineticEdge: new THREE.MeshStandardMaterial({color:0x22d3ee, emissive:0x0a6a80, emissiveIntensity:0.5}),
+  netCage: new THREE.MeshStandardMaterial({color:0x34d399, transparent:true, opacity:0.28, roughness:0.4}),
+  dark: new THREE.MeshStandardMaterial({color:0x11161d, roughness:0.9}),
+  speaker: new THREE.MeshStandardMaterial({color:0x222a33, roughness:0.5}),
+  furn: new THREE.MeshStandardMaterial({map:fabricTex, color:0x9aa1ab, roughness:0.9}),
+  furnLight: new THREE.MeshStandardMaterial({color:0xc2c8d0, roughness:0.7}),
+  plant: new THREE.MeshStandardMaterial({color:0x3a7d4f, roughness:0.95}),
+  counter: new THREE.MeshStandardMaterial({color:0xeceff1, roughness:0.15, metalness:0.05}),
+  lightStrip: new THREE.MeshStandardMaterial({color:0xe9eef4, emissive:0xffffff, emissiveIntensity:1.0}),
+  tv: new THREE.MeshStandardMaterial({color:0x0b0e12, roughness:0.3, metalness:0.2}),
+  rug: new THREE.MeshStandardMaterial({map:carpetTex2, color:0x9c8f7c, roughness:0.95}),
+  city: new THREE.MeshStandardMaterial({color:0xaebdc9, roughness:0.35, metalness:0.4}),
+  logo: new THREE.MeshStandardMaterial({color:0x0f2a33, emissive:0x22d3ee, emissiveIntensity:0.35}),
+  slab: new THREE.MeshStandardMaterial({color:0xc7ccd2, roughness:0.9}),
+  woodFloor: (function(){
+    var t = woodTex.clone(); t.needsUpdate = true; t.repeat.set(5,5);
+    return new THREE.MeshStandardMaterial({map:t, color:0xcaa87e, roughness:0.45});
+  })(),
+  baseTrim: new THREE.MeshStandardMaterial({color:0x565b62, roughness:0.6}),
+  towerGlass: new THREE.MeshStandardMaterial({color:0x7fa6bd, transparent:true, opacity:0.5, roughness:0.15, metalness:0.6}),
+  spandrel: new THREE.MeshStandardMaterial({color:0x38434e, roughness:0.35, metalness:0.5})
+};
+
+function box(w,h,d,mat,x,y,z,ry,noShadow){
+  var m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
+  m.position.set(x,y,z);
+  if(ry) m.rotation.y = ry;
+  if(!noShadow){ m.castShadow = true; m.receiveShadow = true; }
+  scene.add(m); return m;
+}
+function cyl(r,h,mat,x,y,z,rz){
+  var m = new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,16), mat);
+  m.position.set(x,y,z);
+  if(rz!==undefined) m.rotation.z = rz;
+  m.castShadow = true; scene.add(m); return m;
+}
+
+/* --- realistic furniture helpers (soft contact shadows, rounded forms) --- */
+var blobTex = canvasTex(128,128,function(ctx,w,h){
+  var g = ctx.createRadialGradient(64,64,6,64,64,62);
+  g.addColorStop(0,'rgba(0,0,0,0.38)'); g.addColorStop(0.6,'rgba(0,0,0,0.16)'); g.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+},1,1);
+var blobMat = new THREE.MeshBasicMaterial({map:blobTex, transparent:true, depthWrite:false});
+var _pillowSeed = 0;
+function _blob(s){
+  var m = new THREE.Mesh(new THREE.PlaneGeometry(s,s), blobMat);
+  m.rotation.x = -Math.PI/2; m.position.y = 0.035; return m;
+}
+function chairT(x,z,ry){            // task chair: round seat, tilted back, 5-star base
+  var g = new THREE.Group();
+  var seat = new THREE.Mesh(new THREE.CylinderGeometry(0.78,0.68,0.3,18), M.furn); seat.position.y=1.55; seat.castShadow=true; g.add(seat);
+  var back = new THREE.Mesh(new THREE.BoxGeometry(1.42,1.6,0.18), M.furn); back.position.set(0,2.6,-0.66); back.rotation.x=-0.13; back.castShadow=true; g.add(back);
+  var lumbar = new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.06,0.9,8), M.track); lumbar.position.set(0,1.9,-0.62); lumbar.rotation.x=0.35; g.add(lumbar);
+  var ped = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.09,1.35,10), M.track); ped.position.y=0.75; g.add(ped);
+  for(var i=0;i<5;i++){
+    var a = i/5*Math.PI*2;
+    var arm = new THREE.Mesh(new THREE.BoxGeometry(0.09,0.06,0.66), M.track);
+    arm.position.set(Math.sin(a)*0.32, 0.09, Math.cos(a)*0.32); arm.rotation.y = a; g.add(arm);
+  }
+  g.add(_blob(1.9));
+  g.position.set(x,0,z); if(ry) g.rotation.y=ry; scene.add(g); return g;
+}
+function sofa(x,z,w,ry){            // sofa: platform, split cushions, tilted back pillows, arm rolls
+  var g = new THREE.Group();
+  var base = new THREE.Mesh(new THREE.BoxGeometry(w,0.55,2.7), M.furn); base.position.y=0.5; base.castShadow=true; g.add(base);
+  var n = Math.max(2, Math.round(w/3.4)), cw = (w-1.3)/n;
+  for(var i=0;i<n;i++){
+    var cx = -w/2+0.65+cw*(i+0.5);
+    var cush = new THREE.Mesh(new THREE.BoxGeometry(cw-0.08,0.42,2.15), M.furnLight); cush.position.set(cx,0.98,0.12); cush.castShadow=true; g.add(cush);
+    var bk = new THREE.Mesh(new THREE.BoxGeometry(cw-0.08,1.25,0.45), M.furnLight); bk.position.set(cx,1.7,-1.0); bk.rotation.x=-0.16; bk.castShadow=true; g.add(bk);
+  }
+  var rail = new THREE.Mesh(new THREE.BoxGeometry(w,1.15,0.35), M.furn); rail.position.set(0,1.35,-1.22); g.add(rail);
+  [-1,1].forEach(function(s){
+    var roll = new THREE.Mesh(new THREE.CylinderGeometry(0.3,0.3,2.7,14), M.furn);
+    roll.rotation.x = Math.PI/2; roll.position.set(s*(w/2-0.3),1.35,0); roll.castShadow=true; g.add(roll);
+    var armb = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.7,2.7), M.furn); armb.position.set(s*(w/2-0.3),0.9,0); g.add(armb);
+  });
+  [[-w/2+0.4,-1],[w/2-0.4,-1],[-w/2+0.4,1],[w/2-0.4,1]].forEach(function(p){
+    var leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.05,0.25,8), M.track); leg.position.set(p[0],0.12,p[1]); g.add(leg);
+  });
+  /* accent throw pillows */
+  var pilCols = [0xb0713f,0x50663f,0x8a8250,0x5d6b7b];
+  [-1,1].forEach(function(s,i){
+    var pil = new THREE.Mesh(new THREE.BoxGeometry(0.95,0.95,0.35),
+      new THREE.MeshStandardMaterial({color:pilCols[(_pillowSeed+i)%4], roughness:0.9}));
+    pil.position.set(s*(w/2-1.1), 1.5, -0.72); pil.rotation.z = s*0.18; pil.rotation.x = -0.25;
+    pil.castShadow = true; g.add(pil);
+  });
+  _pillowSeed++;
+  g.add(_blob(Math.max(w+1.2,4)));
+  g.position.set(x,0,z); if(ry) g.rotation.y=ry; scene.add(g); return g;
+}
+function tableLegs(x,z,w,d,h,topMat,ry){   // table: top w/ apron + cylinder legs
+  var g = new THREE.Group();
+  var top = new THREE.Mesh(new THREE.BoxGeometry(w,0.14,d), topMat); top.position.y=h; top.castShadow=true; g.add(top);
+  var apron = new THREE.Mesh(new THREE.BoxGeometry(w-0.6,0.22,d-0.6), M.timberDark); apron.position.y=h-0.16; g.add(apron);
+  [[-w/2+0.3,-d/2+0.3],[w/2-0.3,-d/2+0.3],[-w/2+0.3,d/2-0.3],[w/2-0.3,d/2-0.3]].forEach(function(p){
+    var l = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.07,h,10), M.track); l.position.set(p[0],h/2,p[1]); l.castShadow=true; g.add(l);
+  });
+  g.add(_blob(Math.max(w,d)+0.8));
+  g.position.set(x,0,z); if(ry) g.rotation.y=ry; scene.add(g); return g;
+}
+function plantPot(x,z,s){           // potted ficus: pot, trunk, foliage cluster
+  s = s||1;
+  var g = new THREE.Group();
+  var pot = new THREE.Mesh(new THREE.CylinderGeometry(0.62*s,0.5*s,1.0*s,14), new THREE.MeshStandardMaterial({color:0x7a746c, roughness:0.8}));
+  pot.position.y=0.5*s; pot.castShadow=true; g.add(pot);
+  var trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.07*s,0.1*s,1.4*s,8), M.timberDark); trunk.position.y=1.6*s; g.add(trunk);
+  [[0,2.7,0,0.95],[0.5,2.35,0.25,0.6],[-0.45,2.45,-0.2,0.62],[0.1,3.3,-0.15,0.68],[-0.2,2.3,0.45,0.5]].forEach(function(f){
+    var leaf = new THREE.Mesh(new THREE.SphereGeometry(f[3]*s,10,8), M.plant);
+    leaf.position.set(f[0]*s,f[1]*s,f[2]*s); leaf.scale.y=0.85; leaf.castShadow=true; g.add(leaf);
+  });
+  g.add(_blob(2.2*s));
+  g.position.set(x,0,z); scene.add(g); return g;
+}
+var _personSeed = 0;
+function person(x,z,ry,shirtColor,seated){   // proportioned mannequin (faces +z)
+  var g = new THREE.Group();
+  var si = (_personSeed++) % 4;
+  var skin = new THREE.MeshStandardMaterial({color:[0xc9a183,0xa9805e,0x8a6246,0xe0b79a][si], roughness:0.65});
+  var hairM = new THREE.MeshStandardMaterial({color:[0x2b2118,0x4a3826,0x151312,0x6b5747][si], roughness:0.92});
+  var shirt = new THREE.MeshStandardMaterial({color:shirtColor||0x3f5871, roughness:0.85});
+  var pants = new THREE.MeshStandardMaterial({color:0x2e333b, roughness:0.9});
+  var shoe = new THREE.MeshStandardMaterial({color:0x23262b, roughness:0.45});
+  function mesh(geo,mat,px,py,pz,rx,rz){
+    var m = new THREE.Mesh(geo,mat); m.position.set(px,py,pz);
+    if(rx) m.rotation.x = rx; if(rz) m.rotation.z = rz;
+    m.castShadow = true; g.add(m); return m;
+  }
+  function headAt(y,zo){
+    var h = mesh(new THREE.SphereGeometry(0.36,14,12), skin, 0, y, zo); h.scale.y = 1.18;
+    var hair = mesh(new THREE.SphereGeometry(0.37,14,12), hairM, 0, y+0.1, zo-0.07); hair.scale.y = 1.05;
+    mesh(new THREE.CylinderGeometry(0.11,0.13,0.3,8), skin, 0, y-0.52, zo);
+  }
+  if(seated){
+    mesh(new THREE.BoxGeometry(0.95,0.45,0.85), pants, 0,1.72,0.05);                 // pelvis
+    mesh(new THREE.CylinderGeometry(0.16,0.15,1.15,10), pants, -0.24,1.78,0.6, Math.PI/2);
+    mesh(new THREE.CylinderGeometry(0.16,0.15,1.15,10), pants, 0.24,1.78,0.6, Math.PI/2);
+    mesh(new THREE.SphereGeometry(0.16,8,8), pants, -0.24,1.78,1.15);
+    mesh(new THREE.SphereGeometry(0.16,8,8), pants, 0.24,1.78,1.15);
+    mesh(new THREE.CylinderGeometry(0.13,0.11,1.55,10), pants, -0.24,1.0,1.2);
+    mesh(new THREE.CylinderGeometry(0.13,0.11,1.55,10), pants, 0.24,1.0,1.2);
+    mesh(new THREE.BoxGeometry(0.28,0.18,0.62), shoe, -0.24,0.12,1.35);
+    mesh(new THREE.BoxGeometry(0.28,0.18,0.62), shoe, 0.24,0.12,1.35);
+    mesh(new THREE.CylinderGeometry(0.5,0.42,1.75,12), shirt, 0,2.75,-0.02, -0.06);  // torso
+    mesh(new THREE.SphereGeometry(0.17,8,8), shirt, -0.5,3.55,0);
+    mesh(new THREE.SphereGeometry(0.17,8,8), shirt, 0.5,3.55,0);
+    mesh(new THREE.CylinderGeometry(0.095,0.085,0.95,8), shirt, -0.56,3.05,0.18, 0.4);
+    mesh(new THREE.CylinderGeometry(0.095,0.085,0.95,8), shirt, 0.56,3.05,0.18, 0.4);
+    mesh(new THREE.CylinderGeometry(0.08,0.075,0.95,8), skin, -0.5,2.6,0.75, Math.PI/2-0.22);
+    mesh(new THREE.CylinderGeometry(0.08,0.075,0.95,8), skin, 0.5,2.6,0.75, Math.PI/2-0.22);
+    headAt(4.12, 0.02);
+  } else {
+    mesh(new THREE.CylinderGeometry(0.15,0.12,1.45,10), pants, -0.22,0.85,0);        // calves
+    mesh(new THREE.CylinderGeometry(0.15,0.12,1.45,10), pants, 0.22,0.85,0);
+    mesh(new THREE.CylinderGeometry(0.17,0.15,1.35,10), pants, -0.22,2.15,0);        // thighs
+    mesh(new THREE.CylinderGeometry(0.17,0.15,1.35,10), pants, 0.22,2.15,0);
+    mesh(new THREE.BoxGeometry(0.28,0.18,0.62), shoe, -0.22,0.09,0.1);
+    mesh(new THREE.BoxGeometry(0.28,0.18,0.62), shoe, 0.22,0.09,0.1);
+    mesh(new THREE.BoxGeometry(0.95,0.5,0.6), pants, 0,2.9,0);                        // hips
+    mesh(new THREE.CylinderGeometry(0.52,0.4,1.85,12), shirt, 0,4.05,0);              // torso
+    mesh(new THREE.SphereGeometry(0.17,8,8), shirt, -0.52,4.85,0);
+    mesh(new THREE.SphereGeometry(0.17,8,8), shirt, 0.52,4.85,0);
+    mesh(new THREE.CylinderGeometry(0.095,0.08,1.7,8), shirt, -0.6,3.95,0.05, 0.06, 0.12);
+    mesh(new THREE.CylinderGeometry(0.095,0.08,1.7,8), shirt, 0.6,3.95,0.05, 0.06, -0.12);
+    mesh(new THREE.SphereGeometry(0.09,8,8), skin, -0.68,3.1,0.12);                   // hands
+    mesh(new THREE.SphereGeometry(0.09,8,8), skin, 0.68,3.1,0.12);
+    headAt(5.45, 0);
+  }
+  g.add(_blob(1.9));
+  g.position.set(x,0,z); if(ry) g.rotation.y=ry; scene.add(g); return g;
+}
+function stool(x,z,h){              // bar/café stool
+  h = h||2.05;
+  var g = new THREE.Group();
+  var seat = new THREE.Mesh(new THREE.CylinderGeometry(0.6,0.55,0.15,14), M.timberDark); seat.position.y=h; seat.castShadow=true; g.add(seat);
+  [[-0.35,-0.35],[0.35,-0.35],[-0.35,0.35],[0.35,0.35]].forEach(function(p){
+    var l = new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.04,h,8), M.track);
+    l.position.set(p[0]*0.8,h/2,p[1]*0.8); l.rotation.z = -p[0]*0.09; l.rotation.x = p[1]*0.09; g.add(l);
+  });
+  g.add(_blob(1.5));
+  g.position.set(x,0,z); scene.add(g); return g;
+}
+
+/* ---------- shell: floor / walls / ceiling ---------- */
+var SX=140, SZ=72, CH=12;   // 140' x 72' = 10,080 RSF
+
+var floor = box(SX,0.5,SZ,M.floor, SX/2,-0.25,SZ/2);
+floor.castShadow = false;
+/* accent floor zones */
+box(56,0.06,22,M.floorAccent, 41,0.03,20).castShadow=false;          // collab hall
+box(24,0.06,44,M.floorAccent, 128,0.03,38).castShadow=false;         // matrix rooms
+box(19,0.08,25,M.woodFloor, 9.5,0.05,13).castShadow=false;           // reception — wood
+box(15.5,0.08,18,M.woodFloor, 8,0.05,62).castShadow=false;           // pantry — wood
+/* baseboard trim on solid walls */
+box(SX,0.38,0.18,M.baseTrim, SX/2, 0.19, SZ-0.5);
+
+/* CORNER SUITE — exterior glass on SOUTH + EAST; drywall core on north, timber on west */
+box(SX,CH,0.8,M.wall, SX/2, CH/2, SZ);           // north — interior demising drywall
+/* west wall — full glass storefront (entry side), mullions every 8', door bay left open */
+for(var gw=0; gw<9; gw++){
+  var zc = 4+gw*8, gp = gw*8;
+  if(!(zc>4.6 && zc<13.4)) box(0.3,CH-1,7.6,M.glassClear, 0.4,(CH-1)/2+0.5, zc, 0, true);
+  if(!(gp>5 && gp<13)) box(0.5,CH,0.5,M.track, 0.4, CH/2, gp);
+}
+box(0.5,CH,0.5,M.track, 0.4, CH/2, SZ);
+box(1.0,0.5,SZ,M.track, 0.4, CH-0.25, SZ/2);
+box(0.3,CH-1,4.2,M.glassClear, 0.4,(CH-1)/2+0.5, 2.3, 0, true);   // sidelite S of doors
+box(0.3,CH-1,2.6,M.glassClear, 0.4,(CH-1)/2+0.5, 14.6, 0, true);  // sidelite N of doors
+/* east curtain wall: glass with mullions */
+for(var ge=0; ge<7; ge++){
+  box(0.3,CH-1,9.6,M.glassClear, SX-0.2, (CH-1)/2+0.5, 5+ge*10, 0, true);
+  box(0.6,CH,0.5,M.track, SX-0.2, CH/2, ge*10);
+}
+box(0.6,CH,0.5,M.track, SX-0.2, CH/2, 70);
+box(1.2,0.5,SZ,M.track, SX-0.3, CH-0.25, SZ/2);
+/* structural drywall-wrapped columns — 30' grid */
+[[25,24],[55,24],[85,24],[115,24],[25,48],[55,48],[85,48]].forEach(function(c){
+  box(1.6,CH,1.6,M.white, c[0], CH/2, c[1]);
+});
+
+/* slab edge below the suite so the floating floor reads as a building slab */
+box(SX+2, 1.6, SZ+2, M.slab, SX/2, -1.15, SZ/2, 0, true);
+/* south curtain wall: glass with mullions */
+for(var gx=0; gx<14; gx++){
+  box(9.6,CH-1,0.3,M.glassClear, 5+gx*10, (CH-1)/2+0.5, 0.2, 0, true);
+  box(0.5,CH,0.6,M.track, gx*10, CH/2, 0.2);
+}
+box(0.5,CH,0.6,M.track, SX, CH/2, 0.2);
+box(SX,0.5,1.2,M.track, SX/2, CH-0.25, 0.3);
+
+/* ceiling: one-sided "dollhouse" lid — visible from inside, culled from above */
+var lidMat = new THREE.MeshStandardMaterial({color:0x3b434d, roughness:0.9, side:THREE.FrontSide});
+var lid = new THREE.Mesh(new THREE.PlaneGeometry(SX,SZ), lidMat);
+lid.rotation.x = Math.PI/2;              // normal faces down (-y)
+lid.position.set(SX/2, CH+0.2, SZ/2);
+scene.add(lid);
+
+/* ---------- 1. acoustic pods (north wall) ---------- */
+function pod(x){
+  var g = new THREE.Group();
+  var shell = box(7,8.5,6,M.podShell, x, 4.25, 67.6);
+  box(6.4,7.8,0.15,M.podGlass, x, 4.15, 64.55, 0, true);          // front glass
+  box(7.4,0.5,6.4,M.timberDark, x, 8.75, 67.6);                    // timber cap
+  box(2.4,4,0.3,M.dark, x+1.6, 3.4, 64.62);                        // door tint
+  /* desk + stool + display inside */
+  box(4,0.25,1.8,M.furnLight, x, 3.4, 68.8);
+  stool(x, 67.2, 1.7);
+  box(1.8,1.1,0.06,M.tv, x, 4.35, 69.35);
+  box(0.1,0.6,0.1,M.track, x, 3.95, 69.3);
+  return g;
+}
+[22,31,40,49,90,99,108,117].forEach(pod);   // west cluster + east cluster between RRs and IT
+
+/* ---------- 2. immersive matrix room ---------- */
+/* room: x 60→90, z 25→48 */
+/* TWO Matrix Rooms side by side on the east window line (x116-140):
+   east wall = exterior curtain wall (daylight), screens on the cross walls,
+   toggleable smart glass along the west front (x=116) */
+var matrixWalls = [];
+matrixWalls.push(box(24,CH-1,0.6,M.screen, 128, (CH-1)/2, 16.3));        // Room A south screen
+matrixWalls.push(box(24,CH-1,0.6,M.screenSide, 128, (CH-1)/2, 38));      // shared divider screen
+matrixWalls.push(box(24,CH-1,0.6,M.screen, 128, (CH-1)/2, 59.7));        // Room B north screen
+/* west front = smart glass (toggleable), both rooms */
+var smartPanes = [];
+for(var sp=0; sp<7; sp++){
+  smartPanes.push(box(5.6,CH-2,0.25,M.smart, 116, (CH-2)/2+0.4, 19.2+sp*5.9, 0, true));
+}
+box(0.8,0.8,44,M.track, 116, CH-0.6, 38);
+/* conference tables + task chairs (one per room) */
+tableLegs(127, 27, 5, 13, 2.6, M.timberDark);
+tableLegs(127, 49, 5, 13, 2.6, M.timberDark);
+for(var ch=0; ch<4; ch++){
+  chairT(124.2, 22.5+ch*3, -Math.PI/2);
+  chairT(129.8, 22.5+ch*3, Math.PI/2);
+  chairT(124.2, 44.5+ch*3, -Math.PI/2);
+  chairT(129.8, 44.5+ch*3, Math.PI/2);
+}
+/* ---------- 3. spatial audio array (ceiling of matrix room) ---------- */
+for(var ax=0; ax<3; ax++){
+  for(var az=0; az<3; az++){
+    cyl(0.55,0.5,M.speaker, 120+ax*8, CH-0.8, 21+az*6);
+    cyl(0.55,0.5,M.speaker, 120+ax*8, CH-0.8, 43+az*6);
+  }
+}
+box(22,0.25,19,new THREE.MeshStandardMaterial({color:0x1b232d,roughness:.8}), 128, CH-0.5, 27, 0, true);
+box(22,0.25,19,new THREE.MeshStandardMaterial({color:0x1b232d,roughness:.8}), 128, CH-0.5, 49, 0, true);
+
+/* ---------- 4. kinetic wall zone (collab hall) ---------- */
+/* ceiling tracks */
+box(56,0.35,0.6,M.track, 41, CH-0.5, 16.5);
+box(56,0.35,0.6,M.track, 41, CH-0.5, 28);
+/* movable panels — animated group */
+var kineticPanels = [];
+function kpanel(x,z){
+  var g = new THREE.Group();
+  var p = new THREE.Mesh(new THREE.BoxGeometry(7.5,CH-1.8,0.45), M.kinetic);
+  p.castShadow = true; p.receiveShadow = true;
+  var e = new THREE.Mesh(new THREE.BoxGeometry(7.5,0.3,0.5), M.kineticEdge);
+  e.position.y = (CH-1.8)/2;
+  g.add(p); g.add(e);
+  g.position.set(x,(CH-1.8)/2,z);
+  scene.add(g);
+  kineticPanels.push({g:g, homeX:x, outX:x-14- (z===20?4:0)});
+  return g;
+}
+kpanel(24,16.5); kpanel(32,16.5); kpanel(40,16.5); kpanel(48,16.5);
+kpanel(24,28); kpanel(32,28); kpanel(40,28); kpanel(48,28);
+/* collab furniture — single band between the kinetic runs */
+[26,38,52,64].forEach(function(tx){
+  tableLegs(tx, 22, 9, 3.5, 2.5, M.timberDark);
+  for(var cf=0; cf<3; cf++){
+    chairT(tx-2.6+cf*2.6, 19.8, 0);
+    chairT(tx-2.6+cf*2.6, 24.2, Math.PI);
+  }
+});
+/* one break-out sofa group serving the collab hall */
+sofa(31, 4.5, 8, 0);
+tableLegs(31, 8.2, 2.6, 2.6, 1.2, M.timberDark);
+plantPot(12, 3.5, 1.1);
+plantPot(35.5, 3.5, 1.1);
+
+/* ---------- 5. smart glass — handled above (smartPanes) ---------- */
+
+/* ---------- 6. liquid-cooled server closet (x 92→100, z 0→10) ---------- */
+/* interior IT block, NE corner: server (x126-133) + network (x133-140), glass fronts */
+box(0.5,CH-1,10,M.glassClear, 126,(CH-1)/2,67, 0, true);
+box(0.5,CH-1,10,M.glassClear, 133,(CH-1)/2,67, 0, true);
+box(13.6,CH-1,0.4,M.glassClear, 132.8,(CH-1)/2,62, 0, true);
+box(0.4,CH-1,0.5,M.track, 126,(CH-1)/2,62);
+box(0.4,CH-1,0.5,M.track, 133,(CH-1)/2,62);
+box(0.4,CH-1,0.5,M.track, 139.5,(CH-1)/2,62);
+var rackLeds = [];
+function rack(x,z){
+  box(2.6,7,3,M.rack, x, 3.5, z);
+  for(var r=0;r<5;r++){
+    var led = box(2.3,0.18,0.1,M.rackLED, x, 1.2+r*1.25, z+1.56, 0, true);
+    rackLeds.push(led);
+  }
+}
+rack(128, 66.5); rack(131, 66.5); rack(128, 69.8); rack(131, 69.8);
+/* coolant loop pipes */
+cyl(0.28,8,M.pipeCold, 126.7, CH-1.4, 66, Math.PI/2).rotation.x = Math.PI/2;
+cyl(0.28,8,M.pipeHot, 127.3, CH-0.8, 66, Math.PI/2).rotation.x = Math.PI/2;
+cyl(0.28,4,M.pipeCold, 126.7, 9.6, 70.5, 0);
+cyl(0.28,4,M.pipeHot, 127.3, 9.9, 70.5, 0);
+box(2,2.4,2,M.track, 127.3, 1.2, 70.2);   // CDU
+box(14,0.5,10,M.floorAccent, 133, 0.05, 67).castShadow=false;
+
+/* ---------- 7. zero-trust network closet (x 92→100, z 12→20) ---------- */
+/* containerized cage (network room, x133-140) */
+box(5.5,8,6,M.netCage, 136.4, 4, 67, 0, true);
+box(1.8,5.5,2,M.rack, 135.2, 2.75, 68);
+box(1.8,5.5,2,M.rack, 137.6, 2.75, 68);
+for(var nr=0;nr<4;nr++){
+  rackLeds.push(box(1.5,0.15,0.1,M.rackLED, 135.2, 1.1+nr*1.3, 66.95, 0, true));
+  rackLeds.push(box(1.5,0.15,0.1,M.rackLED, 137.6, 1.1+nr*1.3, 66.95, 0, true));
+}
+
+/* ---------- 8. power spine: overhead bus duct ---------- */
+box(114,0.9,1.1,M.busduct, 72, CH-1.2, 18);
+box(0.9,0.9,44,M.busduct, 113.5, CH-1.2, 40);   // riser toward NE IT block
+for(var bd=0; bd<8; bd++){
+  box(0.35,1.6,0.35,M.track, 22+bd*13, CH-2.3, 18);
+}
+/* panelboard inside network room */
+box(3,4.5,0.5,new THREE.MeshStandardMaterial({color:0xb8bec7,roughness:.4,metalness:.3}), 137, 4.5, 70.9);
+
+/* ---------- 9. acoustic shell — expressed on the north demising wall (timber battens) ---------- */
+for(var ts=0; ts<10; ts++){
+  box(1.6,CH-1,0.35,M.timberDark, 88+ts*2.4, (CH-1)/2, SZ-0.7);
+}
+
+/* ---------- 12. reception & front entrance (west wall) ---------- */
+/* main entrance — full-glass storefront double doors, slim black metal frames */
+box(0.7,10.2,0.5,M.track, 0.8, 5.1, 4.85);                      // jamb S
+box(0.7,10.2,0.5,M.track, 0.8, 5.1, 13.15);                     // jamb N
+box(0.7,0.6,8.8,M.track, 0.8, 9.9, 9);                          // header
+box(0.14,9.4,3.85,M.podGlass, 0.85, 4.7, 7.05, 0, true);        // glass door leaf S (tinted, reads as door)
+box(0.14,9.4,3.85,M.podGlass, 0.85, 4.7, 10.95, 0, true);       // glass door leaf N
+box(1.4,0.6,9.6,M.timberDark, 0.9, 10.55, 9);                   // timber canopy over entry
+box(0.2,9.4,0.18,M.track, 0.85, 4.7, 5.15);                     // stile S edge
+box(0.2,9.4,0.18,M.track, 0.85, 4.7, 8.92);                     // meeting stile S
+box(0.2,9.4,0.18,M.track, 0.85, 4.7, 9.08);                     // meeting stile N
+box(0.2,9.4,0.18,M.track, 0.85, 4.7, 12.85);                    // stile N edge
+box(0.2,0.3,3.85,M.track, 0.85, 0.35, 7.05);                    // bottom rail S
+box(0.2,0.3,3.85,M.track, 0.85, 0.35, 10.95);                   // bottom rail N
+cyl(0.06,3.0,M.track, 1.12, 4.5, 8.55);                         // pull handle S
+cyl(0.06,3.0,M.track, 1.12, 4.5, 9.45);                         // pull handle N
+/* reception desk (millwork) at the back, facing the entry doors */
+box(7.5,3.4,2.4,M.timber, 10, 1.7, 23);
+box(8.1,0.3,3.0,M.timberDark, 10, 3.55, 23);
+box(2.2,2.6,4.5,M.timber, 13.4, 1.3, 25.2);
+chairT(10, 25.7, Math.PI);      // receptionist chair faces the desk + entry
+/* back-lit logo feature wall behind the desk */
+box(0.6,9,13,M.timberDark, 19.5, 4.5, 21);
+box(0.15,0.9,6,M.logo, 19.15, 5.8, 21);
+/* visitor waiting — between the doors and the desk, so guests sit before the desk */
+box(12,0.06,8,M.rug, 8.5, 0.06, 15.5).castShadow=false;
+sofa(4.5, 15.5, 4.5, Math.PI/2);   // faces east
+sofa(12.5, 15.5, 4.5, -Math.PI/2); // faces west — conversational pair
+tableLegs(8.5, 15.5, 2.8, 2.8, 1.2, M.timberDark);
+sofa(15, 4.8, 6.5, 0);             // window bench seat, east of the entry path
+sofa(17.6, 15.5, 4.5, -Math.PI/2); // back against the wood logo wall, faces the table
+plantPot(15.5, 5.5, 1.15);
+plantPot(2.5, 27, 1.0);
+
+/* ---------- 10. wet pantry / café (northwest) ---------- */
+/* base millwork run along west wall + stone top */
+box(2.0,3.0,14.5,M.white, 2.1, 1.5, 63.5);
+box(2.4,0.25,15.0,M.counter, 2.2, 3.12, 63.5);
+box(1.2,2.4,12.5,M.timberDark, 1.7, 7.4, 63.5);                 // upper cabinets
+box(1.4,0.12,2.0,M.dark, 2.3, 3.26, 61);                        // sink inset
+box(2.6,6.8,2.6,M.rack, 2.6, 3.4, 55.2);                        // panel fridge
+box(1.0,0.9,0.9,M.dark, 2.2, 3.7, 66.5);                        // coffee machine
+box(0.12,2.1,13.5,M.counter, 1.2, 4.6, 63.5);                   // stone backsplash
+/* extended counter + cabinet run along the north wall */
+box(13,3.0,2.0,M.white, 9, 1.5, 70.5);
+box(13.5,0.25,2.4,M.counter, 9, 3.12, 70.4);
+box(13,2.4,1.2,M.timberDark, 9, 7.4, 71.2);                     // north uppers
+box(0.9,0.8,0.8,M.dark, 5.5, 3.65, 70.4);                       // microwave
+box(2.3,7.6,2.3,M.timberDark, 16.3, 3.8, 70.5);                 // tall pantry cabinet
+/* island + stone waterfall top + stools */
+box(7.5,3.0,2.8,M.timberDark, 9.5, 1.5, 63);
+box(8.2,0.25,3.4,M.counter, 9.5, 3.15, 63);
+stool(7.2, 65.2);
+stool(9.5, 65.2);
+stool(11.8, 65.2);
+/* pendants over island */
+[7.2,9.5,11.8].forEach(function(px){
+  cyl(0.05,2.4,M.track, px, 10.4, 63);
+  cyl(0.42,0.8,M.lightStrip, px, 9.0, 63);
+});
+pointLite(9.5,8,63,0xffe8c4,0.7,24);
+
+/* ---------- 13. men's + women's restrooms (x 48-60, z 40-50) ---------- */
+var mirrorMat = new THREE.MeshStandardMaterial({color:0xdfe8ee, roughness:0.05, metalness:1});
+/* two 12'x10' restrooms (x58-70 men's, x70-82 women's), 2 stalls + double vanity each */
+box(0.5,CH-1,10,M.wall, 58,(CH-1)/2,67);
+box(0.5,CH-1,10,M.wall, 70,(CH-1)/2,67);          // divider
+box(0.5,CH-1,10,M.wall, 82,(CH-1)/2,67);
+[58,70].forEach(function(x0,ri){
+  box(7,CH-1,0.5,M.wall, x0+3.5, (CH-1)/2, 62);    // front segment L
+  box(2.2,CH-1,0.5,M.wall, x0+10.9, (CH-1)/2, 62); // front segment R
+  box(12,1.5,0.5,M.wall, x0+6, CH-1.6, 62);        // header over door
+  box(2.7,8.3,0.18,M.timberDark, x0+8.4, 4.15, 62);// closed door
+  /* 2 stalls along the back wall */
+  box(0.15,7,4.4,M.furnLight, x0+3.1, 3.5, 69.7);
+  box(0.15,7,4.4,M.furnLight, x0+6.1, 3.5, 69.7);
+  [x0+1.6, x0+4.6].forEach(function(wx){
+    box(1.4,1.3,2,M.white, wx, 0.65, 70.4);        // WC
+    box(1.2,1.1,0.5,M.white, wx, 1.9, 71.2);       // tank
+    box(2.6,7,0.12,M.furnLight, wx, 3.5, 67.5);    // stall door
+  });
+  /* double vanity on the east wall */
+  box(1.5,2.9,4.6,M.white, x0+10.9, 1.45, 68.5);
+  box(1.7,0.15,4.9,M.counter, x0+10.9, 2.98, 68.5);
+  box(0.12,1.1,0.9,M.dark, x0+10.9, 3.1, 67.2);
+  box(0.12,1.1,0.9,M.dark, x0+10.9, 3.1, 69.8);
+  box(0.1,2.6,4.2,mirrorMat, x0+11.6, 5.6, 68.5);  // mirror
+});
+
+/* ---------- 11. executive offices (south glass line, x 38-98, 12'x13') ---------- */
+for(var oi=0; oi<5; oi++){
+  var x0 = 38 + oi*12, cx = x0 + 6;
+  /* demising + end walls */
+  if(oi===0) box(0.3,CH-1,13,M.glassClear, x0, (CH-1)/2, 8.5, 0, true);
+  box(0.3,CH-1,13,M.glassClear, x0+12, (CH-1)/2, 8.5, 0, true);
+  box(0.4,CH-1,0.4,M.track, x0+12, (CH-1)/2, 2.2);
+  /* corridor glass front with door gap */
+  box(8.4,9.6,0.15,M.glassClear, x0+7.7, 5.3, 15, 0, true);
+  box(0.3,10,0.4,M.track, x0+3.4, 5, 15);
+  box(0.3,10,0.4,M.track, x0+11.9, 5, 15);
+  box(12,1.0,0.4,M.wall, x0+6, 10.6, 15);
+  /* furniture: desk, chairs, credenza, wall display */
+  tableLegs(cx, 6.5, 6, 2.6, 2.5, M.timberDark);
+  chairT(cx, 4.3, 0);                    // exec: back to window, faces the door
+  chairT(cx-1.7, 9.2, Math.PI);          // guests face the exec
+  chairT(cx+1.7, 9.2, Math.PI);
+  /* dual monitors + laptop (screens face the exec) */
+  box(1.9,1.15,0.07,M.tv, cx-1.05, 3.45, 7.3);
+  box(1.9,1.15,0.07,M.tv, cx+1.05, 3.45, 7.3);
+  box(0.12,0.75,0.12,M.track, cx-1.05, 2.95, 7.38);
+  box(0.12,0.75,0.12,M.track, cx+1.05, 2.95, 7.38);
+  box(1.1,0.05,0.8,M.track, cx, 2.62, 6.0);
+  box(4.5,2.0,1.3,M.furnLight, x0+9.2, 1.0, 12.8);
+  box(0.12,2.2,3.8,M.tv, x0+11.7, 6, 7);
+  /* realism: rug, ajar glass door leaf, credenza books + plant, task lamp */
+  box(8,0.05,8.5,M.rug, cx, 0.09, 7.3).castShadow = false;
+  box(2.9,9.3,0.12,M.podGlass, x0+1.8, 4.75, 14.6, 0.5, true);
+  box(0.5,0.75,0.9,new THREE.MeshStandardMaterial({color:0x7a4a4a,roughness:.8}), x0+8.0, 2.4, 12.8);
+  box(0.5,0.6,0.9,new THREE.MeshStandardMaterial({color:0x3d5a63,roughness:.8}), x0+8.6, 2.3, 12.8);
+  box(0.5,0.68,0.9,new THREE.MeshStandardMaterial({color:0xb99a35,roughness:.8}), x0+9.2, 2.35, 12.8);
+  plantPot(x0+1.4, 12.6, 0.62);
+  cyl(0.1,0.9,M.track, cx+2.5, 3.0, 7.0);
+  cyl(0.3,0.18,M.track, cx+2.5, 3.5, 7.0);
+}
+pointLite(68,9,8,0xfff2d9,0.6,50);
+
+/* ---------- finished-ceiling linear light strips ---------- */
+[[20,8],[42,8],[64,8],[86,8],[108,8],[130,8],[20,22],[42,22],[64,22],[86,22],[108,22],[130,22],[20,33],[42,33],[64,33],[20,44],[42,44],[64,44],[20,56],[42,56],[64,56],[120,30],[86,50]].forEach(function(p){
+  box(13,0.12,0.75,M.lightStrip, p[0], 11.72, p[1], 0, true);
+});
+
+/* ---------- 14. connectivity: Wi-Fi 7 / 5G ceiling APs ---------- */
+[[22,30],[48,12],[75,33],[95,26],[75,14],[115,30],[130,12],[40,56]].forEach(function(p){
+  cyl(0.55,0.14,M.white, p[0], CH-0.42, p[1]);
+});
+/* ---------- 15. sensor mesh pucks + building OS wall panel ---------- */
+[[15,25],[33,8],[48,30],[62,18],[85,42],[100,30],[120,55],[75,60],[130,35]].forEach(function(p){
+  cyl(0.2,0.1,M.tv, p[0], CH-0.38, p[1]);
+});
+box(0.14,1.7,1.15,M.tv, 19.4, 5.2, 16.8);  // building OS panel on logo wall
+/* ---------- 16. UPS cabinet in edge closet ---------- */
+box(1.8,4.2,1.6,M.rack, 131.4, 2.1, 70);
+box(1.6,0.16,0.12,M.rackLED, 131.4, 3.6, 69.18, 0, true);
+
+/* ---------- wall art on the north drywall ---------- */
+var artTex1 = canvasTex(256,192,function(ctx,w,h){
+  ctx.fillStyle='#d8d2c6'; ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='#8a9aa8'; ctx.beginPath(); ctx.arc(90,100,58,0,7); ctx.fill();
+  ctx.fillStyle='#c47f5a'; ctx.beginPath(); ctx.arc(170,70,34,0,7); ctx.fill();
+  ctx.fillStyle='#3e4a56'; ctx.fillRect(30,140,190,14);
+},1,1);
+var artTex2 = canvasTex(256,192,function(ctx,w,h){
+  ctx.fillStyle='#e4e0d8'; ctx.fillRect(0,0,w,h);
+  for(var i=0;i<5;i++){ ctx.strokeStyle='rgba(60,74,88,'+(0.25+i*0.12)+')'; ctx.lineWidth=7; ctx.beginPath(); ctx.moveTo(20,30+i*28); ctx.bezierCurveTo(90,10+i*30,170,60+i*24,236,30+i*28); ctx.stroke(); }
+},1,1);
+function art(tex,x,z,w2,h2){
+  box(w2+0.4,h2+0.4,0.14,M.timberDark, x, 6.4, z);
+  var cnv = new THREE.Mesh(new THREE.PlaneGeometry(w2,h2), new THREE.MeshStandardMaterial({map:tex, roughness:0.85}));
+  cnv.position.set(x, 6.4, z-0.09); cnv.rotation.y = Math.PI; scene.add(cnv);
+}
+art(artTex1, 30, 71.5, 4.2, 3.1);
+art(artTex2, 40, 71.5, 4.2, 3.1);
+art(artTex1, 73, 61.55, 4.2, 3.1);   // on the restroom front wall
+
+/* ---------- living green wall on the north drywall ---------- */
+var greenTex = canvasTex(256,256,function(ctx,w,h){
+  ctx.fillStyle='#3d6742'; ctx.fillRect(0,0,w,h);
+  var gs = ['#2f5d3a','#4d7d4f','#5d8f56','#35543a','#6a9a5f'];
+  for(var i=0;i<520;i++){
+    ctx.fillStyle = gs[i%5];
+    ctx.beginPath(); ctx.arc(Math.random()*w, Math.random()*h, 2+Math.random()*5, 0, 7); ctx.fill();
+  }
+},2,1);
+box(6.6,7.6,0.3,M.timberDark, 61.5, 5.4, 61.62);                                   // frame on RR front wall
+var gwall = new THREE.Mesh(new THREE.BoxGeometry(6,7,0.35),
+  new THREE.MeshStandardMaterial({map:greenTex, roughness:1}));
+gwall.position.set(61.5, 5.4, 61.42); gwall.castShadow = true; scene.add(gwall);
+
+/* ---------- console + decor in the tenant lounge ---------- */
+box(10,2.6,1.5,M.timberDark, 32, 1.3, 56.9);
+box(10.5,0.16,1.7,M.counter, 32, 2.7, 56.9);
+plantPot(26.5, 56.5, 0.85);
+plantPot(37.5, 56.5, 0.85);
+
+/* ---------- small decor: books, bowl, extra greenery ---------- */
+function bookStack(x,z,y){
+  [[0x7a4a4a,0.9],[0x3d5a63,0.75],[0xb99a35,0.6]].forEach(function(b,i){
+    var m = new THREE.Mesh(new THREE.BoxGeometry(b[1],0.12,0.65),
+      new THREE.MeshStandardMaterial({color:b[0], roughness:0.85}));
+    m.position.set(x, y+0.07+i*0.13, z); m.rotation.y = i*0.3; m.castShadow=true; scene.add(m);
+  });
+}
+bookStack(8.5, 15.5, 1.26);        // reception coffee table
+bookStack(32, 56.9, 2.78);         // lounge console
+bookStack(30, 4.5, 1.26);          // lounge coffee table
+var bowl = new THREE.Mesh(new THREE.SphereGeometry(0.5,12,8), M.counter);
+bowl.scale.y = 0.42; bowl.position.set(10.8, 3.4, 63); bowl.castShadow=true; scene.add(bowl);
+[[10.5,62.8,0x7fb069],[11.1,63.2,0xd98e32],[10.8,62.9,0xc75146]].forEach(function(f){
+  var fr = new THREE.Mesh(new THREE.SphereGeometry(0.16,8,8),
+    new THREE.MeshStandardMaterial({color:f[2], roughness:0.6}));
+  fr.position.set(f[0], 3.62, f[1]); scene.add(fr);
+});
+plantPot(18, 30, 0.95);
+plantPot(73, 33, 1.0);
+plantPot(126, 8, 1.0);
+plantPot(15.5, 55, 0.9);
+plantPot(93, 64, 0.95);
+
+/* ---------- people (sparse, staged) ---------- */
+person(10, 25.8, Math.PI, 0x7a3b3b, true);      // receptionist at desk, facing the entry
+person(63, 4.0, 0, 0x2f4a66, true);             // exec office 1 — back to window, facing door
+person(94, 4.3, 0.7, 0x555e68, false);          // exec office 4 — standing at window
+person(22, 67.3, 0, 0x4a6b48, true);            // acoustic pod 1 — prompting
+person(31, 67.3, 0, 0x39506b, true);            // acoustic pod 3 — prompting
+person(124.2, 49, -Math.PI/2, 0x6e6a75, true);  // matrix room B — directing agents
+person(5.4, 63, -Math.PI/2, 0x51606f, false);   // pantry — standing at island
+person(28.6, 19.8, 0, 0x63534a, true);          // collab table
+
+/* ---------- clean sky outside — no clutter ---------- */
+plantPot(55.5, 3.5, 1.0);
+plantPot(89.5, 21.5, 1.0);
+plantPot(100, 3.5, 1.1);
+plantPot(133, 30, 1.1);
+/* SE zone: 2 glass AI huddle rooms — 2-4 person agent-steering rooms, bookable hourly */
+[104,114,124].forEach(function(wx){
+  box(0.25,CH-2,10,M.glassClear, wx, (CH-2)/2, 7, 0, true);
+  box(0.35,CH-2,0.35,M.track, wx, (CH-2)/2, 2.2);
+  box(0.35,CH-2,0.35,M.track, wx, (CH-2)/2, 11.8);
+});
+[104,114].forEach(function(x0,hi){
+  var cx = x0+5;
+  /* corridor front glass with door gap */
+  box(6.6,CH-2,0.2,M.glassClear, x0+6.5, (CH-2)/2, 12, 0, true);
+  box(0.3,CH-2,0.4,M.track, x0+3.2, (CH-2)/2, 12);
+  box(2.9,9.2,0.12,M.podGlass, x0+1.7, 4.65, 11.7, 0.4, true);   // ajar door leaf
+  /* display wall + round table + chairs + ceiling voice puck */
+  box(0.12,2.6,4.2,M.tv, x0+9.72, 5.6, 7);
+  var tt = new THREE.Mesh(new THREE.CylinderGeometry(1.7,1.7,0.15,20), M.timberDark);
+  tt.position.set(cx,2.5,7); tt.castShadow=true; scene.add(tt);
+  cyl(0.16,2.45,M.track, cx, 1.25, 7);
+  chairT(x0+3.2, 7, -Math.PI/2);
+  chairT(cx, 4.6, 0);
+  chairT(cx, 9.4, Math.PI);
+  cyl(0.32,0.12,M.tv, cx, CH-0.45, 7);
+  box(7,0.05,7,M.rug, cx, 0.09, 7).castShadow = false;
+});
+person(117.2, 7, -Math.PI/2, 0x5b4a63, true);   // huddle 2 — pair working with agents
+person(119, 4.6, 0, 0x3f6258, true);
+box(10,0.06,6,M.rug, 31, 0.06, 5.5).castShadow=false;
+
+/* ---------- corner exec office on the prime SE glass corner ---------- */
+box(0.3,CH-1,15,M.glassClear, 127, (CH-1)/2, 8.5, 0, true);      // west glass wall
+box(0.4,CH-1,0.4,M.track, 127, (CH-1)/2, 1.2);
+box(13,CH-1,0.3,M.glassClear, 133.5, (CH-1)/2, 16, 0, true);     // north glass wall
+box(0.3,CH-1,0.4,M.track, 133.5, (CH-1)/2, 16);
+box(2.9,9.3,0.12,M.podGlass, 129.2, 4.7, 15.7, 0.45, true);      // ajar door leaf
+box(8,0.05,9,M.rug, 134, 0.09, 8).castShadow = false;
+tableLegs(134, 8, 6.5, 2.8, 2.6, M.timberDark);
+chairT(134, 5.3, 0);                     // corner exec: back to the S window, faces the door
+chairT(132.2, 10.8, Math.PI);
+chairT(135.8, 10.8, Math.PI);
+box(4.5,2.0,1.3,M.furnLight, 130.8, 1.0, 14.9);
+box(3.8,2.2,0.12,M.tv, 135.5, 6, 15.6);
+box(1.9,1.15,0.07,M.tv, 133, 3.65, 8.9);
+box(1.9,1.15,0.07,M.tv, 135, 3.65, 8.9);
+plantPot(128.6, 13.2, 0.8);
+person(134, 5.4, 0, 0x44586e, true);            // corner exec at desk, facing the door
+
+/* ---------- flex desking neighborhood — kinetic ring converts it to a conference room ---------- */
+box(28,0.06,18,M.floorAccent, 85, 0.035, 48).castShadow=false;
+box(26,0.35,0.6,M.track, 85, CH-0.5, 40);
+box(26,0.35,0.6,M.track, 85, CH-0.5, 56);
+kpanel(74.5, 40); kpanel(82, 40); kpanel(89.5, 40);
+kpanel(74.5, 56); kpanel(82, 56); kpanel(89.5, 56);
+[[78,44],[78,50],[85,44],[85,50],[92,44],[92,50]].forEach(function(dp){
+  tableLegs(dp[0], dp[1], 5, 2.2, 2.5, M.furnLight);
+  chairT(dp[0], dp[1]-2.1, 0);
+  chairT(dp[0], dp[1]+2.1, Math.PI);
+  box(1.7,1.05,0.06,M.tv, dp[0]-1.1, 3.4, dp[1]);
+  box(1.7,1.05,0.06,M.tv, dp[0]+1.1, 3.4, dp[1]);
+});
+person(85, 41.9, 0, 0x71564a, true);            // flex desk occupant
+
+/* ---------- second open desking cluster — in line with the tenant lounge ---------- */
+[[52,46],[52,52],[60,46],[60,52],[68,46],[68,52]].forEach(function(dp){
+  tableLegs(dp[0], dp[1], 5, 2.2, 2.5, M.furnLight);
+  chairT(dp[0], dp[1]-2.1, 0);
+  chairT(dp[0], dp[1]+2.1, Math.PI);
+  box(1.7,1.05,0.06,M.tv, dp[0]-1.1, 3.4, dp[1]);
+  box(1.7,1.05,0.06,M.tv, dp[0]+1.1, 3.4, dp[1]);
+});
+person(60, 43.9, 0, 0x4f5d52, true);
+
+/* ---------- tenant lounge — glass-walled, adjacent to the wet pantry ---------- */
+/* south glass wall (z=42) with door gap, east glass wall (x=44) */
+box(10,CH-2,0.25,M.glassClear, 25, (CH-2)/2, 42, 0, true);
+box(10.8,CH-2,0.25,M.glassClear, 38.6, (CH-2)/2, 42, 0, true);
+box(0.35,CH-2,0.4,M.track, 20, (CH-2)/2, 42);
+box(0.35,CH-2,0.4,M.track, 30, (CH-2)/2, 42);
+box(0.35,CH-2,0.4,M.track, 33.2, (CH-2)/2, 42);
+box(2.9,9.2,0.12,M.podGlass, 31.4, 4.65, 41.7, 0.4, true);       // ajar glass door
+box(0.25,CH-2,16,M.glassClear, 44, (CH-2)/2, 50, 0, true);
+box(0.35,CH-2,0.4,M.track, 44, (CH-2)/2, 42);
+box(0.35,CH-2,0.4,M.track, 44, (CH-2)/2, 58);
+/* lounge furnishings */
+box(24,0.08,15,M.woodFloor, 32, 0.05, 50).castShadow=false;
+box(15,0.06,10,M.rug, 31, 0.1, 49.5).castShadow=false;
+sofa(31, 45, 7, 0);                    // faces north
+sofa(31, 54, 7, Math.PI);              // faces south — conversational pair
+sofa(24, 49.5, 2.8, Math.PI/2);        // armchair, faces east
+sofa(38.5, 49.5, 2.8, -Math.PI/2);     // armchair, faces west
+tableLegs(31, 49.5, 3.4, 2.4, 1.2, M.timberDark);
+bookStack(31, 49.5, 1.26);
+plantPot(21.5, 56, 1.0);
+plantPot(42, 44, 0.9);
+person(31, 45.1, 0, 0x6b4a52, true);   // lounge occupant
+plantPot(74, 48, 1.0);
+
+/* ============================================================
+   Labels (DOM, projected) + interaction
+   ============================================================ */
+var listEl = document.getElementById('list');
+var cardEl = document.getElementById('card');
+var labels = [];
+
+COMPONENTS.forEach(function(c){
+  /* left list item */
+  var it = document.createElement('div');
+  it.className = 'item'; it.id = 'item-'+c.id;
+  it.innerHTML = '<div class="n">'+c.num+'</div><div class="t">'+c.short+'<small>'+c.cost+'</small></div>';
+  it.onclick = function(){ selectComponent(c.id, true); };
+  listEl.appendChild(it);
+
+  /* floating 3D label */
+  var el = document.createElement('div');
+  el.className = 'lbl';
+  el.innerHTML = '<div class="n">'+c.num+'</div>'+c.short+'<span class="cost">'+c.costShort+'</span>';
+  el.onclick = function(){ selectComponent(c.id, true); };
+  document.body.appendChild(el);
+  labels.push({el:el, pos:new THREE.Vector3(c.pos[0],c.pos[1],c.pos[2]), comp:c});
+});
+
+/* ---------- dimension tags ---------- */
+var DIMS = [
+  {t:'SUITE 140′ × 72′ — 10,080 RSF', p:[70,0.9,36], big:true},
+  {t:'Matrix Rooms 24′ × 22′ ea (×2)', p:[127,3,38]},
+  {t:'Exec Offices 12′ × 13′ · 156 SF ea (×5)', p:[68,3,7]},
+  {t:'Acoustic Pods 7′ × 6′ ea (×8)', p:[34,3,66.5]},
+  {t:'Wet Pantry 15′ × 18′ · ~270 SF', p:[7,3,63]},
+  {t:'Reception 22′ × 28′ · ~620 SF', p:[9,3,14]},
+  {t:'Collab Hall 56′ × 13′ · ~730 SF', p:[41,3,22]},
+  {t:'Server Room 7′ × 10′', p:[129.5,3,66]},
+  {t:'Network Room 7′ × 10′', p:[136.5,3,66]},
+  {t:'Men’s RR 12′ × 10′ · 2 stalls', p:[64,3,66.5]},
+  {t:'Women’s RR 12′ × 10′ · 2 stalls', p:[76,3,66.5]},
+  {t:'AI Huddles 10′ × 10′ ea (×2)', p:[114,3,7]},
+  {t:'Corner Exec Office 13′ × 14′', p:[134,3,8]},
+  {t:'Flex Desking → Kinetic Conf 26′ × 16′', p:[85,3,48]},
+  {t:'Tenant Lounge 24′ × 16′', p:[32,3,50]}
+];
+var dimsOn = false;
+var dimLabels = DIMS.map(function(d){
+  var el = document.createElement('div');
+  el.className = 'dim' + (d.big ? ' big' : '');
+  el.textContent = d.t;
+  el.style.display = 'none';
+  document.body.appendChild(el);
+  return {el:el, pos:new THREE.Vector3(d.p[0],d.p[1],d.p[2])};
+});
+
+/* ---------- CAD-style linear dimension lines (visible from Plan View, above ceiling) ---------- */
+var DIMY = 13.0;
+var LDIMS = [
+  /* exterior */
+  {a:[0,0],     b:[140,0],   o:[0,-7],   t:'140′-0″'},
+  {a:[140,0],   b:[140,72],  o:[7,0],    t:'72′-0″'},
+  {a:[0,0],     b:[0,72],    o:[-7,0],   t:'72′-0″'},
+  {a:[0,72],    b:[140,72],  o:[0,7],    t:'140′-0″'},
+  /* interior components */
+  {a:[38,15],   b:[98,15],   o:[0,3],    t:'60′-0″ · 5 exec offices @ 12′'},
+  {a:[98,2],    b:[98,15],   o:[3,0],    t:'13′-0″'},
+  {a:[116,16],  b:[116,60],  o:[-3,0],   t:'44′-0″ · 2 Matrix Rooms @ 22′'},
+  {a:[13,16.5], b:[69,16.5], o:[0,2],    t:'56′-0″ · Collab Hall'},
+  {a:[18.5,64.6],b:[52.5,64.6],o:[0,-3], t:'34′-0″ · 4 acoustic pods'},
+  {a:[86.5,64.6],b:[120.5,64.6],o:[0,-3],t:'34′-0″ · 4 acoustic pods'},
+  {a:[1,55],    b:[16,55],   o:[0,-2.5], t:'15′-0″ · Wet Pantry'},
+  {a:[0.4,28],  b:[22,28],   o:[0,2.5],  t:'21′-6″ · Reception'},
+  {a:[58,62],   b:[82,62],   o:[0,-3],   t:'24′-0″ · 2 restrooms @ 12′'},
+  {a:[126,62],  b:[140,62],  o:[0,-3],   t:'14′-0″ · Server + Network'},
+  {a:[104,12],  b:[124,12],  o:[0,3],    t:'20′-0″ · 2 AI huddles @ 10′'},
+  {a:[127,16],  b:[140,16],  o:[0,3],    t:'13′-0″ · Corner exec office'},
+  {a:[72,40],   b:[98,40],   o:[0,-2.5], t:'26′-0″ · Flex desking / kinetic conf'},
+  {a:[20,42],   b:[44,42],   o:[0,-3],   t:'24′-0″ · Tenant lounge'}
+];
+var dimGroup = new THREE.Group();
+scene.add(dimGroup);
+(function(){
+  var pts = [];
+  function P(x,z){ return new THREE.Vector3(x, DIMY, z); }
+  LDIMS.forEach(function(d){
+    var ax=d.a[0], az=d.a[1], bx=d.b[0], bz=d.b[1], ox=d.o[0], oz=d.o[1];
+    var a2=[ax+ox, az+oz], b2=[bx+ox, bz+oz];
+    /* main dimension line */
+    pts.push(P(a2[0],a2[1]), P(b2[0],b2[1]));
+    /* extension lines */
+    pts.push(P(ax,az), P(ax+ox*1.3, az+oz*1.3));
+    pts.push(P(bx,bz), P(bx+ox*1.3, bz+oz*1.3));
+    /* 45° tick slashes at each end */
+    var dx=bx-ax, dz=bz-az, len=Math.sqrt(dx*dx+dz*dz); dx/=len; dz/=len;
+    var on=Math.sqrt(ox*ox+oz*oz), nx=ox/on, nz=oz/on;
+    [[a2[0],a2[1]],[b2[0],b2[1]]].forEach(function(e){
+      pts.push(P(e[0]-(dx+nx)*0.8, e[1]-(dz+nz)*0.8), P(e[0]+(dx+nx)*0.8, e[1]+(dz+nz)*0.8));
+    });
+    /* label at midpoint */
+    var el = document.createElement('div');
+    el.className = 'dim';
+    el.textContent = d.t;
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    dimLabels.push({el:el, pos:new THREE.Vector3((a2[0]+b2[0])/2, DIMY+0.3, (a2[1]+b2[1])/2)});
+  });
+  var geo = new THREE.BufferGeometry().setFromPoints(pts);
+  dimGroup.add(new THREE.LineSegments(geo, new THREE.LineBasicMaterial({color:0x33404d})));
+  dimGroup.visible = dimsOn;
+})();
+
+document.getElementById('btnDims').onclick = function(){
+  dimsOn = !dimsOn;
+  dimGroup.visible = dimsOn;
+};
+
+var activeId = null;
+function selectComponent(id, fly){
+  activeId = id;
+  var c = COMPONENTS.find(function(x){return x.id===id;});
+  document.querySelectorAll('.item').forEach(function(e){e.classList.remove('active');});
+  var it = document.getElementById('item-'+id);
+  if(it){ it.classList.add('active'); it.scrollIntoView({block:'nearest'}); }
+
+  cardEl.className = 'show';
+  cardEl.innerHTML =
+    '<button class="close" onclick="closeCard()">✕</button>' +
+    '<h2><span class="num">'+c.num+'</span>'+c.name+'</h2>' +
+    '<p>'+c.desc+'</p>' +
+    (c.why ? '<div class="why"><h4>Why the AI office needs it</h4><p>'+c.why+'</p></div>' : '') +
+    '<div class="row">' +
+      '<div class="stat"><label>Est. Cost (this suite)</label><span>'+c.cost+'</span></div>' +
+    '</div>' +
+    '<div class="row"><div class="stat" style="flex:1"><label>Basis</label><span style="color:#c3cfdd;font-size:11.5px;font-weight:500">'+c.unit+'</span></div></div>' +
+    '<h4>Product Vendors</h4><div>'+c.vendors.map(function(v){
+      var name = Array.isArray(v) ? v[0] : v, url = Array.isArray(v) ? v[1] : null;
+      return url ? '<a class="vend" href="'+url+'" target="_blank" rel="noopener">'+name+' ↗</a>'
+                 : '<span class="vend">'+name+'</span>';
+    }).join('')+'</div>' +
+    '<h4 style="margin-top:10px">Install / Integration</h4><div>'+c.installers.map(function(v){return '<span class="inst">'+v+'</span>';}).join('')+'</div>' +
+    '<div class="note">Rough order-of-magnitude planning estimates for a ~10,000 RSF prototype suite (2026 $, NY/NJ metro install). Validate with vendor RFPs before underwriting.</div>';
+
+  if(fly){
+    var p = new THREE.Vector3(c.pos[0], c.pos[1], c.pos[2]);
+    /* camera goes to a viewpoint offset toward suite center */
+    var center = new THREE.Vector3(70, 6, 33);
+    var dir = new THREE.Vector3().subVectors(p, center).normalize();
+    var eye = new THREE.Vector3().copy(p).addScaledVector(dir, -16);
+    eye.y = Math.max(5.5, Math.min(9, p.y+1.5));
+    /* keep inside-ish bounds */
+    eye.x = Math.max(4, Math.min(136, eye.x));
+    eye.z = Math.max(4, Math.min(68, eye.z));
+    flyToLookAt(eye, p);
+  }
+}
+window.closeCard = function(){ cardEl.className=''; activeId=null;
+  document.querySelectorAll('.item').forEach(function(e){e.classList.remove('active');}); };
+
+function flyToLookAt(eye, look){
+  var d = new THREE.Vector3().subVectors(look, eye);
+  var ny = Math.atan2(-d.x, -d.z);
+  var np = Math.atan2(d.y, Math.sqrt(d.x*d.x+d.z*d.z));
+  camTarget = {pos:eye.clone(), yaw:ny, pitch:np};
+  flyT = 0;
+}
+
+/* ---------- controls ---------- */
+var keys = {};
+document.addEventListener('keydown', function(e){ keys[e.code]=true; });
+document.addEventListener('keyup', function(e){ keys[e.code]=false; });
+
+var dragging=false, lx=0, ly=0;
+canvas.addEventListener('mousedown', function(e){ dragging=true; lx=e.clientX; ly=e.clientY; camTarget=null; stopTour(); });
+window.addEventListener('mouseup', function(){ dragging=false; });
+window.addEventListener('mousemove', function(e){
+  if(!dragging) return;
+  yaw   -= (e.clientX-lx)*0.0032;
+  pitch -= (e.clientY-ly)*0.0032;
+  pitch = Math.max(-1.35, Math.min(1.35, pitch));
+  lx=e.clientX; ly=e.clientY;
+});
+canvas.addEventListener('wheel', function(e){
+  e.preventDefault(); camTarget=null; stopTour();
+  var f = forwardVec();
+  camPos.addScaledVector(f, -e.deltaY*0.02);
+}, {passive:false});
+
+/* touch */
+var tX=0,tY=0;
+canvas.addEventListener('touchstart', function(e){ if(e.touches.length){tX=e.touches[0].clientX;tY=e.touches[0].clientY; camTarget=null; stopTour();} },{passive:true});
+canvas.addEventListener('touchmove', function(e){
+  if(!e.touches.length) return;
+  yaw -= (e.touches[0].clientX-tX)*0.004;
+  pitch -= (e.touches[0].clientY-tY)*0.004;
+  pitch = Math.max(-1.35, Math.min(1.35, pitch));
+  tX=e.touches[0].clientX; tY=e.touches[0].clientY;
+},{passive:true});
+
+function forwardVec(){
+  return new THREE.Vector3(-Math.sin(yaw)*Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw)*Math.cos(pitch));
+}
+
+/* ---------- view buttons ---------- */
+document.getElementById('btnWalk').onclick = function(){
+  stopTour();
+  flyToLookAt(new THREE.Vector3(6,5.7,6), new THREE.Vector3(65,5.5,33));
+};
+document.getElementById('btnTop').onclick = function(){
+  stopTour();
+  /* near-straight-down, offset so the 100×50 plate lands centered */
+  camTarget = {pos:new THREE.Vector3(70,118,52), yaw:0, pitch:-1.45};
+  flyT = 0;
+};
+
+/* smart glass toggle */
+var glassOpaque = false;
+function toggleGlass(){ glassOpaque = !glassOpaque; selectComponent('glass', false); }
+document.getElementById('btnGlass').onclick = toggleGlass;
+
+/* kinetic walls toggle */
+var wallsOpen = false;
+function toggleWalls(){ wallsOpen = !wallsOpen; selectComponent('kinetic', false); }
+document.getElementById('btnWalls').onclick = toggleWalls;
+
+/* in-scene action buttons, anchored on the components themselves */
+[
+  {t:'◧ Toggle Smart Glass', p:[114, 10.5, 38], fn:toggleGlass},
+  {t:'⇄ Move Kinetic Walls', p:[33, 11.5, 20], fn:toggleWalls},
+  {t:'⇄ Move Kinetic Walls', p:[85, 11.5, 40], fn:toggleWalls}
+].forEach(function(a){
+  var el = document.createElement('div');
+  el.className = 'lbl act';
+  el.textContent = a.t;
+  el.onclick = a.fn;
+  document.body.appendChild(el);
+  labels.push({el:el, pos:new THREE.Vector3(a.p[0], a.p[1], a.p[2]), act:true});
+});
+
+/* ---------- auto tour ---------- */
+var tourIdx = -1, tourTimer = null, touring=false;
+function stopTour(){ touring=false; if(tourTimer){clearTimeout(tourTimer); tourTimer=null;}
+  document.getElementById('btnTour').textContent='▶ Auto Tour'; }
+document.getElementById('btnTour').onclick = function(){
+  if(touring){ stopTour(); return; }
+  touring = true; tourIdx = -1;
+  document.getElementById('btnTour').textContent='⏸ Stop Tour';
+  nextStop();
+};
+function nextStop(){
+  if(!touring) return;
+  tourIdx = (tourIdx+1) % COMPONENTS.length;
+  selectComponent(COMPONENTS[tourIdx].id, true);
+  tourTimer = setTimeout(nextStop, 6000);
+}
+
+/* ---------- resize ---------- */
+function resize(){
+  var w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resize);
+resize();
+
+/* ---------- label occlusion (hide tags behind opaque walls; glass sees through) ---------- */
+var _ray = new THREE.Raycaster();
+var _rayDir = new THREE.Vector3();
+var _occluders = [];
+scene.traverse(function(o){
+  if(o.isMesh && o.material && !o.material.transparent && o.material !== blobMat &&
+     !(o.geometry && o.geometry.type === 'PlaneGeometry' && o.material.map === blobTex)){
+    _occluders.push(o);
+  }
+});
+function labelOccluded(pos){
+  _rayDir.subVectors(pos, camera.position);
+  var dist = _rayDir.length();
+  _ray.set(camera.position, _rayDir.normalize());
+  _ray.far = dist - 0.5;
+  var hits = _ray.intersectObjects(_occluders, false);
+  for(var i=0;i<hits.length;i++){
+    if(dist - hits[i].distance > 4) return true;   // something solid well in front of the tag
+  }
+  return false;
+}
+var _frame = 0;
+
+/* ---------- animate ---------- */
+var clock = new THREE.Clock();
+var tmpV = new THREE.Vector3();
+
+function animate(){
+  requestAnimationFrame(animate);
+  var dt = Math.min(clock.getDelta(), 0.05);
+  var t = clock.elapsedTime;
+
+  /* fly-to easing */
+  if(camTarget){
+    flyT = Math.min(1, flyT + dt*1.1);
+    var e = flyT<0.5 ? 2*flyT*flyT : 1-Math.pow(-2*flyT+2,2)/2;
+    camPos.lerp(camTarget.pos, Math.min(1, dt*3.2));
+    var dy = camTarget.yaw - yaw;
+    while(dy>Math.PI) dy-=2*Math.PI;
+    while(dy<-Math.PI) dy+=2*Math.PI;
+    yaw += dy*Math.min(1, dt*3.2);
+    pitch += (camTarget.pitch-pitch)*Math.min(1, dt*3.2);
+    if(flyT>=1 && camPos.distanceTo(camTarget.pos)<0.3) camTarget=null;
+  }
+
+  /* WASD walking */
+  var spd = (keys['ShiftLeft']||keys['ShiftRight']) ? 28 : 14;
+  var f = forwardVec(); f.y=0; f.normalize();
+  var r = new THREE.Vector3(-f.z,0,f.x);
+  var moved=false;
+  if(keys['KeyW']||keys['ArrowUp']){ camPos.addScaledVector(f, spd*dt); moved=true; }
+  if(keys['KeyS']||keys['ArrowDown']){ camPos.addScaledVector(f,-spd*dt); moved=true; }
+  if(keys['KeyA']||keys['ArrowLeft']){ camPos.addScaledVector(r,-spd*dt); moved=true; }
+  if(keys['KeyD']||keys['ArrowRight']){ camPos.addScaledVector(r, spd*dt); moved=true; }
+  if(moved){ camTarget=null; stopTour(); if(camPos.y<4.5) camPos.y=5.5; }
+  if(keys['KeyQ']) camPos.y -= spd*dt*0.6;
+  if(keys['KeyE']) camPos.y += spd*dt*0.6;
+  camPos.y = Math.max(2.5, Math.min(110, camPos.y));
+
+  camera.position.copy(camPos);
+  tmpV.set(camPos.x - Math.sin(yaw)*Math.cos(pitch), camPos.y + Math.sin(pitch), camPos.z - Math.cos(yaw)*Math.cos(pitch));
+  camera.lookAt(tmpV);
+
+  /* smart glass animation */
+  var targetOp = glassOpaque ? 0.92 : 0.16;
+  smartPanes.forEach(function(p){
+    p.material = M.smart;
+  });
+  M.smart.opacity += (targetOp - M.smart.opacity)*Math.min(1, dt*4);
+  M.smart.color.setHex(glassOpaque ? 0x5a6b7a : 0xaee6f2);
+
+  /* kinetic wall animation */
+  kineticPanels.forEach(function(k,i){
+    var target = wallsOpen ? k.outX : k.homeX;
+    k.g.position.x += (target - k.g.position.x)*Math.min(1, dt*2.2);
+  });
+
+  /* screen shimmer */
+  var hue = (t*0.03)%1;
+  M.screen.emissive.setHSL(0.52+0.06*Math.sin(t*0.5), 0.85, 0.38+0.06*Math.sin(t*0.9));
+  M.screenSide.emissive.setHSL(0.72+0.05*Math.sin(t*0.4+1), 0.75, 0.34+0.05*Math.sin(t*0.7));
+
+  /* rack LEDs blink */
+  rackLeds.forEach(function(l,i){
+    l.material = M.rackLED;
+  });
+  M.rackLED.emissiveIntensity = 0.9 + 0.5*Math.sin(t*6);
+
+  renderer.render(scene, camera);
+
+  /* project dimension tags */
+  dimLabels.forEach(function(L){
+    if(!dimsOn){ L.el.style.display='none'; return; }
+    tmpV.copy(L.pos).project(camera);
+    var bx = (tmpV.x*0.5+0.5)*window.innerWidth;
+    var by = (-tmpV.y*0.5+0.5)*window.innerHeight;
+    if(tmpV.z > 1 || bx<0 || bx>window.innerWidth || by<0 || by>window.innerHeight){ L.el.style.display='none'; }
+    else { L.el.style.display='block'; L.el.style.left=bx+'px'; L.el.style.top=by+'px'; }
+  });
+
+  /* project labels (with occlusion test, staggered across frames) */
+  _frame++;
+  var testOcc = (_frame % 3 === 0);
+  labels.forEach(function(L){
+    tmpV.copy(L.pos).project(camera);
+    var behind = tmpV.z > 1;
+    var x = (tmpV.x*0.5+0.5)*window.innerWidth;
+    var y = (-tmpV.y*0.5+0.5)*window.innerHeight;
+    if(testOcc || L.occ === undefined) L.occ = labelOccluded(L.pos);
+    /* in-scene toggle buttons: only at eye level (walk view) and within 40 ft of the feature */
+    var actHidden = L.act && (camPos.y > 10 || camera.position.distanceTo(L.pos) > 40);
+    if(behind || L.occ || actHidden || x<-100 || x>window.innerWidth+100 || y<0 || y>window.innerHeight){
+      L.el.style.display='none';
+    } else {
+      L.el.style.display='flex';
+      L.el.style.left = x+'px';
+      L.el.style.top = y+'px';
+      var d = camera.position.distanceTo(L.pos);
+      L.el.style.opacity = d>170 ? 0.35 : 1;
+      L.el.style.zIndex = Math.round(1000 - d);
+    }
+  });
+}
+
+/* intro: sweep in over the SW corner — reception in the foreground */
+flyToLookAt(new THREE.Vector3(-32, 28, -26), new THREE.Vector3(72, -2, 34));
+animate();
+</script>
+</body>
+</html>

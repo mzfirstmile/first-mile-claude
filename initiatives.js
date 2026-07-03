@@ -1048,6 +1048,7 @@
             <p class="init-detail-summary" id="initDetailSummary"></p>
           </div>
           <div class="init-detail-actions">
+            <span id="initLinkBtns" style="display:contents;"></span>
             <button class="init-btn-outline" id="initStatusActionBtn" onclick="initQuickStatusChange()" style="display:none;"></button>
             <button class="init-btn-outline" onclick="initEditProject()">Edit</button>
             <button class="init-btn-primary" onclick="initAddEntry()">+ Add Entry</button>
@@ -1264,6 +1265,26 @@
     btn.style.display = '';
   }
 
+  // Prominent link buttons in the detail header — driven by document entries
+  // that carry metadata.button_label + metadata.url (e.g. 3D walkthroughs, models)
+  function _updateLinkButtons() {
+    const wrap = document.getElementById('initLinkBtns');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    if (!_currentInitiative) return;
+    const linkEntries = _entries.filter(e =>
+      e.initiative_id === _currentInitiative.id &&
+      e.metadata && e.metadata.button_label && e.metadata.url);
+    linkEntries.forEach(e => {
+      const b = document.createElement('button');
+      b.className = 'init-btn-primary';
+      b.textContent = e.metadata.button_label;
+      b.style.cssText = 'background:linear-gradient(135deg,#0891b2,#6366f1);border:none;';
+      b.onclick = () => window.open(e.metadata.url, '_blank');
+      wrap.appendChild(b);
+    });
+  }
+
   async function _quickStatusChange() {
     if (!_currentInitiative) return;
     const btn = document.getElementById('initStatusActionBtn');
@@ -1295,6 +1316,7 @@
     document.getElementById('initDetailTitle').textContent = _currentInitiative.name;
     document.getElementById('initDetailSummary').textContent = _currentInitiative.summary || '';
     _updateStatusActionBtn();
+    _updateLinkButtons();
 
     // Reset to overview tab (default landing)
     document.querySelectorAll('#initRoot .init-tab').forEach(t => t.classList.remove('active'));
