@@ -2391,9 +2391,9 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
         )
         UPDATE market_research_markets m SET
           score        = ROUND(c.comp_res::numeric, 1),
-          tier         = CASE WHEN c.comp_res >= 8.5 THEN 1 WHEN c.comp_res >= 7.0 THEN 2 WHEN c.comp_res >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
+          tier         = CASE WHEN ROUND(c.comp_res::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_res::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_res::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
           office_score = ROUND(c.comp_off::numeric, 1),
-          office_tier  = CASE WHEN c.comp_off >= 8.5 THEN 1 WHEN c.comp_off >= 7.0 THEN 2 WHEN c.comp_off >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
+          office_tier  = CASE WHEN ROUND(c.comp_off::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_off::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_off::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
           updated_at = now()
         FROM composites c WHERE m.id = c.market_id`;
         const _runSql = async (q) => {
