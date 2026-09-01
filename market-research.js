@@ -2222,6 +2222,7 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-workspace-id': 'wrkspc_01KFMjdE8FRViEkxanZET8rH',
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
@@ -2802,6 +2803,7 @@ Research this town now and produce the scoring JSON.`;
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-workspace-id': 'wrkspc_01KFMjdE8FRViEkxanZET8rH',
           'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({

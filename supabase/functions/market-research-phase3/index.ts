@@ -136,6 +136,7 @@ async function callClaudeForTown(apiKey: string, system: string, m: Market) {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-workspace-id": Deno.env.get("ANTHROPIC_WORKSPACE_ID") || "wrkspc_01KFMjdE8FRViEkxanZET8rH",
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",

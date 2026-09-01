@@ -52,6 +52,7 @@ async function generateSmsReply(inboundBody: string, fromNumber: string): Promis
     headers: {
       "x-api-key": claudeKey,
       "anthropic-version": "2023-06-01",
+      "anthropic-workspace-id": Deno.env.get("ANTHROPIC_WORKSPACE_ID") || "wrkspc_01KFMjdE8FRViEkxanZET8rH",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

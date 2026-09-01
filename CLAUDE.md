@@ -30,6 +30,7 @@ An internal admin dashboard for First Mile Capital, a real estate investment fir
 - `scripts/` — Utility scripts (Google Sheets push, local server)
 
 ## Supabase Project
+- **Anthropic API key (2026-09-01):** the original legacy key `first-mile-dashboard` (`sk-ant-api03-cps…0wAA`) stopped working ("credit balance too low" even with $20 on the org). Replaced with a new identity-linked key from the First Mile org — these REQUIRE the header `anthropic-workspace-id: wrkspc_01KFMjdE8FRViEkxanZET8rH` on every request or the API returns 400. Header added to all 9 call sites (index.html, exec.html, exec-v2.js, market-research.js ×2, edge functions auto-reply ×2 / receive-sms / market-research-phase3). Edge functions read `ANTHROPIC_WORKSPACE_ID` secret with the hardcoded ID as fallback. Key lives in Supabase Edge Function secret `CLAUDE_API_KEY` + GitHub Actions secret `CLAUDE_API_KEY` + local config.js. **Edge functions must be redeployed after this change** (`supabase functions deploy market-research-phase3 && supabase functions deploy auto-reply && supabase functions deploy receive-sms --no-verify-jwt`).
 - URL: https://qrtleqasnhbnruodlgpt.supabase.co
 - Edge Functions are deployed via `supabase functions deploy <name>`
 

@@ -159,6 +159,7 @@ If you cannot determine status, return {"done_ids": [], "not_done_ids": [], "sum
       headers: {
         "x-api-key": claudeKey,
         "anthropic-version": "2023-06-01",
+        "anthropic-workspace-id": Deno.env.get("ANTHROPIC_WORKSPACE_ID") || "wrkspc_01KFMjdE8FRViEkxanZET8rH",
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -260,6 +261,7 @@ ${email.body_text || email.body_preview || "(empty email)"}`;
     headers: {
       "x-api-key": claudeKey,
       "anthropic-version": "2023-06-01",
+        "anthropic-workspace-id": Deno.env.get("ANTHROPIC_WORKSPACE_ID") || "wrkspc_01KFMjdE8FRViEkxanZET8rH",
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
