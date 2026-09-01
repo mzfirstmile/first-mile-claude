@@ -1439,7 +1439,7 @@
       const pageCountEl = document.querySelector('.mr-page-count');
       if (pageCountEl) {
         const suffix = _addressPin
-          ? ` <span style="color:#b91c1c;font-weight:600;">· 📍 Within ${_ADDRESS_RADIUS_MILES}mi of ${_esc((_addressPin.label || '').split(',').slice(0,3).join(','))}</span> <button onclick="mrClearAddressSearch()" style="margin-left:8px;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
+          ? ` <span style="color:#b91c1c;font-weight:600;">· 📍 Within ${_ADDRESS_RADIUS_MILES}mi of ${_esc((_addressPin.label || '').split(',').slice(0,3).join(','))}</span> <button onclick="mrAreaReport()" style="margin-left:8px;background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;border:0;border-radius:6px;padding:3px 12px;font-size:11px;font-weight:700;cursor:pointer;">📄 Area Report (PDF)</button> <button onclick="mrClearAddressSearch()" style="margin-left:6px;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
           : _mapBounds
             ? ` <span style="color:#0369a1;font-weight:600;">· Filtered by map view</span> <button onclick="mrClearMapBounds()" style="margin-left:8px;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
             : '';
@@ -1554,7 +1554,7 @@
     const lastIdx = Math.min(total, (_page + 1) * PAGE_SIZE);
     const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const boundsPill = _addressPin
-      ? ` <span style="color:#b91c1c;font-weight:600;">· 📍 Within ${_ADDRESS_RADIUS_MILES}mi of ${_esc((_addressPin.label || '').split(',').slice(0,3).join(','))}</span> <button onclick="mrClearAddressSearch()" style="margin-left:8px;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
+      ? ` <span style="color:#b91c1c;font-weight:600;">· 📍 Within ${_ADDRESS_RADIUS_MILES}mi of ${_esc((_addressPin.label || '').split(',').slice(0,3).join(','))}</span> <button onclick="mrAreaReport()" style="margin-left:8px;background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;border:0;border-radius:6px;padding:3px 12px;font-size:11px;font-weight:700;cursor:pointer;">📄 Area Report (PDF)</button> <button onclick="mrClearAddressSearch()" style="margin-left:6px;background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
       : _mapBounds
         ? ` <span style="color:#0369a1;font-weight:600;">· Filtered by map view</span> <button onclick="mrClearMapBounds()" style="margin-left:8px;background:#e0f2fe;border:1px solid #bae6fd;color:#075985;border-radius:6px;padding:2px 10px;font-size:11px;cursor:pointer;">× Clear</button>`
         : '';
