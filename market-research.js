@@ -1098,6 +1098,7 @@
         </div>
         <div id="mrAddressHint" style="font-size:11px;color:#94a3b8;margin:-2px 0 4px 4px;display:none;">
           📍 <span id="mrAddressHintText"></span>
+          <button id="mrAreaReportBtn" onclick="mrAreaReport()" style="display:none;margin-left:10px;background:linear-gradient(135deg,#0ea5e9,#6366f1);color:#fff;border:0;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;vertical-align:middle;">📄 Area Report (PDF)</button>
         </div>
 
         <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;">
@@ -1317,6 +1318,7 @@
       if (d <= _ADDRESS_RADIUS_MILES) { m._distMi = d; within.push(m); }
     }
     within.sort((a, b) => a._distMi - b._distMi);
+    _proximityAll = within;
     const offset = _page * PAGE_SIZE;
     return { rows: within.slice(offset, offset + PAGE_SIZE), total: within.length };
   }
@@ -1906,7 +1908,8 @@
               // Persistent global rank — survives search/filter so user always
               // sees the market's true ranking, not its position in the result list.
               const mRank = _viewType === 'office' ? m.rank_office : m.rank_residential;
-              const rank = mRank != null ? mRank : (startIdx + idx + 1);
+              // Address search: # is proximity order (nearest = 1), not the global rank
+              const rank = _addressPin ? (startIdx + idx + 1) : (mRank != null ? mRank : (startIdx + idx + 1));
               return `
                 <tr onclick="mrOpenMarket('${m.id}')">
                   <td style="text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:#64748b;font-size:12px;">${rank}</td>
@@ -3886,6 +3889,246 @@ Research this town now and produce the scoring JSON.`;
   window.mrCloseModal     = ()    => _closeModal();
   window.mrChatSubmit     = ()    => _chatSubmit();
   window.mrChatSuggest    = (t)   => _chatSuggest(t);
+  // ── Market Area Report (PDF via print) ──────────────────
+  // Triangulates the research scores of the nearest N scored markets around an
+  // address pin. Opens a print-ready HTML report in a new tab (Save as PDF).
+  const _AREA_REPORT_N = 10;
+  let _proximityAll = [];   // full nearest-first list cached by _fetchPageByProximity
+
+  function _bearingDeg(lat1, lng1, lat2, lng2) {
+    const toRad = d => d * Math.PI / 180;
+    const y = Math.sin(toRad(lng2 - lng1)) * Math.cos(toRad(lat2));
+    const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lng2 - lng1));
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+  function _fmtMoney(n) { return n == null ? '—' : '$' + Math.round(n).toLocaleString(); }
+  function _fmtInt(n)   { return n == null ? '—' : Math.round(n).toLocaleString(); }
+  function _heat(v) {
+    // 0-10 → soft red → amber → green background
+    if (v == null || !isFinite(v)) return '#f1f5f9';
+    const t = Math.max(0, Math.min(1, v / 10));
+    const h = Math.round(t * 120);           // 0=red, 120=green
+    return `hsl(${h} 70% ${92 - t * 22}%)`;
+  }
+
+  async function _buildAreaReport() {
+    const pin = _addressPin;
+    if (!pin) { _toast('Search an address first', true); return; }
+    const isOffice = _viewType === 'office';
+    const sCol = isOffice ? 'office_score' : 'score';
+    const tCol = isOffice ? 'office_tier'  : 'tier';
+    const vCol = isOffice ? 'value_numeric_office' : 'value_numeric';
+    const wCol = isOffice ? 'weight_office' : 'weight';
+
+    _toast('Building area report…');
+    // Nearest N markets that actually carry a score in the active view
+    let pool = _proximityAll.length ? _proximityAll : (await _fetchPageByProximity(), _proximityAll);
+    const markets = pool.filter(m => m[sCol] != null).slice(0, _AREA_REPORT_N);
+    if (!markets.length) { _toast('No scored markets within radius', true); return; }
+
+    // One query for all score rows
+    // One call per market (≤45 rows each) — immune to the 1000-row anon cap
+    let scoreRows = [];
+    try {
+      const chunks = await Promise.all(markets.map(m =>
+        window.supaFetch('market_research_scores', `?select=market_id,criterion_id,${vCol}&market_id=eq.${m.id}&limit=1000`).catch(() => [])));
+      scoreRows = chunks.flat().filter(Boolean);
+    } catch (e) { console.warn('[mr] area report scores', e); }
+
+    const cats = (_categories || []).slice().sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
+    const critCat = {}; (_criteria || []).forEach(c => { critCat[c.id] = c.category_id; });
+    const critName = {}; (_criteria || []).forEach(c => { critName[c.id] = c.name; });
+
+    // per market → per category → mean; also per criterion value for appendix
+    const catMean = {};   // catMean[mid][cid] = mean
+    const critVal = {};   // critVal[mid][critId] = value
+    const acc = {};
+    for (const r of scoreRows) {
+      const v = r[vCol]; if (v == null) continue;
+      const cid = critCat[r.criterion_id]; if (!cid) continue;
+      acc[r.market_id] ??= {}; acc[r.market_id][cid] ??= { s: 0, n: 0 };
+      acc[r.market_id][cid].s += Number(v); acc[r.market_id][cid].n++;
+      critVal[r.market_id] ??= {}; critVal[r.market_id][r.criterion_id] = Number(v);
+    }
+    for (const mid in acc) { catMean[mid] = {}; for (const cid in acc[mid]) catMean[mid][cid] = acc[mid][cid].s / acc[mid][cid].n; }
+
+    // Distance-weighted "area" view: w = 1 / (d + 2mi) so the closest towns dominate
+    const w = markets.map(m => 1 / ((m._distMi || 0) + 2));
+    const wSum = w.reduce((a, b) => a + b, 0);
+    const areaCat = {};
+    for (const c of cats) {
+      let s = 0, ws = 0;
+      markets.forEach((m, i) => { const v = catMean[m.id]?.[c.id]; if (v != null) { s += v * w[i]; ws += w[i]; } });
+      areaCat[c.id] = ws ? s / ws : null;
+    }
+    const areaComposite = markets.reduce((a, m, i) => a + (m[sCol] || 0) * w[i], 0) / wSum;
+    const simpleAvg = markets.reduce((a, m) => a + (m[sCol] || 0), 0) / markets.length;
+    const best = markets.slice().sort((a, b) => (b[sCol] ?? -1) - (a[sCol] ?? -1))[0];
+    const avgHHI = markets.filter(m => m.median_household_income).reduce((a, m, _, arr) => a + Number(m.median_household_income) / arr.length, 0);
+    const avgPop = markets.filter(m => m.population).reduce((a, m, _, arr) => a + Number(m.population) / arr.length, 0);
+    const tierCount = { 1: 0, 2: 0, 3: 0, 4: 0 }; markets.forEach(m => { if (m[tCol]) tierCount[m[tCol]]++; });
+    const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6', 4: '#94a3b8' };
+    const areaTier = areaComposite >= 8.5 ? 1 : areaComposite >= 7 ? 2 : areaComposite >= 4 ? 3 : 4;
+
+    // ── SVG: triangulation plot (pin at center, rings every 15 mi) ──
+    const R = 205, cx = 320, cy = 250;
+    // Scale rings to the farthest market (nice step), not the fixed 60mi radius
+    const farthest = Math.max(1, ...markets.map(m => m._distMi));
+    const step = farthest <= 4 ? 1 : farthest <= 8 ? 2 : farthest <= 20 ? 5 : farthest <= 40 ? 10 : 15;
+    const maxMi = Math.ceil(farthest / step) * step;
+    const rings = []; for (let mi = step; mi <= maxMi; mi += step) rings.push(mi);
+    let tri = `<svg viewBox="0 0 640 500" width="100%" style="max-width:640px;display:block;margin:0 auto;font-family:inherit;">`;
+    rings.forEach(mi => {
+      const r = R * mi / maxMi;
+      tri += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#cbd5e1" stroke-dasharray="3 4"/>`;
+      tri += `<text x="${cx + 4}" y="${cy - r - 3}" font-size="10" fill="#94a3b8">${mi} mi</text>`;
+    });
+    tri += `<line x1="${cx}" y1="${cy - R}" x2="${cx}" y2="${cy + R}" stroke="#e2e8f0"/><line x1="${cx - R}" y1="${cy}" x2="${cx + R}" y2="${cy}" stroke="#e2e8f0"/>`;
+    tri += `<text x="${cx}" y="${cy - R - 12}" text-anchor="middle" font-size="10" fill="#64748b" font-weight="600">N</text>`;
+    markets.forEach((m, i) => {
+      const brg = _bearingDeg(pin.lat, pin.lng, +m.latitude, +m.longitude) * Math.PI / 180;
+      const r = R * Math.min(maxMi, m._distMi) / maxMi;
+      const x = cx + r * Math.sin(brg), y = cy - r * Math.cos(brg);
+      tri += `<line x1="${cx}" y1="${cy}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#dc2626" stroke-opacity="0.18"/>`;
+      tri += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(6 + (m[sCol] || 0) * 0.9).toFixed(1)}" fill="${tierColor[m[tCol]] || '#94a3b8'}" stroke="#fff" stroke-width="2"/>`;
+      // Label sits on the far side of the dot (away from the subject) so labels fan outward
+      const dotR = 6 + (m[sCol] || 0) * 0.9;
+      const lx = x + (dotR + 6) * Math.sin(brg), ly = y - (dotR + 6) * Math.cos(brg);
+      const anchor = Math.sin(brg) > 0.3 ? 'start' : Math.sin(brg) < -0.3 ? 'end' : 'middle';
+      const dy = Math.cos(brg) > 0.3 ? -2 : Math.cos(brg) < -0.3 ? 12 : 4;
+      tri += `<text x="${lx.toFixed(1)}" y="${(ly + dy).toFixed(1)}" text-anchor="${anchor}" font-size="10" font-weight="600" fill="#0f172a">${i + 1}. ${_esc(m.name.split(',')[0])} <tspan font-weight="400" fill="#475569" font-size="9">${(m[sCol] || 0).toFixed(1)} · ${m._distMi.toFixed(1)} mi</tspan></text>`;
+    });
+    tri += `<circle cx="${cx}" cy="${cy}" r="7" fill="#dc2626" stroke="#fff" stroke-width="2"/><text x="${cx}" y="${cy + 22}" text-anchor="middle" font-size="10" font-weight="700" fill="#dc2626">📍 Subject</text></svg>`;
+
+    // ── SVG: category radar (area-weighted bold + top 3 markets thin) ──
+    const nA = cats.length, RR = 120, rcx = 230, rcy = 175;
+    const axisPt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / nA; const r = RR * v / 10; return [rcx + r * Math.cos(a), rcy + r * Math.sin(a)]; };
+    let radar = `<svg viewBox="0 0 460 350" width="100%" style="max-width:480px;display:block;margin:0 auto;">`;
+    [2.5, 5, 7.5, 10].forEach(lv => { radar += `<polygon points="${cats.map((_, i) => axisPt(i, lv).join(',')).join(' ')}" fill="none" stroke="#e2e8f0"/>`; });
+    cats.forEach((c, i) => {
+      const [x, y] = axisPt(i, 10); const [lx, ly] = axisPt(i, 12.6);
+      radar += `<line x1="${rcx}" y1="${rcy}" x2="${x}" y2="${y}" stroke="#cbd5e1"/>`;
+      radar += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#475569">${_esc(c.name)}</text>`;
+    });
+    const top3 = markets.slice().sort((a, b) => (b[sCol] ?? -1) - (a[sCol] ?? -1)).slice(0, 3);
+    const palette = ['#0ea5e9', '#8b5cf6', '#f59e0b'];
+    top3.forEach((m, k) => {
+      const pts = cats.map((c, i) => axisPt(i, catMean[m.id]?.[c.id] ?? 0).join(',')).join(' ');
+      radar += `<polygon points="${pts}" fill="${palette[k]}" fill-opacity="0.08" stroke="${palette[k]}" stroke-width="1.5"/>`;
+    });
+    radar += `<polygon points="${cats.map((c, i) => axisPt(i, areaCat[c.id] ?? 0).join(',')).join(' ')}" fill="#dc2626" fill-opacity="0.12" stroke="#dc2626" stroke-width="2.5"/>`;
+    radar += `</svg>`;
+    const radarLegend = `<div class="legend"><span><i style="background:#dc2626"></i>Area (distance-weighted)</span>${top3.map((m, k) => `<span><i style="background:${palette[k]}"></i>${_esc(m.name)}</span>`).join('')}</div>`;
+
+    // ── Tables ──
+    const catTable = `
+      <table class="grid"><thead><tr><th style="text-align:left;">Category</th><th>Wt</th><th class="area">Area</th>${markets.map((m, i) => `<th title="${_esc(m.name)}">${i + 1}<br><span class="sub">${_esc(m.name.split(',')[0])}</span></th>`).join('')}</tr></thead><tbody>
+      ${cats.map(c => `<tr><td style="text-align:left;font-weight:600;">${_esc(c.name)}</td><td class="mut">${c[wCol] ?? '—'}</td><td class="area" style="background:${_heat(areaCat[c.id])}">${areaCat[c.id] != null ? areaCat[c.id].toFixed(1) : '—'}</td>${markets.map(m => { const v = catMean[m.id]?.[c.id]; return `<td style="background:${_heat(v)}">${v != null ? v.toFixed(1) : '—'}</td>`; }).join('')}</tr>`).join('')}
+      <tr class="tot"><td style="text-align:left;">Composite ${isOffice ? 'Office' : 'Residential'} Score</td><td></td><td class="area" style="background:${_heat(areaComposite)}">${areaComposite.toFixed(1)}</td>${markets.map(m => `<td style="background:${_heat(m[sCol])}">${(m[sCol] ?? 0).toFixed(1)}</td>`).join('')}</tr>
+      <tr><td style="text-align:left;">Tier</td><td></td><td class="area">T${areaTier}</td>${markets.map(m => `<td><span class="tier" style="background:${tierColor[m[tCol]] || '#94a3b8'}">T${m[tCol] ?? '—'}</span></td>`).join('')}</tr>
+      <tr><td style="text-align:left;">Distance</td><td></td><td class="area">—</td>${markets.map(m => `<td class="mut">${m._distMi.toFixed(1)} mi</td>`).join('')}</tr>
+      </tbody></table>`;
+
+    const roster = `
+      <table class="grid roster"><thead><tr><th>#</th><th style="text-align:left;">Market</th><th>Distance</th><th>Population</th><th>Median HHI</th><th>Median Home</th><th>Score</th><th>Tier</th><th style="text-align:left;">Thesis</th></tr></thead><tbody>
+      ${markets.map((m, i) => `<tr><td>${i + 1}</td><td style="text-align:left;font-weight:600;white-space:nowrap;">${_esc(m.name)}</td><td>${m._distMi.toFixed(1)} mi</td><td>${_fmtInt(m.population)}</td><td>${_fmtMoney(m.median_household_income)}</td><td>${_fmtMoney(m.median_home_value)}</td><td style="font-weight:700;background:${_heat(m[sCol])}">${(m[sCol] ?? 0).toFixed(1)}</td><td><span class="tier" style="background:${tierColor[m[tCol]] || '#94a3b8'}">T${m[tCol] ?? '—'}</span></td><td style="text-align:left;font-size:10px;color:#475569;">${_esc((m.thesis || m.summary || '').slice(0, 220))}${(m.thesis || m.summary || '').length > 220 ? '…' : ''}</td></tr>`).join('')}
+      </tbody></table>`;
+
+    // Criterion-level appendix (one block per category)
+    const appendix = cats.map(c => {
+      const crits = (_criteria || []).filter(k => k.category_id === c.id).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      if (!crits.length) return '';
+      return `<h4>${_esc(c.name)}</h4><table class="grid small"><thead><tr><th style="text-align:left;">Criterion</th>${markets.map((m, i) => `<th>${i + 1}</th>`).join('')}</tr></thead><tbody>
+        ${crits.map(k => `<tr><td style="text-align:left;">${_esc(k.name)}</td>${markets.map(m => { const v = critVal[m.id]?.[k.id]; return `<td style="background:${_heat(v)}">${v != null ? v.toFixed(1) : '—'}</td>`; }).join('')}</tr>`).join('')}
+      </tbody></table>`;
+    }).join('');
+
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const shortAddr = _esc((pin.label || '').split(',').slice(0, 4).join(','));
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Market Area Report — ${shortAddr}</title>
+<style>
+  @page { size: letter landscape; margin: 0.5in; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif; color: #0f172a; margin: 0; padding: 24px 32px; font-size: 12px; background: #fff; }
+  .bar { position: sticky; top: 0; background: #0f172a; color: #fff; padding: 10px 16px; margin: -24px -32px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .bar button { background: #0ea5e9; color: #fff; border: 0; border-radius: 6px; padding: 8px 16px; font-weight: 700; cursor: pointer; font-size: 13px; }
+  header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #0f172a; padding-bottom: 12px; margin-bottom: 18px; }
+  header img { height: 44px; }
+  h1 { margin: 0 0 4px; font-size: 22px; letter-spacing: -0.01em; }
+  h2 { font-size: 15px; margin: 26px 0 10px; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; }
+  h4 { margin: 14px 0 6px; font-size: 12px; color: #334155; }
+  .meta { color: #475569; font-size: 12px; }
+  .kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin: 14px 0; }
+  .kpi { border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px; }
+  .kpi .v { font-size: 22px; font-weight: 800; line-height: 1.1; }
+  .kpi .l { font-size: 10px; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 4px; }
+  .two { display: grid; grid-template-columns: 1.1fr 1fr; gap: 24px; align-items: start; }
+  .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; }
+  .card h3 { margin: 0 0 8px; font-size: 13px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: 10px; color: #475569; justify-content: center; margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  table.grid { width: 100%; border-collapse: collapse; font-size: 11px; }
+  table.grid th, table.grid td { border: 1px solid #e2e8f0; padding: 5px 6px; text-align: center; font-variant-numeric: tabular-nums; }
+  table.grid th { background: #f8fafc; font-size: 10px; color: #334155; vertical-align: bottom; }
+  table.grid th .sub { font-weight: 500; color: #64748b; font-size: 9px; }
+  table.grid .area { font-weight: 800; border-left: 2px solid #dc2626; border-right: 2px solid #dc2626; }
+  table.grid tr.tot td { font-weight: 800; border-top: 2px solid #0f172a; }
+  table.grid .mut { color: #64748b; }
+  table.small { font-size: 10px; table-layout: fixed; } table.small td, table.small th { padding: 3px 5px; }
+  table.small th:first-child, table.small td:first-child { width: 34%; }
+  tr, .card, .kpi { page-break-inside: avoid; } h4 { page-break-after: avoid; }
+  .tier { color: #fff; font-weight: 700; padding: 1px 7px; border-radius: 8px; font-size: 10px; }
+  .note { font-size: 10px; color: #64748b; margin-top: 8px; line-height: 1.5; }
+  footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #e2e8f0; font-size: 10px; color: #94a3b8; display: flex; justify-content: space-between; }
+  .pb { page-break-before: always; }
+  @media print { .bar { display: none; } body { padding: 0; } }
+</style></head><body>
+<div class="bar"><span>Market Area Report · ready to save</span><button onclick="window.print()">⬇ Save as PDF</button></div>
+<header>
+  <div>
+    <h1>Market Area Report</h1>
+    <div class="meta"><b>Subject:</b> ${_esc(pin.label || '')}</div>
+    <div class="meta">${pin.lat.toFixed(4)}, ${pin.lng.toFixed(4)} · ${isOffice ? 'Office' : 'Residential'} scoring view · Nearest ${markets.length} scored markets within ${_ADDRESS_RADIUS_MILES} mi · ${today}</div>
+  </div>
+  <img src="https://admin.firstmilecap.com/assets/First_Mile_Capital_Logo_RGB.png" alt="First Mile Capital">
+</header>
+
+<div class="kpis">
+  <div class="kpi"><div class="v" style="color:${tierColor[areaTier]}">${areaComposite.toFixed(1)}</div><div class="l">Area score (distance-wtd) · T${areaTier}</div></div>
+  <div class="kpi"><div class="v">${simpleAvg.toFixed(1)}</div><div class="l">Simple average score</div></div>
+  <div class="kpi"><div class="v">${(best[sCol] || 0).toFixed(1)}</div><div class="l">Best: ${_esc(best.name)} (${best._distMi.toFixed(1)} mi)</div></div>
+  <div class="kpi"><div class="v">${tierCount[1]} / ${tierCount[2]} / ${tierCount[3]} / ${tierCount[4]}</div><div class="l">Tier 1 / 2 / 3 / 4 count</div></div>
+  <div class="kpi"><div class="v">${_fmtMoney(avgHHI)}</div><div class="l">Avg median HHI</div></div>
+  <div class="kpi"><div class="v">${_fmtInt(avgPop)}</div><div class="l">Avg population</div></div>
+</div>
+
+<div class="two">
+  <div class="card"><h3>Triangulation — markets by bearing &amp; distance from subject</h3>${tri}
+    <div class="legend">${[1,2,3,4].map(t => `<span><i style="background:${tierColor[t]};border-radius:50%"></i>Tier ${t}</span>`).join('')}<span>Dot size ∝ score</span></div></div>
+  <div class="card"><h3>Category profile — area vs. top 3 markets</h3>${radar}${radarLegend}</div>
+</div>
+
+<h2>Category score matrix</h2>
+${catTable}
+<div class="note">Cells are 0–10 category means of the underlying criteria. <b>Area</b> column = distance-weighted average across the ${markets.length} markets (weight = 1 / (miles + 2)), so the closest towns count most. Composite uses category weights (Wt) from the ${isOffice ? 'office' : 'residential'} scoring model. Tier bands: T1 ≥ 8.5 · T2 7.0–8.4 · T3 4.0–6.9 · T4 &lt; 4.0.</div>
+
+<h2>Market roster (nearest first)</h2>
+${roster}
+
+<div class="pb"></div>
+<h2>Appendix — criterion-level scores</h2>
+<div class="note" style="margin:0 0 6px;">Columns are market # from the roster above. Phase 2 criteria are Census/programmatic; Phase 3 criteria come from Claude deep research and carry source citations in the dashboard.</div>
+${appendix}
+
+<footer><span>First Mile Capital · Market Research · admin.firstmilecap.com</span><span>Generated ${today}. Planning-grade screening data — validate before underwriting.</span></footer>
+</body></html>`;
+
+    const win = window.open('', '_blank');
+    if (!win) { _toast('Popup blocked — allow popups for this site', true); return; }
+    win.document.open(); win.document.write(html); win.document.close();
+  }
+  window.mrAreaReport = () => _buildAreaReport();
+
   // ── Address search (Nominatim, free OSM geocoder, CORS-enabled) ──
   function _looksLikeAddress(q) {
     if (!q) return false;
@@ -3925,6 +4168,7 @@ Research this town now and produce the scoring JSON.`;
     const sel = document.getElementById('mrSort');
     const opt = document.getElementById('mrSortDistanceOpt');
     if (opt) opt.style.display = pinActive ? '' : 'none';
+    if (!pinActive) _proximityAll = [];
     if (!sel) return;
     if (pinActive) sel.value = 'distance_asc';
     else if (sel.value === 'distance_asc') sel.value = 'score_desc';
@@ -3935,6 +4179,8 @@ Research this town now and produce the scoring JSON.`;
     if (!wrap || !t) return;
     if (text) { t.textContent = text; wrap.style.display = 'block'; }
     else { wrap.style.display = 'none'; }
+    const rb = document.getElementById('mrAreaReportBtn');
+    if (rb) rb.style.display = _addressPin ? 'inline-block' : 'none';
   }
   function _syncShowTier4Checkbox() {
     const cb = document.getElementById('mrShowTier4');
