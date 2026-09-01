@@ -139,6 +139,7 @@ The embedded Claude chat has access to these tools:
 - **UI (market-research.js):**
   - Chatbot input at the very top — Claude (sonnet-4-6) with the shortlist (≤1k rows) as context. Suggested-question chips.
   - Search input under the page header. Server-side ilike on name + state, 220ms debounce.
+  - **Address search (2026-09-01):** any query containing a digit is treated as an address; Enter geocodes via Nominatim → `_addressPin` + 60mi bbox. In pin mode `_fetchPage` delegates to `_fetchPageByProximity`: pulls every row in the bbox (looping past the 1000-row cap), computes haversine `_distMi`, clips to the 60mi circle, **sorts nearest-first**, pages client-side. Sort dropdown auto-switches to a `distance_asc` option (hidden otherwise); list view gains a Distance column, grid cards show `📍 X mi`. Clearing the search reverts sort to score.
   - Filter chips: 🎯 Shortlist (default) · All · ❤ Favorites. Plus a Tier multi-select pill row (Tier 1/2/3/4 independently toggleable). Badges populated via count-only PostgREST queries (`Prefer: count=exact`, read total from Content-Range).
   - Server-side pagination, **1,000 rows/page** (Supabase anon cap). PostgREST `offset + limit + Prefer: count=exact`. "Showing X-Y of Z" + "« Prev / Page N of M / Next »" controls.
   - List columns: Heart · Market · State · Population · Median HHI · Nearby Metro · Score · Tier · 🔬 Deep Research · Thesis. Click heart → optimistic PATCH `is_favorite`.

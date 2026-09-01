@@ -1137,6 +1137,7 @@
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select class="mr-sort" id="mrSort" onchange="mrChangeSort(this.value)">
+              <option value="distance_asc" id="mrSortDistanceOpt" style="display:none;">Sort: Distance (nearest first)</option>
               <option value="score_desc">Sort: Score (high → low)</option>
               <option value="tier_asc">Sort: Tier (1 → 4)</option>
               <option value="name_asc">Sort: Name (A → Z)</option>
@@ -1280,7 +1281,48 @@
 
   // Single source-of-truth fetch for the active filter + search + page.
   // Returns total count via Content-Range header (Prefer: count=exact).
+  // Great-circle distance in miles between two lat/lng points.
+  function _haversineMi(lat1, lng1, lat2, lng2) {
+    const R = 3958.8, toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  // Address-pin mode: PostgREST can't ORDER BY distance, so pull every row in
+  // the bounding box (looping past the 1000-row anon cap), compute the true
+  // great-circle distance client-side, clip to the radius circle, sort nearest-
+  // first, then page locally. Rows get a transient `_distMi` for rendering.
+  async function _fetchPageByProximity() {
+    const pin = _addressPin;
+    const parts = _buildFilterQuery();
+    parts.push('select=*');
+    const baseUrl = `${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&');
+    const CHUNK = 1000;
+    const all = [];
+    for (let offset = 0; offset < 20000; offset += CHUNK) {
+      const r = await fetch(`${baseUrl}&limit=${CHUNK}&offset=${offset}`, {
+        headers: { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY },
+      });
+      if (!r.ok) throw new Error(`Supabase ${r.status}: ${(await r.text()).slice(0,200)}`);
+      const chunk = await r.json();
+      if (!Array.isArray(chunk) || chunk.length === 0) break;
+      all.push(...chunk);
+      if (chunk.length < CHUNK) break;
+    }
+    const within = [];
+    for (const m of all) {
+      if (m.latitude == null || m.longitude == null) continue;
+      const d = _haversineMi(pin.lat, pin.lng, parseFloat(m.latitude), parseFloat(m.longitude));
+      if (d <= _ADDRESS_RADIUS_MILES) { m._distMi = d; within.push(m); }
+    }
+    within.sort((a, b) => a._distMi - b._distMi);
+    const offset = _page * PAGE_SIZE;
+    return { rows: within.slice(offset, offset + PAGE_SIZE), total: within.length };
+  }
+
   async function _fetchPage() {
+    if (_addressPin) return _fetchPageByProximity();
     const parts = _buildFilterQuery();
     parts.push('select=*');
     // Always sort by composite Score descending — T1 surfaces at the top of
@@ -1473,6 +1515,8 @@
     const aTier  = (m) => _viewType === 'office' ? (m.office_tier ?? 99) : (m.tier ?? 99);
     const aHHI   = (m) => m.median_household_income ?? -1;
     visible.sort((a, b) => {
+      // Address search → nearest first (rows carry _distMi from _fetchPageByProximity)
+      if (sortMode === 'distance_asc') return ((a._distMi ?? 1e9) - (b._distMi ?? 1e9)) || (aScore(b) - aScore(a));
       // Tiebreaker chain must match the rank_{view} SQL: score DESC → HHI DESC → name ASC
       if (sortMode === 'score_desc') return (aScore(b) - aScore(a)) || (aHHI(b) - aHHI(a)) || a.name.localeCompare(b.name);
       if (sortMode === 'tier_asc')   return (aTier(a) - aTier(b)) || (aScore(b) - aScore(a)) || (aHHI(b) - aHHI(a));
@@ -1804,7 +1848,8 @@
       const popLine = m.population ? `Pop ${parseInt(m.population).toLocaleString()}` : '';
       const hhiLine = m.median_household_income ? `HHI $${parseInt(m.median_household_income).toLocaleString()}` : '';
       const metro = m.nearest_top50_city ? `Metro: ${m.nearest_top50_city}` : '';
-      const stateLine = [popLine, hhiLine, metro].filter(Boolean).join(' · ');
+      const distLine = (_addressPin && m._distMi != null) ? `📍 ${m._distMi.toFixed(1)} mi` : '';
+      const stateLine = [distLine, popLine, hhiLine, metro].filter(Boolean).join(' · ');
       return `
         <div class="mr-card" onclick="mrOpenMarket('${m.id}')">
           <div class="mr-card-row">
@@ -1840,6 +1885,7 @@
               <th style="width:36px;text-align:center;">#</th>
               <th style="width:26px;"></th>
               <th style="width:13%;">Market</th>
+              ${_addressPin ? '<th style="width:8%;text-align:right;">Distance</th>' : ''}
               <th style="width:9%;text-align:right;">Population</th>
               <th style="width:10%;text-align:right;">Median HHI</th>
               <th style="width:12%;">Nearby Metro</th>
@@ -1874,6 +1920,7 @@
                       ? `<a class="mr-view-on-map" onclick="event.stopPropagation(); mrViewOnMap(${m.latitude}, ${m.longitude}, '${_esc(m.name)}')">view on map</a>`
                       : ''}
                   </td>
+                  ${_addressPin ? `<td style="text-align:right;font-variant-numeric:tabular-nums;color:#b91c1c;font-weight:600;">${m._distMi != null ? m._distMi.toFixed(1) + ' mi' : '—'}</td>` : ''}
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#475569;">${pop}</td>
                   <td style="text-align:right;font-variant-numeric:tabular-nums;color:#0f172a;font-weight:600;">${hhi}</td>
                   <td style="font-size:12px;color:#475569;">${_esc(metro)}</td>
@@ -3873,6 +3920,15 @@ Research this town now and produce the scoring JSON.`;
       west:  (pin.lng - lngDelta).toFixed(4),
     };
   }
+  // Toggle the "Distance" sort option and select/deselect it as the pin comes and goes.
+  function _syncDistanceSort(pinActive) {
+    const sel = document.getElementById('mrSort');
+    const opt = document.getElementById('mrSortDistanceOpt');
+    if (opt) opt.style.display = pinActive ? '' : 'none';
+    if (!sel) return;
+    if (pinActive) sel.value = 'distance_asc';
+    else if (sel.value === 'distance_asc') sel.value = 'score_desc';
+  }
   function _updateAddressHint(text) {
     const wrap = document.getElementById('mrAddressHint');
     const t = document.getElementById('mrAddressHintText');
@@ -3897,6 +3953,7 @@ Research this town now and produce the scoring JSON.`;
     }
     _addressPin = pin;
     _applyAddressBounds(pin);
+    _syncDistanceSort(true);
     // Auto-show T4 so all nearby markets surface around the pin
     if (!_showTier4) {
       _showTier4 = true;
@@ -3918,7 +3975,7 @@ Research this town now and produce the scoring JSON.`;
     clearTimeout(_searchTimer);
     // Empty input → clear any active address pin + bounds and refresh
     if (!_searchQuery.trim()) {
-      _addressPin = null;
+      _addressPin = null; _syncDistanceSort(false);
       _mapBounds = null;
       _updateAddressHint('');
       _page = 0;
@@ -3934,7 +3991,7 @@ Research this town now and produce the scoring JSON.`;
       return;
     }
     // Name search path — clear any previous address pin/bounds first
-    if (_addressPin) { _addressPin = null; _mapBounds = null; _updateAddressHint(''); }
+    if (_addressPin) { _addressPin = null; _syncDistanceSort(false); _mapBounds = null; _updateAddressHint(''); }
     _searchTimer = setTimeout(() => { _page = 0; _refreshPage(); }, 220);
   };
   window.mrSearchEnter = (q) => {
@@ -3945,12 +4002,12 @@ Research this town now and produce the scoring JSON.`;
       _doAddressSearch(v);
     } else {
       _searchQuery = v;
-      _addressPin = null; _mapBounds = null; _updateAddressHint('');
+      _addressPin = null; _syncDistanceSort(false); _mapBounds = null; _updateAddressHint('');
       _page = 0; _refreshPage();
     }
   };
   window.mrClearAddressSearch = () => {
-    _addressPin = null;
+    _addressPin = null; _syncDistanceSort(false);
     _mapBounds = null;
     _searchQuery = '';
     const inp = document.getElementById('mrSearchInput');
