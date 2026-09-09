@@ -38,7 +38,7 @@ import argparse, csv, gzip, io, json, os, sys, time, urllib.request, zipfile
 from collections import defaultdict
 
 LODES = "https://lehd.ces.census.gov/data/lodes/LODES8"
-GAZ = "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2023_Gazetteers/2023_Gaz_place_national.zip"
+GAZ_URLS = [f"https://www2.census.gov/geo/docs/maps-data/data/gazetteer/{y}_Gazetteers/{y}_Gaz_place_national.zip" for y in (2024, 2023, 2022, 2021)]
 OFFICE_COLS = ["CNS09", "CNS10", "CNS11", "CNS12", "CNS13", "CNS14"]
 UPDATED_BY = "phase2_lodes"
 REPLACES = "phase2_office"
@@ -102,7 +102,19 @@ def lodes_file(st, kind, seg, year):
 
 
 def load_gazetteer():
-    blob = fetch(GAZ)
+    """Place land area (sq mi) by 7-digit GEOID. Returns {} (density skipped) if unavailable."""
+    blob = None
+    for url in GAZ_URLS:
+        try:
+            b = fetch(url)
+        except Exception as e:
+            print(f"  gazetteer {url.split('/')[-1]}: {e}", flush=True); continue
+        if b and b[:2] == b"PK":
+            blob = b; print(f"  gazetteer: {url.split('/')[-1]}", flush=True); break
+        print(f"  gazetteer {url.split('/')[-1]}: {'404' if b is None else 'not a zip (%d bytes)' % len(b)}", flush=True)
+    if not blob:
+        print("  WARNING: no Gazetteer file — Office Job Density will be skipped", flush=True)
+        return {}
     area = {}
     with zipfile.ZipFile(io.BytesIO(blob)) as z:
         name = [n for n in z.namelist() if n.lower().endswith(".txt")][0]
