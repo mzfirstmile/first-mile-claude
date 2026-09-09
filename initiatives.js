@@ -1305,7 +1305,7 @@
   window.initQuickStatusChange = _quickStatusChange;
 
   // ── Detail view ──────────────────────────────────────────
-  function _openProject(id) {
+  function _openProject(id, fromHistory) {
     _currentInitiative = _initiatives.find(i => i.id === id);
     if (!_currentInitiative) return;
 
@@ -1338,15 +1338,23 @@
     _renderDocs();
     _renderTeam();
 
-    // Push history for back button
-    history.pushState({ view: 'initiatives', project: id }, '', '#initiatives&project=' + id);
+    // Push history for back button (shared sub-nav protocol in index.html)
+    if (!fromHistory && window.pushSubNav) window.pushSubNav('initiatives', id, 'project=' + id);
   }
 
-  function _backToList() {
+  function _backToList(fromHistory) {
+    // Unwind the history entry pushed in _openProject so browser Back and this button agree
+    if (!fromHistory && window.subNavBack && window.subNavBack('initiatives')) return;
     _currentInitiative = null;
     document.getElementById('initListView').classList.remove('hidden');
     document.getElementById('initDetailView').classList.remove('show');
-    history.pushState({ view: 'initiatives' }, '', '#initiatives');
+    if (!fromHistory && window.replaceSubNav) window.replaceSubNav('initiatives');
+  }
+  if (window.registerSubNav) {
+    window.registerSubNav('initiatives', (sub) => {
+      if (sub) { if (!_currentInitiative || _currentInitiative.id !== sub) _openProject(sub, true); }
+      else if (_currentInitiative) _backToList(true);
+    });
   }
 
   // ── Timeline rendering ───────────────────────────────────
@@ -2283,6 +2291,8 @@
     try {
       await _loadData();
       _renderGrid();
+      const deepId = window.getHashParam && window.getHashParam('project');
+      if (deepId) { _openProject(deepId, true); history.replaceState({ view: 'initiatives', sub: deepId }, '', window.location.hash); }
     } catch (e) {
       console.error('Initiatives init failed:', e);
       const root = document.getElementById('initRoot');
@@ -2290,11 +2300,6 @@
     }
   };
 
-  // Handle popstate for back button
-  window.addEventListener('popstate', function (e) {
-    if (e.state?.view === 'initiatives' && !e.state?.project) {
-      _backToList();
-    }
-  });
+  // Browser back/forward handled by index.html's popstate → registerSubNav handler above
 
 })();

@@ -2062,9 +2062,37 @@
   // Handle browser back/forward buttons
   window.addEventListener('popstate', function(e) {
     if (isAuthHash()) return;
-    const view = (e.state && e.state.view) || getViewFromHash() || 'home';
-    switchView(view, false);
+    const st = e.state || {};
+    const view = st.view || getViewFromHash() || 'home';
+    // Only switch modules when the module actually changed — re-running a module's
+    // init on every back/forward reset its list state and caused the "lost my place" feeling.
+    if (view !== currentView) switchView(view, false);
+    // Hand detail-screen state (a market id, a project id, a property name…) to the module
+    const handler = _subNavHandlers[view];
+    if (handler) { try { handler(st.sub || null); } catch (err) { console.error('subnav', view, err); } }
   });
+
+  // ── Sub-navigation: detail screens inside modules share the browser history ──
+  // A module calls pushSubNav(view, subId, 'param=value') when it opens a detail screen,
+  // subNavBack(view) from its in-app Back button, and registerSubNav(view, fn) so that
+  // browser back/forward can re-open (fn(subId)) or close (fn(null)) the detail screen.
+  const _subNavHandlers = {};
+  window.registerSubNav = function(view, handler) { _subNavHandlers[view] = handler; };
+  window.pushSubNav = function(view, sub, hashSuffix) {
+    const hash = '#' + view + (sub && hashSuffix ? '&' + hashSuffix : '');
+    if (history.state && history.state.view === view && history.state.sub === sub) return; // already here
+    history.pushState({ view, sub: sub || null }, '', hash);
+  };
+  // In-app Back: if the current history entry is a detail screen we pushed, unwind it via
+  // history.back() so the browser stack stays in sync (popstate → handler(null) closes it).
+  // Returns false when there is nothing to unwind (deep link straight into a detail) —
+  // caller should then close the detail itself and call replaceSubNav().
+  window.subNavBack = function(view) {
+    if (history.state && history.state.view === view && history.state.sub) { history.back(); return true; }
+    return false;
+  };
+  window.replaceSubNav = function(view) { history.replaceState({ view, sub: null }, '', '#' + view); };
+  window.getHashParam = getHashParam;
 
   // True when the URL hash is an OAuth/MSAL response (code=/state=/error=/id_token=)
   // rather than one of our view names. The router must leave those hashes alone or
@@ -2105,7 +2133,7 @@
           fbInit().then(() => {
             if (!bgtData) return;
             const idx = bgtData.findIndex(b => b.name.toLowerCase() === propName.toLowerCase());
-            if (idx >= 0) fbSelectProp(idx);
+            if (idx >= 0) { fbSelectProp(idx, true); history.replaceState({ view: 'financials', sub: bgtData[idx].name }, '', window.location.hash); }
           });
         }
       }
@@ -4271,8 +4299,10 @@ SMS: +1 (866) 568-4445 — send_sms, search_sms. Confirm number + body before se
     }).join('');
   }
 
-  function fbSelectProp(idx) {
+  function fbSelectProp(idx, fromHistory) {
+    if (!bgtData || !bgtData[idx]) return;
     fbSelectedIdx = idx;
+    if (!fromHistory) window.pushSubNav('financials', bgtData[idx].name, 'prop=' + encodeURIComponent(bgtData[idx].name));
     // Reset to the default tab for the current year status
     const status = fbGetYearStatus();
     fbActiveTab = FB_DEFAULT_TAB[status] || 'overview';
@@ -4285,10 +4315,20 @@ SMS: +1 (866) 568-4445 — send_sms, search_sms. Confirm number + body before se
     fbRenderDetail();
   }
 
-  function fbBackToCards() {
+  function fbBackToCards(fromHistory) {
+    if (!fromHistory && window.subNavBack('financials')) return; // popstate → fbBackToCards(true)
     fbSelectedIdx = -1;
     fbRenderCards();
+    if (!fromHistory) window.replaceSubNav('financials');
   }
+  window.registerSubNav('financials', function(sub) {
+    if (!sub) { if (fbSelectedIdx >= 0) fbBackToCards(true); return; }
+    fbInit().then(() => {
+      if (!bgtData) return;
+      const idx = bgtData.findIndex(b => b.name.toLowerCase() === String(sub).toLowerCase());
+      if (idx >= 0 && idx !== fbSelectedIdx) fbSelectProp(idx, true);
+    });
+  });
 
   function fbRenderTabs() {
     const tabs = document.getElementById('fbTabs');

@@ -1952,7 +1952,8 @@
   }
 
   // ── Detail render ────────────────────────────────────────
-  async function _openMarket(id) {
+  async function _openMarket(id, fromHistory) {
+    if (!fromHistory && window.pushSubNav) window.pushSubNav('marketresearch', id, 'market=' + id);
     // Look in current page first; if not present (different page), fetch by id
     _currentMarket = _markets.find(m => m.id === id) ||
                      _shortlistFull.find(m => m.id === id);
@@ -1969,10 +1970,20 @@
     document.getElementById('mrDetailView').classList.add('show');
     _renderDetail();
   }
-  function _backToList() {
+  function _backToList(fromHistory) {
+    // In-app Back unwinds the browser history entry we pushed in _openMarket, so the
+    // browser Back button and this button do the same thing (popstate → _backToList(true)).
+    if (!fromHistory && window.subNavBack && window.subNavBack('marketresearch')) return;
     _currentMarket = null;
     document.getElementById('mrListView').classList.remove('hidden');
     document.getElementById('mrDetailView').classList.remove('show');
+    if (!fromHistory && window.replaceSubNav) window.replaceSubNav('marketresearch');
+  }
+  if (window.registerSubNav) {
+    window.registerSubNav('marketresearch', (sub) => {
+      if (sub) { if (!_currentMarket || _currentMarket.id !== sub) _openMarket(sub, true); }
+      else if (_currentMarket) _backToList(true);
+    });
   }
   function _renderDetail() {
     const m = _currentMarket;
@@ -3109,7 +3120,8 @@ Research this town now and produce the scoring JSON.`;
     try {
       await window.supaWrite('market_research_markets', 'DELETE', null, `?id=eq.${m.id}`);
       await _loadData();
-      _backToList();
+      _backToList(true);
+      if (window.replaceSubNav) window.replaceSubNav('marketresearch');
       _renderGrid();
       _toast('Market deleted');
     } catch(e) { _toast('Error: ' + e.message, true); }
@@ -4409,6 +4421,8 @@ ${appendix}
     try {
       await _loadData();
       _renderGrid();
+      const deepId = window.getHashParam && window.getHashParam('market');
+      if (deepId) { await _openMarket(deepId, true); history.replaceState({ view: 'marketresearch', sub: deepId }, '', window.location.hash); }
     } catch(e) {
       console.error('Market Research init failed:', e);
       const root = document.getElementById('mrRoot');
