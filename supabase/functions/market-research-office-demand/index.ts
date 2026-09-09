@@ -101,27 +101,30 @@ async function fetchJson(url: string): Promise<any | null> {
   }
 }
 
-async function resolveS0804(year: string): Promise<S0804Vars | null> {
+async function resolveS0804(year: string): Promise<S0804Vars | { error: string; labels: Record<string, string> } | null> {
   const g = await fetchJson(`https://api.census.gov/data/${year}/acs/acs5/subject/groups/S0804.json`);
   if (!g?.variables) return null;
   let total = "";
   const office: string[] = [];
+  const c01: Record<string, string> = {};
   for (const [id, v] of Object.entries<any>(g.variables)) {
     if (!/^S0804_C01_\d+E$/.test(id)) continue;           // C01 = Total column, estimates only
     const label: string = (v.label || "").replace(/:/g, "");
-    // Total row
-    if (/^Estimate!!Total!!Workers 16 years and over$/.test(label)) { total = id; continue; }
-    if (!/!!INDUSTRY!!/.test(label)) continue;
-    const leaf = label.split("!!").pop() || "";
+    c01[id] = label;
+    const segs = label.split("!!");
+    const leaf = (segs.pop() || "").trim();
+    // Total row: first C01 estimate, or the "Workers 16 years and over" row with no deeper segments
+    if (id === "S0804_C01_001E" || (segs.length <= 2 && /^Workers 16 years and over/i.test(leaf))) { if (!total) total = id; continue; }
+    if (!/INDUSTRY/i.test(label)) continue;
     if (/^Information$/i.test(leaf) ||
-        /^Finance and insurance, and real estate/i.test(leaf) ||
-        /^Professional, scientific, and management, and administrative/i.test(leaf)) {
+        /^Finance and insurance/i.test(leaf) ||
+        /^Professional, scientific/i.test(leaf)) {
       office.push(id);
     }
   }
   if (!total || office.length !== 3) {
     console.error(`S0804 ${year}: resolved total=${total} office=${office.join(",")}`);
-    return null;
+    return { error: `S0804 ${year}: total=${total || "none"} office=[${office.join(",")}]`, labels: c01 };
   }
   return { total, office };
 }
@@ -236,8 +239,14 @@ serve(async (req: Request) => {
   if (markets.length === 0) return json({ ok: true, done: true, processed: 0, states_done: [] });
 
   // Resolve ACS variable ids (metadata is small — one fetch per table/year)
-  const [s22, s17, b22] = await Promise.all([resolveS0804(year), resolveS0804(baseYear), resolveB08301(year)]);
-  if (!s22 || !b22) return json({ error: `could not resolve ACS variables (S0804 ${year}: ${!!s22}, B08301 ${year}: ${!!b22})` }, 502);
+  const [r22, r17, b22] = await Promise.all([resolveS0804(year), resolveS0804(baseYear), resolveB08301(year)]);
+  if (!r22 || "error" in r22 || !b22) {
+    return json({ error: `could not resolve ACS variables (S0804 ${year}: ${r22 ? ("error" in r22 ? r22.error : "ok") : "fetch failed"}, B08301 ${year}: ${!!b22})`,
+                  s0804_labels: r22 && "error" in r22 ? r22.labels : undefined }, 502);
+  }
+  const s22 = r22 as S0804Vars;
+  const s17 = r17 && !("error" in r17) ? (r17 as S0804Vars) : null;
+  if (body.debug) return json({ ok: true, debug: true, s0804: s22, s0804_base: s17, b08301: b22 });
 
   const states = [...new Set(markets.map((m) => m.state))];
   const errors: string[] = [];
