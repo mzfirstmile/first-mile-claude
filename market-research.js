@@ -1416,6 +1416,25 @@
     } catch (e) { _shortlistFull = []; }
   }
 
+  // Lightweight name index of every shortlisted town (2 pages past the 1k cap) so the
+  // search dropdown's Markets section is instant and needs no network round-trip.
+  let _nameIndex = [], _nameIndexLoading = null;
+  function _loadNameIndex() {
+    if (_nameIndexLoading) return _nameIndexLoading;
+    _nameIndexLoading = (async () => {
+      const out = [];
+      for (let off = 0; off < 5000; off += 1000) {
+        const rows = await window.supaFetch('market_research_markets',
+          `?select=id,name,state,population,score,tier,office_score,office_tier&phase=eq.shortlisted&order=id&offset=${off}&limit=1000`) || [];
+        out.push(...rows);
+        if (rows.length < 1000) break;
+      }
+      for (const r of out) r._lc = (r.name || '').toLowerCase();
+      _nameIndex = out;
+    })().catch(e => { console.warn('[mr] name index failed', e); _nameIndexLoading = null; });
+    return _nameIndexLoading;
+  }
+
   async function _loadData() {
     _currentUser = window.currentUser;
     const [categories, criteria, paged] = await Promise.all([
@@ -1430,6 +1449,7 @@
     _totalForCurrentFilter = paged.total;
     _loadFilterCounts();
     _loadShortlistForChatbot();
+    _loadNameIndex();
     _loadGeoFilterOptions();
   }
 
@@ -4307,17 +4327,27 @@ ${appendix}
     const i = (text || '').toLowerCase().indexOf(q.toLowerCase());
     return i < 0 ? t : _esc(text.slice(0, i)) + '<b>' + _esc(text.slice(i, i + q.length)) + '</b>' + _esc(text.slice(i + q.length));
   }
-  async function _marketSuggest(q, signal) {
+  function _marketSuggestLocal(q) {
     const isOffice = _viewType === 'office';
-    const qq = q.replace(/[%,*]/g, ' ').trim();
-    if (!qq) return [];
-    const rows = await window.supaFetch('market_research_markets',
-      `?select=id,name,state,population,score,tier,office_score,office_tier&phase=eq.shortlisted&name=ilike.*${encodeURIComponent(qq)}*&order=${isOffice ? 'office_score' : 'score'}.desc.nullslast&limit=6`, { signal });
-    return (rows || []).map(m => ({
+    const lc = q.toLowerCase().replace(/,\s*$/, '').trim();
+    if (!lc) return [];
+    const starts = [], contains = [];
+    for (const m of _nameIndex) {
+      const i = m._lc.indexOf(lc);
+      if (i === 0) starts.push(m); else if (i > 0) contains.push(m);
+    }
+    const sc = (m) => (isOffice ? m.office_score : m.score) ?? -1;
+    starts.sort((a, b) => sc(b) - sc(a)); contains.sort((a, b) => sc(b) - sc(a));
+    return [...starts, ...contains].slice(0, 6).map(m => ({
       kind: 'market', id: m.id, label: m.name,
       sub: m.population ? m.population.toLocaleString() + ' pop' : '',
       score: isOffice ? m.office_score : m.score, tier: isOffice ? m.office_tier : m.tier,
     }));
+  }
+  async function _marketSuggest(q) {
+    if (_nameIndex.length) return _marketSuggestLocal(q);
+    await _loadNameIndex();                       // first keystroke before index landed
+    return _nameIndex.length ? _marketSuggestLocal(q) : [];
   }
   async function _photonSuggest(q, signal) {
     // CONUS + AK/HI bbox keeps results domestic; Photon has no countrycodes filter
@@ -4343,30 +4373,37 @@ ${appendix}
     }
     return out;
   }
+  let _sgPlacesPending = false;
   function _suggest(q) {
     clearTimeout(_sgTimer);
     const v = (q || '').trim();
     if (v.length < 2) { _sgClose(); return; }
+    const seq = ++_sgSeq;
+    // Stage 1 — markets from the in-memory index: synchronous, shows on this keystroke
+    const mk = _nameIndex.length ? _marketSuggestLocal(v) : [];
+    _sgItems = mk; _sgActive = -1; _sgPlacesPending = true;
+    _sgRender(v);
+    if (!_nameIndex.length) _marketSuggest(v).then(m => { if (seq !== _sgSeq) return; _sgItems = [...m, ..._sgItems.filter(i => i.kind !== 'market')]; _sgRender(v); });
+    // Stage 2 — geocoder, debounced (keystrokes cancel in-flight requests), appended on arrival
     _sgTimer = setTimeout(async () => {
       if (_sgAbort) _sgAbort.abort();
       _sgAbort = new AbortController();
-      const seq = ++_sgSeq, signal = _sgAbort.signal;
-      const [mk, pl] = await Promise.all([
-        _marketSuggest(v, signal).catch(() => []),
-        _photonSuggest(v, signal).catch(() => []),
-      ]);
+      const pl = await _photonSuggest(v, _sgAbort.signal).catch(() => []);
       if (seq !== _sgSeq) return; // stale
-      _sgItems = [...mk, ...pl];
-      _sgActive = -1;
+      _sgPlacesPending = false;
+      _sgItems = [..._sgItems.filter(i => i.kind === 'market'), ...pl];
+      if (_sgActive >= _sgItems.length) _sgActive = -1;
       _sgRender(v);
-    }, 260);
+    }, 180);
   }
   function _sgRender(q) {
     const el = _sgEl(); if (!el) return;
     const inp = document.getElementById('mrSearchInput');
     if (!inp || document.activeElement !== inp) { return; }
     if (!_sgItems.length) {
-      el.innerHTML = `<div class="mr-suggest-empty">No matching markets or places${_looksLikeAddress(q) ? ' — press Enter to geocode the full address' : ''}</div>`;
+      el.innerHTML = _sgPlacesPending
+        ? `<div class="mr-suggest-empty">Looking up places & addresses…</div>`
+        : `<div class="mr-suggest-empty">No matching markets or places${_looksLikeAddress(q) ? ' — press Enter to geocode the full address' : ''}</div>`;
       el.classList.add('open'); return;
     }
     let html = ''; let lastKind = null;
@@ -4388,6 +4425,7 @@ ${appendix}
         </div>`;
       }
     });
+    if (_sgPlacesPending && !_sgItems.some(i => i.kind !== 'market')) html += `<div class="mr-suggest-head">Places & addresses</div><div class="mr-suggest-empty" style="padding:6px 12px;">Looking up…</div>`;
     html += `<div class="mr-suggest-foot">↑↓ to move · Enter to select · Esc to close</div>`;
     el.innerHTML = html;
     el.classList.add('open');
