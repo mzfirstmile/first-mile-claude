@@ -519,6 +519,31 @@
       #mrRoot .mr-search-clear:hover { background: #f1f5f9; color: #475569; }
       #mrRoot .mr-search-input:not(:placeholder-shown) + .mr-search-clear { display: block; }
 
+      /* Autocomplete dropdown */
+      #mrRoot .mr-suggest {
+        position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 60;
+        background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+        box-shadow: 0 12px 32px rgba(15,23,42,0.14); overflow: hidden; display: none;
+      }
+      #mrRoot .mr-suggest.open { display: block; }
+      #mrRoot .mr-suggest-head {
+        padding: 6px 12px 4px; font-size: 10px; font-weight: 700; letter-spacing: .06em;
+        text-transform: uppercase; color: #94a3b8; background: #f8fafc; border-top: 1px solid #f1f5f9;
+      }
+      #mrRoot .mr-suggest-head:first-child { border-top: 0; }
+      #mrRoot .mr-suggest-item {
+        display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer;
+        font-size: 13px; color: #1e293b; line-height: 1.3;
+      }
+      #mrRoot .mr-suggest-item:hover, #mrRoot .mr-suggest-item.active { background: #f0f9ff; }
+      #mrRoot .mr-suggest-item .mr-sg-ico { width: 18px; text-align: center; flex: none; font-size: 13px; }
+      #mrRoot .mr-suggest-item .mr-sg-main { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      #mrRoot .mr-suggest-item .mr-sg-sub { color: #64748b; font-size: 11.5px; margin-left: 6px; }
+      #mrRoot .mr-suggest-item .mr-sg-right { flex: none; font-size: 11px; color: #64748b; display: flex; gap: 6px; align-items: center; }
+      #mrRoot .mr-suggest-item b { color: #0369a1; font-weight: 700; }
+      #mrRoot .mr-suggest-empty { padding: 10px 12px; font-size: 12px; color: #94a3b8; }
+      #mrRoot .mr-suggest-foot { padding: 5px 12px; font-size: 10.5px; color: #94a3b8; border-top: 1px solid #f1f5f9; background: #fafafa; }
+
       /* Page header + pager */
       #mrRoot .mr-page-header {
         display: flex; justify-content: space-between; align-items: center;
@@ -1087,11 +1112,13 @@
         <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin: 8px 0 4px 0;">
           <div class="mr-search-wrap" style="flex:1; min-width:320px; margin:0;">
             <svg class="mr-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input class="mr-search-input" id="mrSearchInput" type="text"
-                   placeholder="Search by town name, state, or full address (street, city, zip…)"
+            <input class="mr-search-input" id="mrSearchInput" type="text" autocomplete="off"
+                   placeholder="Search a town, city, or full address (street, city, zip…)"
                    oninput="mrSearch(this.value)"
-                   onkeydown="if(event.key==='Enter'){event.preventDefault();mrSearchEnter(this.value);}">
+                   onfocus="mrSuggestFocus()"
+                   onkeydown="mrSuggestKey(event)">
             <span class="mr-search-clear" id="mrSearchClear" onclick="mrSearch('')" title="Clear">×</span>
+            <div class="mr-suggest" id="mrSuggest" role="listbox"></div>
           </div>
           <label id="mrShowTier4Wrap" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:#475569; white-space:nowrap; user-select:none; padding:6px 10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff;">
             <input type="checkbox" id="mrShowTier4" onchange="mrToggleShowTier4(this.checked)" style="margin:0;" ${_showTier4 ? 'checked' : ''}>
@@ -4217,6 +4244,10 @@ ${appendix}
       _toast('Address not found', true);
       return;
     }
+    _applyPin(pin);
+  }
+  // Drop the 60-mile pin at a known lat/lng (from Nominatim on Enter, or a picked suggestion)
+  function _applyPin(pin) {
     _addressPin = pin;
     _applyAddressBounds(pin);
     _syncDistanceSort(true);
@@ -4239,6 +4270,7 @@ ${appendix}
     const inp = document.getElementById('mrSearchInput');
     if (inp && inp.value !== _searchQuery) inp.value = _searchQuery;
     clearTimeout(_searchTimer);
+    _suggest(_searchQuery);
     // Empty input → clear any active address pin + bounds and refresh
     if (!_searchQuery.trim()) {
       _addressPin = null; _syncDistanceSort(false);
@@ -4260,6 +4292,140 @@ ${appendix}
     if (_addressPin) { _addressPin = null; _syncDistanceSort(false); _mapBounds = null; _updateAddressHint(''); }
     _searchTimer = setTimeout(() => { _page = 0; _refreshPage(); }, 220);
   };
+  // ── Search autocomplete ──────────────────────────────────
+  // Two sections: our shortlist markets (Supabase ilike, instant) and places/addresses
+  // from Photon (komoot's OSM geocoder — built for as-you-type, no key). Picking a market
+  // opens it; picking a place/address drops the 60-mile pin without needing Enter.
+  // Swap _photonSuggest for Google Places Autocomplete if a billed key is ever added.
+  let _sgTimer = null, _sgAbort = null, _sgItems = [], _sgActive = -1, _sgSeq = 0;
+  const _PHOTON = 'https://photon.komoot.io/api/';
+  const _sgScoreColor = (s) => s >= 8 ? '#15803d' : (s >= 6 ? '#65a30d' : (s >= 4 ? '#ca8a04' : (s != null ? '#b91c1c' : '#cbd5e1')));
+  function _sgEl() { return document.getElementById('mrSuggest'); }
+  function _sgClose() { const el = _sgEl(); if (el) { el.classList.remove('open'); el.innerHTML = ''; } _sgItems = []; _sgActive = -1; }
+  function _sgHighlight(text, q) {
+    const t = _esc(text || ''); if (!q) return t;
+    const i = (text || '').toLowerCase().indexOf(q.toLowerCase());
+    return i < 0 ? t : _esc(text.slice(0, i)) + '<b>' + _esc(text.slice(i, i + q.length)) + '</b>' + _esc(text.slice(i + q.length));
+  }
+  async function _marketSuggest(q, signal) {
+    const isOffice = _viewType === 'office';
+    const qq = q.replace(/[%,*]/g, ' ').trim();
+    if (!qq) return [];
+    const rows = await window.supaFetch('market_research_markets',
+      `?select=id,name,state,population,score,tier,office_score,office_tier&phase=eq.shortlisted&name=ilike.*${encodeURIComponent(qq)}*&order=${isOffice ? 'office_score' : 'score'}.desc.nullslast&limit=6`, { signal });
+    return (rows || []).map(m => ({
+      kind: 'market', id: m.id, label: m.name,
+      sub: m.population ? m.population.toLocaleString() + ' pop' : '',
+      score: isOffice ? m.office_score : m.score, tier: isOffice ? m.office_tier : m.tier,
+    }));
+  }
+  async function _photonSuggest(q, signal) {
+    // CONUS + AK/HI bbox keeps results domestic; Photon has no countrycodes filter
+    const url = `${_PHOTON}?q=${encodeURIComponent(q)}&limit=6&lang=en&bbox=-170,18,-65,72`;
+    const r = await fetch(url, { signal });
+    if (!r.ok) return [];
+    const j = await r.json();
+    const out = [];
+    for (const f of (j.features || [])) {
+      const p = f.properties || {}; const c = (f.geometry || {}).coordinates || [];
+      if ((p.countrycode || '').toUpperCase() !== 'US' || c.length < 2) continue;
+      const isAddr = !!p.housenumber || p.osm_key === 'highway' || p.type === 'house' || p.type === 'street';
+      const street = [p.housenumber, p.street || (p.osm_key === 'highway' ? p.name : '')].filter(Boolean).join(' ');
+      const town = p.city || p.town || p.village || p.county || '';
+      const isPlace = ['city', 'town', 'village', 'hamlet', 'locality', 'suburb', 'borough', 'municipality'].includes(p.type) || p.osm_key === 'place';
+      const main = isAddr ? street : (p.name || town);
+      if (!main) continue;
+      const sub = [isAddr ? town : (isPlace && p.type !== 'city' ? (p.county || '') : ''), p.state, isAddr ? p.postcode : ''].filter(Boolean).join(', ');
+      const label = [main, isAddr ? town : '', p.state].filter(Boolean).join(', ');
+      if (out.some(o => o.label === label)) continue;
+      out.push({ kind: isAddr ? 'address' : 'place', label, main, sub, lat: c[1], lng: c[0],
+                 typeTag: isAddr ? 'Address' : (p.type ? p.type[0].toUpperCase() + p.type.slice(1) : 'Place') });
+    }
+    return out;
+  }
+  function _suggest(q) {
+    clearTimeout(_sgTimer);
+    const v = (q || '').trim();
+    if (v.length < 2) { _sgClose(); return; }
+    _sgTimer = setTimeout(async () => {
+      if (_sgAbort) _sgAbort.abort();
+      _sgAbort = new AbortController();
+      const seq = ++_sgSeq, signal = _sgAbort.signal;
+      const [mk, pl] = await Promise.all([
+        _marketSuggest(v, signal).catch(() => []),
+        _photonSuggest(v, signal).catch(() => []),
+      ]);
+      if (seq !== _sgSeq) return; // stale
+      _sgItems = [...mk, ...pl];
+      _sgActive = -1;
+      _sgRender(v);
+    }, 260);
+  }
+  function _sgRender(q) {
+    const el = _sgEl(); if (!el) return;
+    const inp = document.getElementById('mrSearchInput');
+    if (!inp || document.activeElement !== inp) { return; }
+    if (!_sgItems.length) {
+      el.innerHTML = `<div class="mr-suggest-empty">No matching markets or places${_looksLikeAddress(q) ? ' — press Enter to geocode the full address' : ''}</div>`;
+      el.classList.add('open'); return;
+    }
+    let html = ''; let lastKind = null;
+    _sgItems.forEach((it, i) => {
+      const section = it.kind === 'market' ? 'Markets in shortlist' : 'Places & addresses';
+      if (section !== lastKind) { html += `<div class="mr-suggest-head">${section}</div>`; lastKind = section; }
+      if (it.kind === 'market') {
+        const tierCls = _tierClass(it.tier);
+        html += `<div class="mr-suggest-item${i === _sgActive ? ' active' : ''}" data-i="${i}" onmousedown="event.preventDefault()" onclick="mrSuggestPick(${i})">
+          <span class="mr-sg-ico">🏙️</span>
+          <span class="mr-sg-main">${_sgHighlight(it.label, q)}<span class="mr-sg-sub">${_esc(it.sub)}</span></span>
+          <span class="mr-sg-right">${it.score != null ? `<span style="font-weight:700;color:${_sgScoreColor(it.score)};">${Number(it.score).toFixed(1)}</span>` : ''}${it.tier ? `<span class="mr-tier ${tierCls}" style="font-size:10px;">T${it.tier}</span>` : ''}</span>
+        </div>`;
+      } else {
+        html += `<div class="mr-suggest-item${i === _sgActive ? ' active' : ''}" data-i="${i}" onmousedown="event.preventDefault()" onclick="mrSuggestPick(${i})">
+          <span class="mr-sg-ico">${it.kind === 'address' ? '📍' : '🗺️'}</span>
+          <span class="mr-sg-main">${_sgHighlight(it.main, q)}<span class="mr-sg-sub">${_esc(it.sub)}</span></span>
+          <span class="mr-sg-right">${_esc(it.typeTag)} · ${_ADDRESS_RADIUS_MILES} mi radius</span>
+        </div>`;
+      }
+    });
+    html += `<div class="mr-suggest-foot">↑↓ to move · Enter to select · Esc to close</div>`;
+    el.innerHTML = html;
+    el.classList.add('open');
+  }
+  window.mrSuggestPick = (i) => {
+    const it = _sgItems[i]; if (!it) return;
+    const inp = document.getElementById('mrSearchInput');
+    _sgClose();
+    if (it.kind === 'market') {
+      _searchQuery = it.label; if (inp) inp.value = it.label;
+      // Show the picked town in the list too, then open its detail
+      if (_addressPin) { _addressPin = null; _syncDistanceSort(false); _mapBounds = null; _updateAddressHint(''); }
+      _page = 0; _refreshPage();
+      _openMarket(it.id);
+    } else {
+      _searchQuery = it.label; if (inp) inp.value = it.label;
+      _applyPin({ lat: it.lat, lng: it.lng, label: it.label });
+    }
+    if (inp) inp.blur();
+  };
+  window.mrSuggestFocus = () => { if (_sgItems.length) { const el = _sgEl(); if (el) el.classList.add('open'); } else if ((_searchQuery || '').trim().length >= 2) _suggest(_searchQuery); };
+  window.mrSuggestKey = (ev) => {
+    const el = _sgEl(); const open = el && el.classList.contains('open') && _sgItems.length;
+    if (ev.key === 'ArrowDown' && open) { ev.preventDefault(); _sgActive = (_sgActive + 1) % _sgItems.length; _sgRender(_searchQuery.trim()); return; }
+    if (ev.key === 'ArrowUp' && open) { ev.preventDefault(); _sgActive = (_sgActive - 1 + _sgItems.length) % _sgItems.length; _sgRender(_searchQuery.trim()); return; }
+    if (ev.key === 'Escape') { _sgClose(); return; }
+    if (ev.key === 'Enter') {
+      ev.preventDefault();
+      if (open && _sgActive >= 0) { mrSuggestPick(_sgActive); return; }
+      _sgClose();
+      mrSearchEnter(ev.target.value);
+    }
+  };
+  document.addEventListener('click', (ev) => {
+    const wrap = ev.target.closest && ev.target.closest('#mrRoot .mr-search-wrap');
+    if (!wrap) _sgClose();
+  });
+
   window.mrSearchEnter = (q) => {
     const v = (q || '').trim();
     if (!v) return;
