@@ -32,9 +32,14 @@ jobs:
         with:
           fetch-depth: 2
 
-      - uses: supabase/setup-cli@v1
+      - uses: actions/setup-node@v4
         with:
-          version: latest
+          node-version: 20
+
+      # npm install avoids the unauthenticated GitHub-release download that
+      # supabase/setup-cli does (intermittently rate-limited → flaky runs)
+      - name: Install Supabase CLI
+        run: npm install -g supabase@latest && supabase --version
 
       - name: Determine functions to deploy
         id: which
