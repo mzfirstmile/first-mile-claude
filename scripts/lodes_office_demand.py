@@ -14,7 +14,7 @@ Per state it downloads (LODES8, all gzip CSV):
   {st}_wac_SE03_JT00_{year}.csv.gz        same, workers earning > $3,333/month
   {st}_wac_S000_JT00_{base_year}.csv.gz   for 5-yr growth
   {st}_rac_S000_JT00_{year}.csv.gz        workers by RESIDENCE block
-Plus once: Census Gazetteer places file (land area).
+Plus land area per state from the Census geoinfo API (AREALAND; needs CENSUS_API_KEY), Gazetteer zip as fallback.
 
 Office-using sectors = CNS09 Information (51) + CNS10 Finance & Insurance (52)
   + CNS11 Real Estate (53) + CNS12 Professional/Scientific/Technical (54)
@@ -24,7 +24,7 @@ Criteria written (updated_by='phase2_lodes', office view only, value_numeric NUL
   Office-Using Jobs in Town            office jobs                      linear to target (5,000)
   Office Share of Local Jobs           office / all jobs %              linear to target (35%)
   Jobs-to-Resident-Workers Ratio       WAC C000 / RAC C000              linear to target (1.0)
-  Office Job Growth (5-yr)             base_year → year office jobs %   -10%→0 · 0→5 · +15%→10
+  Office Job Growth (5-yr)             base_year → year office jobs %   -10%→0 · +25%→10
   High-Wage Office Jobs in Town        SE03 office jobs                 linear to target (3,000)
   Office Job Density                   office jobs / land sq mi         linear to target (1,000)
 Prior 'phase2_office' (ACS) rows for the same (market, criterion) are replaced —
@@ -127,6 +127,29 @@ def load_gazetteer():
     return area
 
 
+STATE_FIPS = {"AL":"01","AK":"02","AZ":"04","AR":"05","CA":"06","CO":"08","CT":"09","DE":"10","DC":"11","FL":"12","GA":"13","HI":"15","ID":"16","IL":"17","IN":"18","IA":"19","KS":"20","KY":"21","LA":"22","ME":"23","MD":"24","MA":"25","MI":"26","MN":"27","MS":"28","MO":"29","MT":"30","NE":"31","NV":"32","NH":"33","NJ":"34","NM":"35","NY":"36","NC":"37","ND":"38","OH":"39","OK":"40","OR":"41","PA":"42","RI":"44","SC":"45","SD":"46","TN":"47","TX":"48","UT":"49","VT":"50","VA":"51","WA":"53","WV":"54","WI":"55","WY":"56","PR":"72"}
+
+
+def load_area_geoinfo(st, year=2023):
+    """Land area (sq mi) by 7-digit place GEOID from the Census `geoinfo` API (AREALAND in m²).
+    Needs CENSUS_API_KEY. Primary source — the Gazetteer zip URLs have been 404ing."""
+    key = os.environ.get("CENSUS_API_KEY", "")
+    fips = STATE_FIPS.get(st.upper())
+    if not key or not fips:
+        return {}
+    for y in (year, year - 1):
+        try:
+            blob = fetch(f"https://api.census.gov/data/{y}/geoinfo?get=AREALAND&for=place:*&in=state:{fips}&key={key}")
+        except Exception as e:
+            print(f"  {st}: geoinfo {y} failed: {e}", flush=True); continue
+        if not blob:
+            continue
+        rows = json.loads(blob)
+        h = rows[0]; ia, ist, ipl = h.index("AREALAND"), h.index("state"), h.index("place")
+        return {r[ist].zfill(2) + r[ipl].zfill(5): int(r[ia]) / 2_589_988.11 for r in rows[1:] if r[ia] and r[ia].isdigit()}
+    return {}
+
+
 def lin(v, tgt):
     if v is None or tgt is None or tgt <= 0 or v < 0:
         return None
@@ -134,10 +157,10 @@ def lin(v, tgt):
 
 
 def growth_score(pct):
-    # −10% → 0, 0% → 5 (hold your own), +15% → 10
+    # −10% → 0, 0% → ~2.9, +10% → ~5.7, +25% → 10  (first national run: +15% cap gave 10/10 to 43% of towns)
     if pct is None:
         return None
-    return round(max(0.0, min(10.0, (pct + 10) / 25 * 10)), 1)
+    return round(max(0.0, min(10.0, (pct + 10) / 35 * 10)), 1)
 
 
 def agg_state(st, geoids, year, base_year):
@@ -224,9 +247,9 @@ def main():
     states = sorted(by_state) if a.states.lower() == "all" else [s.strip().upper() for s in a.states.split(",")]
     print(f"{len(mk)} shortlisted markets; running {len(states)} states: {' '.join(states)}", flush=True)
 
-    print("Loading Gazetteer land areas…", flush=True)
-    area = load_gazetteer()
-    print(f"  {len(area):,} places with land area", flush=True)
+    print("Loading Gazetteer land areas (fallback source)…", flush=True)
+    gaz_area = load_gazetteer()
+    print(f"  {len(gaz_area):,} places with land area from Gazetteer", flush=True)
 
     t = {k: crits[v]["target_min_office"] for k, v in CRIT.items()}
     rows = []       # (market_id, criterion_id, score, raw, text, source)
@@ -238,6 +261,7 @@ def main():
         geo2m = {m["census_place_geoid"]: m for m in ms}
         t0 = time.time()
         data = agg_state(st, list(geo2m), a.year, a.base_year)
+        area = load_area_geoinfo(st) or gaz_area
         n = 0
         for geoid, m in geo2m.items():
             d = data.get(geoid)
