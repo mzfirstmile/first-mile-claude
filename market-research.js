@@ -985,10 +985,12 @@
     quality_of_life: 'Quality of Life',
     transit: 'Transit & Access',
     company_concentrations: 'Company Concentrations',
+    office_demand: 'Office Demand',
+    asset_relation: 'Relation to Other Asset Classes',
   };
-  const _CAT_ORDER = ['demographics', 'company_concentrations', 'governance', 'economic_activity', 'education', 'quality_of_life', 'transit'];
+  const _CAT_ORDER = ['demographics', 'company_concentrations', 'office_demand', 'asset_relation', 'governance', 'economic_activity', 'education', 'quality_of_life', 'transit'];
   // Which categories Phase 2 can score programmatically. Others require Phase 3.
-  const _PHASE2_CATEGORIES = new Set(['demographics', 'education', 'company_concentrations']);
+  const _PHASE2_CATEGORIES = new Set(['demographics', 'education', 'company_concentrations', 'office_demand', 'asset_relation']);
   const _PHASE3_CATEGORIES = new Set(['governance', 'economic_activity', 'quality_of_life', 'transit']);
 
   // For Phase 2 criteria we can derive the actual measured value from the
@@ -3193,6 +3195,8 @@ Research this town now and produce the scoring JSON.`;
   const _CAT_COLORS = {
     'Demographics':              '#888780',
     'Company Concentrations':    '#7F77DD',
+    'Office Demand':             '#0F766E',
+    'Relation to Other Asset Classes': '#9333EA',
     'Governance & Barriers to Entry': '#D4537E',
     'Transit & Access':          '#1D9E75',
     'Economic Activity':         '#D85A30',
