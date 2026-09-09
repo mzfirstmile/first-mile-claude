@@ -1,0 +1,47 @@
+name: LODES Office Demand scoring
+
+# Pulls Census LEHD LODES payroll job counts and writes the Office Demand criteria
+# for the market-research module. Manual trigger only. Free (Census data + Actions minutes).
+
+on:
+  workflow_dispatch:
+    inputs:
+      states:
+        description: "Comma-separated state codes, or 'all'"
+        required: true
+        default: 'NJ'
+      year:
+        description: 'LODES year (falls back ±1 if a state lacks it)'
+        required: false
+        default: '2022'
+      base_year:
+        description: 'Base year for 5-yr growth'
+        required: false
+        default: '2017'
+      dry_run:
+        description: 'true = print sample rows, write nothing'
+        required: false
+        default: 'false'
+      recompute:
+        description: 'true = recompute composites + ranks after writing'
+        required: false
+        default: 'true'
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          ARGS="--states '${{ github.event.inputs.states }}' --year ${{ github.event.inputs.year }} --base-year ${{ github.event.inputs.base_year }}"
+          [ "${{ github.event.inputs.dry_run }}" = "true" ] && ARGS="$ARGS --dry-run"
+          [ "${{ github.event.inputs.recompute }}" = "true" ] && ARGS="$ARGS --recompute"
+          eval python3 scripts/lodes_office_demand.py $ARGS
