@@ -3416,7 +3416,9 @@ Research this town now and produce the scoring JSON.`;
       });
       if (!r0.ok) throw new Error('per-criterion re-score failed: ' + r0.status);
       const sql = `WITH cat_means AS (
-        SELECT s.market_id, c.category_id, AVG(s.value_numeric) AS mean_res, AVG(s.value_numeric_office) AS mean_off
+        SELECT s.market_id, c.category_id,
+               AVG(CASE WHEN c.is_active_residential IS NOT FALSE THEN s.value_numeric ELSE NULL END) AS mean_res,
+               AVG(CASE WHEN c.is_active_office      IS NOT FALSE THEN s.value_numeric_office ELSE NULL END) AS mean_off
         FROM market_research_scores s JOIN market_research_criteria c ON c.id = s.criterion_id
         WHERE c.category_id IS NOT NULL GROUP BY s.market_id, c.category_id
       ),
@@ -3429,9 +3431,9 @@ Research this town now and produce the scoring JSON.`;
       )
       UPDATE market_research_markets m SET
         score = ROUND(c.comp_res::numeric, 1),
-        tier  = CASE WHEN c.comp_res >= 8.5 THEN 1 WHEN c.comp_res >= 7.0 THEN 2 WHEN c.comp_res >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
+        tier  = CASE WHEN ROUND(c.comp_res::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_res::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_res::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
         office_score = ROUND(c.comp_off::numeric, 1),
-        office_tier  = CASE WHEN c.comp_off >= 8.5 THEN 1 WHEN c.comp_off >= 7.0 THEN 2 WHEN c.comp_off >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
+        office_tier  = CASE WHEN ROUND(c.comp_off::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_off::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_off::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
         updated_at = now()
       FROM composites c WHERE m.id = c.market_id`;
       const runSql = async (q) => {
