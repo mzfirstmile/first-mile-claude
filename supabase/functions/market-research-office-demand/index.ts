@@ -9,9 +9,10 @@
 //   S0804  Means of Transportation to Work by Selected Characteristics for
 //          WORKPLACE Geography. C01_001E = workers 16+ whose workplace is in
 //          the place. INDUSTRY sub-rows are PERCENT of that total.
-//          Office-using sectors = Information (NAICS 51) + Finance/insurance/
-//          real estate (52-53) + Professional/scientific/management/
-//          administrative (54-56).
+//          Office-using sectors = "Information and finance and insurance, and real
+//          estate and rental and leasing" (NAICS 51-53, one merged row in 2022)
+//          + "Professional, scientific, and management, and administrative and
+//          waste management services" (54-56).
 //   B08301 Means of Transportation to Work (RESIDENCE geography).
 //          _001E = employed residents 16+, "Worked from home" row = WFH count.
 //
@@ -111,18 +112,18 @@ async function resolveS0804(year: string): Promise<S0804Vars | { error: string; 
     if (!/^S0804_C01_\d+E$/.test(id)) continue;           // C01 = Total column, estimates only
     const label: string = (v.label || "").replace(/:/g, "");
     c01[id] = label;
-    const segs = label.split("!!");
-    const leaf = (segs.pop() || "").trim();
-    // Total row: first C01 estimate, or the "Workers 16 years and over" row with no deeper segments
-    if (id === "S0804_C01_001E" || (segs.length <= 2 && /^Workers 16 years and over/i.test(leaf))) { if (!total) total = id; continue; }
-    if (!/INDUSTRY/i.test(label)) continue;
-    if (/^Information$/i.test(leaf) ||
-        /^Finance and insurance/i.test(leaf) ||
-        /^Professional, scientific/i.test(leaf)) {
-      office.push(id);
+    const leaf = (label.split("!!").pop() || "").trim();
+    if (!/!!INDUSTRY!!/.test(label)) continue;
+    // 2022 S0804 merges Information with Finance/Insurance/Real Estate into one
+    // row ("Information and finance and insurance, and real estate…"); older
+    // years may split them. Match any of the three and dedupe.
+    if (/^Information/i.test(leaf) || /Finance and insurance/i.test(leaf) || /^Professional, scientific/i.test(leaf)) {
+      if (!office.includes(id)) office.push(id);
     }
   }
-  if (!total || office.length !== 3) {
+  // Total row is always the first C01 estimate
+  if (c01["S0804_C01_001E"] && /Workers 16 years and over$/.test(c01["S0804_C01_001E"])) total = "S0804_C01_001E";
+  if (!total || office.length < 2 || office.length > 3) {
     console.error(`S0804 ${year}: resolved total=${total} office=${office.join(",")}`);
     return { error: `S0804 ${year}: total=${total || "none"} office=[${office.join(",")}]`, labels: c01 };
   }
