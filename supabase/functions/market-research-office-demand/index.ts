@@ -91,13 +91,19 @@ const fmtPct = (n: number) => n.toFixed(1) + "%";
 interface S0804Vars { total: string; office: string[] }
 interface B08301Vars { total: string; wfh: string }
 
+const FETCH_LOG: string[] = [];
 async function fetchJson(url: string): Promise<any | null> {
+  const safe = url.replace(/&key=[^&]+/, "&key=***");
   try {
     const r = await fetch(url);
-    if (!r.ok) { console.error("HTTP", r.status, url.slice(0, 120)); return null; }
+    if (!r.ok) {
+      const body = (await r.text().catch(() => "")).slice(0, 300);
+      FETCH_LOG.push(`HTTP ${r.status} ${safe} :: ${body}`);
+      return null;
+    }
     return await r.json();
   } catch (e) {
-    console.error("fetch failed:", url.slice(0, 120), String(e).slice(0, 200));
+    FETCH_LOG.push(`EXC ${safe} :: ${String(e).slice(0, 200)}`);
     return null;
   }
 }
@@ -168,6 +174,7 @@ async function fetchPlaces(year: string, dataset: string, vars: string[], fips: 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   const t0 = Date.now();
+  FETCH_LOG.length = 0;
   const json = (b: unknown, status = 200) =>
     new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
@@ -345,6 +352,6 @@ serve(async (req: Request) => {
     ok: true, states_done: states, processed, markets_in_scope: markets.length,
     score_rows_written: inserted, remaining_states: remainingStates,
     acs_vars: { s0804_total: s22.total, s0804_office: s22.office, b08301: b22 },
-    errors, duration_ms: Date.now() - t0,
+    errors, fetch_log: FETCH_LOG.slice(-10), duration_ms: Date.now() - t0,
   });
 });
