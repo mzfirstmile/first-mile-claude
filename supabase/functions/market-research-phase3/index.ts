@@ -103,9 +103,10 @@ Return STRICT JSON in this exact shape, with no commentary outside the JSON:
   "scores": [
     {"criterion_name": "<exact name from list>", "score": <0-10 or null>, "value": "<short value>", "sources": ["<URL or label>", "<optional 2nd>", "<optional 3rd>"]}
   ],
-  "thesis": "<2-3 paragraph investment thesis>",
+  "thesis": "<2 concise paragraphs investment thesis>",
   "summary": "<one sentence executive summary, max 200 chars>"
-}`;
+}
+Keep it compact: "value" ≤ 60 chars, 1-2 sources per criterion (URL or short label), no prose outside the JSON.`;
 }
 
 function buildUserPrompt(m: Market): string {
@@ -140,7 +141,9 @@ async function callClaudeForTown(apiKey: string, system: string, m: Market) {
     },
     body: JSON.stringify({
       model: "claude-sonnet-4-6",
-      max_tokens: 3000,
+      // 3000 truncated ~80% of responses in Sept 2026 (model writes longer theses/sources);
+      // a cut-off JSON surfaced as "SyntaxError: Expected ',' or ']'". 6000 leaves headroom.
+      max_tokens: 6000,
       system,
       messages: [{ role: "user", content: buildUserPrompt(m) }],
     }),
@@ -148,6 +151,7 @@ async function callClaudeForTown(apiKey: string, system: string, m: Market) {
   const text = await r.text();
   if (!r.ok) throw new Error(`API ${r.status}: ${text.slice(0, 300)}`);
   const data = JSON.parse(text);
+  if (data.stop_reason === "max_tokens") throw new Error("Claude output truncated at max_tokens — raise max_tokens or tighten the prompt");
   const usage = data.usage || {};
   const inputTok = usage.input_tokens || 0;
   const outputTok = usage.output_tokens || 0;
