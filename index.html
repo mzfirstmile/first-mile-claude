@@ -1693,11 +1693,27 @@
       }
     };
     msalInstance = new msal.PublicClientApplication(msalConfig);
-    // Check for existing session
-    const accounts = msalInstance.getAllAccounts();
-    if (accounts.length > 0) {
-      handleAuthResult(accounts[0]);
-    }
+    // Complete a redirect-flow login if we're returning from Microsoft (mobile path),
+    // otherwise fall back to any cached account.
+    msalInstance.handleRedirectPromise().then(result => {
+      if (result && result.account) {
+        // Clean the auth hash out of the URL and land on home
+        history.replaceState({ view: 'home' }, '', window.location.pathname);
+        return handleAuthResult(result.account);
+      }
+      const accounts = msalInstance.getAllAccounts();
+      if (accounts.length > 0) return handleAuthResult(accounts[0]);
+    }).catch(e => {
+      console.error('Redirect login error:', e);
+      const error = document.getElementById('loginError');
+      if (error) { error.textContent = 'Login failed: ' + (e.message || 'Unknown error'); error.style.display = 'block'; }
+    });
+  }
+
+  // Mobile browsers block/mangle popups (and iOS Chrome can't reliably return a popup
+  // result), so use the full-page redirect flow there and keep popups on desktop.
+  function msalUseRedirect() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
   }
 
   async function msalLogin() {
@@ -1716,6 +1732,11 @@
     loading.style.display = 'block';
 
     try {
+      if (msalUseRedirect()) {
+        // Full-page redirect; handleRedirectPromise() in msalInit finishes the login on return
+        await msalInstance.loginRedirect({ scopes: ['User.Read'], prompt: 'select_account' });
+        return;
+      }
       const result = await msalInstance.loginPopup({
         scopes: ['User.Read'],
         prompt: 'select_account',
@@ -1915,6 +1936,7 @@
     localStorage.removeItem('fmc_auth_ts');
     localStorage.clear();
     if (msalInstance) {
+      if (msalUseRedirect()) { msalInstance.logoutRedirect().catch(() => { window.location.reload(); }); return; }
       msalInstance.logoutPopup().then(() => { window.location.reload(); }).catch(() => { window.location.reload(); });
     } else {
       window.location.reload();
@@ -2039,11 +2061,20 @@
 
   // Handle browser back/forward buttons
   window.addEventListener('popstate', function(e) {
+    if (isAuthHash()) return;
     const view = (e.state && e.state.view) || getViewFromHash() || 'home';
     switchView(view, false);
   });
 
+  // True when the URL hash is an OAuth/MSAL response (code=/state=/error=/id_token=)
+  // rather than one of our view names. The router must leave those hashes alone or
+  // MSAL sees a hash without `state` and throws no_state_in_hash.
+  function isAuthHash() {
+    return /(^|[#&])(code|state|error|id_token|access_token|error_description)=/.test(window.location.hash);
+  }
+
   function getViewFromHash() {
+    if (isAuthHash()) return null;
     const hash = window.location.hash.replace('#', '');
     // Strip query params (e.g. "financials&prop=Paramus+Plaza" → "financials")
     return hash ? hash.split('&')[0] : null;
@@ -2061,6 +2092,7 @@
 
   // On initial load, restore view from hash if present
   (function() {
+    if (isAuthHash()) return; // MSAL owns this hash — don't rewrite the URL
     const initialView = getViewFromHash();
     if (initialView && initialView !== 'home') {
       // Replace current history entry so first back goes to previous page, not home
