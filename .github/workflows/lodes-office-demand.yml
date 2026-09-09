@@ -44,4 +44,19 @@ jobs:
           ARGS="--states '${{ github.event.inputs.states }}' --year ${{ github.event.inputs.year }} --base-year ${{ github.event.inputs.base_year }}"
           [ "${{ github.event.inputs.dry_run }}" = "true" ] && ARGS="$ARGS --dry-run"
           [ "${{ github.event.inputs.recompute }}" = "true" ] && ARGS="$ARGS --recompute"
-          eval python3 scripts/lodes_office_demand.py $ARGS
+          set -o pipefail
+          eval python3 scripts/lodes_office_demand.py $ARGS 2>&1 | tee run.log
+      - name: Ship log to Supabase (market_research_job_logs)
+        if: always()
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          log = open('run.log', errors='replace').read()[-12000:] if os.path.exists('run.log') else '(no run.log)'
+          q = "INSERT INTO market_research_job_logs (workflow, run_id, status, log) VALUES ('lodes-office-demand', '${{ github.run_id }}', '${{ job.status }}', '" + log.replace("'", "''") + "')"
+          req = urllib.request.Request(os.environ['SUPABASE_URL'].rstrip('/') + '/rest/v1/rpc/exec_sql', data=json.dumps({'query': q}).encode(),
+                headers={'apikey': os.environ['SUPABASE_KEY'], 'Authorization': 'Bearer ' + os.environ['SUPABASE_KEY'], 'Content-Type': 'application/json'})
+          print(urllib.request.urlopen(req).read()[:200])
+          PY
