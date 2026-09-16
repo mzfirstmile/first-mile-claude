@@ -1906,6 +1906,25 @@
         _mapResizeObs.observe(mapEl);
       }
 
+      // Belt and braces: Leaflet caches the container size at construction; if that measurement
+      // was taken mid-layout, re-measure a few times and redo the initial fit when it changed.
+      {
+        const sz0 = _mapInstance.getSize();
+        console.log('[mr] map init size', mapEl.offsetWidth, mapEl.offsetHeight, sz0.x, sz0.y);
+        const inst = _mapInstance;
+        [120, 450, 1200].forEach(ms => setTimeout(() => {
+          if (_mapInstance !== inst) return;
+          const before = inst.getSize();
+          try { inst.invalidateSize({ pan: false }); } catch (_) { return; }
+          const after = inst.getSize();
+          if ((before.x !== after.x || before.y !== after.y) && _initialFit && !_mapBounds) {
+            console.log('[mr] map container changed', before.x + 'x' + before.y, '→', after.x + 'x' + after.y, '— refitting');
+            _mapBoundsSettling = true;
+            try { inst.fitBounds(_initialFit, { padding: [0, 0] }); } catch (_) {}
+            setTimeout(() => { _mapBoundsSettling = false; }, 600);
+          }
+        }, ms));
+      }
       // Initial fit issued — anyone waiting to fly to a town (mrViewOnMap) may proceed after it settles
       setTimeout(() => { if (_mapReadyResolve) { _mapReadyResolve(); _mapReadyResolve = null; } }, 650);
 
