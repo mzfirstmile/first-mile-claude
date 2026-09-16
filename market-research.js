@@ -1706,6 +1706,8 @@
   }
 
   let _mapResizeHandler = null;
+  let _mapResizeObs = null;   // ResizeObserver on #mrMap (see _initMap)
+  let _initialFit = null;     // bounds of the initial fit, re-applied if the container resizes right after init
   let _mapDeferred = false; // _initMap skipped because the container was hidden; run it when the list is shown
   let _mapReady = null; // promise that resolves once the current map instance has finished its initial fit
   let _mapReadyResolve = null;
@@ -1725,6 +1727,7 @@
         return;
       }
       _mapDeferred = false;
+      _initialFit = null;
       // Always rebuild — _renderGrid replaces innerHTML
       if (_mapInstance) { try { _mapInstance.stop(); _mapInstance.closePopup(); } catch {} try { _mapInstance.remove(); } catch {} _mapInstance = null; }
       _mapInstance = L.map(mapEl).setView([39.5, -98.35], 4); // US center
@@ -1875,8 +1878,32 @@
         _mapBoundsSettling = true;
         // Tight fit — no padding, no buffer rendering of Canada/Mexico
         _mapInstance.fitBounds(bounds, { padding: [0, 0] });
+        _initialFit = bounds;
         // Release the moveend lock after leaflet settles
         setTimeout(() => { _mapBoundsSettling = false; }, 600);
+      }
+
+      // The split layout (and the collapsed-sidebar layout) often hands Leaflet a container that
+      // is still being laid out when L.map() runs — the map then measures a sliver, the initial
+      // fit is computed against that sliver and moveend writes garbage bounds into the list filter
+      // ("Filtered by map view · 0 results"). Watch the container and re-measure + re-fit whenever
+      // its size changes during the first seconds after init.
+      if (_mapResizeObs) { try { _mapResizeObs.disconnect(); } catch (_) {} }
+      if (window.ResizeObserver) {
+        const createdAt = Date.now();
+        let lastW = mapEl.offsetWidth, lastH = mapEl.offsetHeight;
+        _mapResizeObs = new ResizeObserver(() => {
+          const w = mapEl.offsetWidth, h = mapEl.offsetHeight;
+          if (!_mapInstance || (w === lastW && h === lastH) || w === 0 || h === 0) return;
+          lastW = w; lastH = h;
+          try {
+            _mapBoundsSettling = true;
+            _mapInstance.invalidateSize({ pan: false });
+            if (_initialFit && Date.now() - createdAt < 4000 && !_mapBounds) _mapInstance.fitBounds(_initialFit, { padding: [0, 0] });
+          } catch (_) {}
+          setTimeout(() => { _mapBoundsSettling = false; }, 600);
+        });
+        _mapResizeObs.observe(mapEl);
       }
 
       // Initial fit issued — anyone waiting to fly to a town (mrViewOnMap) may proceed after it settles
