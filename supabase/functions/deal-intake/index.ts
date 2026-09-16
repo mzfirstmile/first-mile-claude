@@ -384,6 +384,11 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
     const { data: cityRows } = await sb.from("market_research_markets").select("name,state,population,median_household_income,phase")
       .ilike("name", `${String(ex.city).replace(/[%_]/g, "")}%`).eq("state", ex.state || "").limit(5);
     cityRow = (cityRows || []).find((r: any) => townOf(r).toLowerCase() === String(ex.city).toLowerCase()) || null;
+    // NYC boroughs / neighborhoods are not universe rows under their own names — map them to New York City
+    const NYC = /^(long island city|lic|astoria|flushing|jamaica|williamsburg|dumbo|downtown brooklyn|bushwick|greenpoint|sunset park|red hook|queens|brooklyn|bronx|the bronx|manhattan|staten island|new york|new york city|nyc|harlem|midtown|soho|tribeca|chelsea|financial district|ridgewood|forest hills|rego park|bay ridge|park slope|crown heights|bed-stuy|bedford-stuyvesant|mott haven|hunts point|riverdale|fordham|st\.? george)$/i;
+    if (!cityRow && (ex.state || "").toUpperCase() === "NY" && NYC.test(String(ex.city).trim())) {
+      cityRow = { name: "New York City", state: "NY", population: 8622467, phase: "universe" };
+    }
     if (cityRow && cityRow.phase !== "shortlisted" && Number(cityRow.population) > 75000) {
       cityNote = `${townOf(cityRow)}, ${cityRow.state} (pop ${Number(cityRow.population).toLocaleString()}) is a large city outside the small-town research universe (4k–75k pop). ${primary ? marketLabel(primary) + " is used as a proxy for the surrounding submarket" : "No proxy market"} — treat the market score as directional; CBD fundamentals (submarket vacancy, absorption, transit, tenant base) must be underwritten separately.`;
     }
