@@ -1706,6 +1706,7 @@
   }
 
   let _mapResizeHandler = null;
+  let _mapDeferred = false; // _initMap skipped because the container was hidden; run it when the list is shown
   let _mapReady = null; // promise that resolves once the current map instance has finished its initial fit
   let _mapReadyResolve = null;
   async function _initMap() {
@@ -1715,6 +1716,15 @@
       const L = window.L;
       const mapEl = document.getElementById('mrMap');
       if (!mapEl) return;
+      // If the list (and therefore the map container) is hidden behind a detail view right now,
+      // Leaflet would measure a 0×0 box and render a sliver with garbage bounds. Defer until
+      // _backToList shows the list again.
+      if (mapEl.offsetWidth === 0 || mapEl.offsetHeight === 0) {
+        _mapDeferred = true;
+        if (_mapReadyResolve) { _mapReadyResolve(); _mapReadyResolve = null; }
+        return;
+      }
+      _mapDeferred = false;
       // Always rebuild — _renderGrid replaces innerHTML
       if (_mapInstance) { try { _mapInstance.stop(); _mapInstance.closePopup(); } catch {} try { _mapInstance.remove(); } catch {} _mapInstance = null; }
       _mapInstance = L.map(mapEl).setView([39.5, -98.35], 4); // US center
@@ -1889,6 +1899,8 @@
         if (_mapBoundsSettling) { userMoved = false; return; }
         if (moveTimer) clearTimeout(moveTimer);
         moveTimer = setTimeout(() => {
+          const el = document.getElementById('mrMap');
+          if (!el || el.offsetWidth === 0 || el.offsetHeight === 0) return; // hidden → bounds are meaningless
           const b = _mapInstance.getBounds();
           // Treat "showing whole US" as no filter to avoid spurious refetches
           const span = b.getNorth() - b.getSouth();
@@ -2066,6 +2078,9 @@
     _currentMarket = null;
     document.getElementById('mrListView').classList.remove('hidden');
     document.getElementById('mrDetailView').classList.remove('show');
+    // Map was (re)built while hidden → build it now; otherwise just re-measure the container
+    if (_mapDeferred) { _initMap(); }
+    else if (_mapInstance) { setTimeout(() => { try { _mapInstance.invalidateSize({ pan: false }); } catch (_) {} }, 50); }
     if (!fromHistory && window.replaceSubNav) window.replaceSubNav('marketresearch');
   }
   if (window.registerSubNav) {
