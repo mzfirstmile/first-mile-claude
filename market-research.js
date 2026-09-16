@@ -1272,14 +1272,18 @@
 
   // ── Data loading (server-paginated) ─────────────────────
   // Builds the PostgREST query suffix for the current filter + search.
-  function _buildFilterQuery() {
+  function _buildFilterQuery(opts) {
+    opts = opts || {};
     const parts = [];
     const q = (_searchQuery || '').trim();
     // When the user searches an address, _addressPin is set and _mapBounds is
     // a box around the pin — so the name ILIKE on the raw address text would
     // never match. Skip the text filter in that case; geographic bounds do the
     // filtering instead.
-    const isNameSearching = q.length > 0 && !_addressPin;
+    // forMap: the marker layer shows every town in the active shortlist/tier filter regardless of
+    // the text search or the current viewport, so a searched town still has its neighbors around it
+    // and panning never reveals an empty area (the list keeps honoring both).
+    const isNameSearching = q.length > 0 && !_addressPin && !opts.forMap;
     const hasTierFilter = _activeTiers && _activeTiers.size > 0;
     // Favorites chip always constrains when active; tier multi-select is the
     // primary surface for filtering the scored universe.
@@ -1302,7 +1306,7 @@
     if (_activeMetro) {
       parts.push(`nearest_top50_city=eq.${encodeURIComponent(_activeMetro)}`);
     }
-    if (_mapBounds) {
+    if (_mapBounds && !opts.forMap) {
       // Narrow to the visible map viewport — set as user zooms/pans the map.
       parts.push(`latitude=gte.${_mapBounds.south}`);
       parts.push(`latitude=lte.${_mapBounds.north}`);
@@ -1715,8 +1719,8 @@
 
       // Fetch the full filtered set (paginated — PostgREST anon caps each call
       // at 1000 rows, so loop with offset until we have everything).
-      const parts = _buildFilterQuery();
-      parts.push('select=id,name,state,population,median_household_income,latitude,longitude,score,tier,office_score,office_tier');
+      const parts = _buildFilterQuery({ forMap: true });
+      parts.push('select=id,name,state,population,median_household_income,nearest_top50_city,latitude,longitude,score,tier,office_score,office_tier');
       const baseUrl = `${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&');
       const PAGE = 1000;
       const rows = [];
