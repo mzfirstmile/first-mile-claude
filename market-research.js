@@ -1289,8 +1289,11 @@
       parts.push(`${_tierCol()}=in.(${tiers})`);
     }
     if (isNameSearching) {
-      const safe = q.replace(/[%*]/g, '');
-      const enc = encodeURIComponent('*' + safe + '*');
+      // PostgREST logic-tree values must be double-quoted when they contain reserved
+      // characters (comma, parens, dot) — e.g. "Santa Clara, CA" picked from the suggest
+      // dropdown otherwise breaks the or=() parser with PGRST100.
+      const safe = q.replace(/[%*"\\]/g, '');
+      const enc = encodeURIComponent('"*' + safe + '*"');
       parts.push(`or=(name.ilike.${enc},state.ilike.${enc})`);
     }
     if (_activeState) {
