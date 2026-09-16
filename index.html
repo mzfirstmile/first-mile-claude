@@ -1093,6 +1093,10 @@
     .sidebar-item span,
     .sidebar-footer { display: none; }
     .sidebar-item { justify-content: center; padding: 12px; border-left: none; }
+    /* collapsed rail: the wordmark PNG (~170px wide) was overflowing the 60px sidebar and
+       bleeding into the topbar — show just the left-hand mark by clipping the image */
+    .sidebar-logo { padding: 18px 0 14px; justify-content: center; }
+    .sidebar-logo img { height: 22px; width: 24px; object-fit: cover; object-position: left center; }
     .home-view, .manage-view { padding: 20px; }
     .module-grid { grid-template-columns: 1fr; }
     .chat-panel { width:calc(100vw - 20px); right:10px; bottom:80px; }
