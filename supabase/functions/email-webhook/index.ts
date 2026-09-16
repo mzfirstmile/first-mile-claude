@@ -23,6 +23,19 @@ const SIGNATURE = `
 <img src="https://admin.firstmilecap.com/assets/First_Mile_Capital_Logo_RGB.png" alt="First Mile Capital" style="width:200px;margin-top:8px;">
 `;
 
+
+// Trusted external senders (colleagues' non-firstmilecap addresses, e.g. Crown aliases) live in
+// table ai_trusted_senders(email). Anyone @firstmilecap.com is always trusted.
+async function isTrustedSender(sb: any, fromAddr: string): Promise<boolean> {
+  const addr = (fromAddr || "").toLowerCase();
+  if (!addr) return false;
+  if (addr.split("@")[1] === "firstmilecap.com") return true;
+  try {
+    const { data } = await sb.from("ai_trusted_senders").select("email").eq("email", addr).limit(1);
+    return !!(data && data.length);
+  } catch (_) { return false; }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -152,9 +165,8 @@ serve(async (req: Request) => {
         .from("emails")
         .upsert([row], { onConflict: "graph_id", ignoreDuplicates: false });
 
-      // Trigger auto-reply for @firstmilecap.com senders (including Morris)
-      const senderDomain = fromAddr.split("@")[1];
-      if (senderDomain === "firstmilecap.com" && !SKIP_REPLY.includes(fromAddr)) {
+      // Trigger auto-reply for @firstmilecap.com senders (including Morris) + trusted external aliases
+      if (!SKIP_REPLY.includes(fromAddr) && await isTrustedSender(sb, fromAddr)) {
         try {
           const autoReplyUrl = `${supabaseUrl}/functions/v1/auto-reply`;
           // Get the email ID from the upserted row

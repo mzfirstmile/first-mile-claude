@@ -1708,34 +1708,58 @@
         authority: `https://login.microsoftonline.com/${MSAL_TENANT_ID}`,
         redirectUri: window.location.origin,
         postLogoutRedirectUri: window.location.origin,
+        // Process the auth response right here on the redirect URI instead of bouncing back to the
+        // URL that started the login (that extra hop relied on sessionStorage surviving the round
+        // trip, which Safari / iOS in-app browsers sometimes lose → silent "login loop").
+        navigateToLoginRequestUrl: false,
       },
       cache: {
         cacheLocation: 'localStorage',
-        storeAuthStateInCookie: false,
+        // Safari ITP mitigation recommended by MSAL: mirror interaction state into a cookie
+        storeAuthStateInCookie: true,
       }
     };
     msalInstance = new msal.PublicClientApplication(msalConfig);
     // Complete a redirect-flow login if we're returning from Microsoft (mobile path),
     // otherwise fall back to any cached account.
+    const hadAuthHash = isAuthHash();
     msalInstance.handleRedirectPromise().then(result => {
       if (result && result.account) {
-        // Clean the auth hash out of the URL and land on home
-        history.replaceState({ view: 'home' }, '', window.location.pathname);
-        return handleAuthResult(result.account);
+        // Clean the auth hash out of the URL; go back to the view the user started from (if any)
+        let target = '';
+        try { target = localStorage.getItem('fmc_login_return') || ''; localStorage.removeItem('fmc_login_return'); } catch (_) {}
+        if (target && !isAuthHash()) { history.replaceState({ view: target.split('&')[0] }, '', '#' + target); }
+        else history.replaceState({ view: 'home' }, '', window.location.pathname);
+        return handleAuthResult(result.account).then(() => {
+          if (target) { const v = target.split('&')[0]; if (v && v !== 'home') switchView(v, false); }
+        });
       }
       const accounts = msalInstance.getAllAccounts();
       if (accounts.length > 0) return handleAuthResult(accounts[0]);
+      if (hadAuthHash) {
+        // Microsoft sent us back with a code but MSAL could not match it to a pending request —
+        // surface it instead of silently showing the login button again (looks like a loop).
+        console.warn('Auth hash present but no MSAL result; interaction state was lost');
+        const error = document.getElementById('loginError');
+        if (error) { error.innerHTML = 'Sign-in could not be completed in this browser session. Please tap Sign in again.<br><span style="font-size:11px;color:var(--text-dim)">If it keeps happening: open admin.firstmilecap.com directly in Safari/Chrome (not from inside another app), or clear site data for this site.</span>'; error.style.display = 'block'; }
+        history.replaceState({ view: 'home' }, '', window.location.pathname);
+      }
     }).catch(e => {
       console.error('Redirect login error:', e);
       const error = document.getElementById('loginError');
       if (error) { error.textContent = 'Login failed: ' + (e.message || 'Unknown error'); error.style.display = 'block'; }
+      history.replaceState({ view: 'home' }, '', window.location.pathname);
     });
   }
 
   // Mobile browsers block/mangle popups (and iOS Chrome can't reliably return a popup
   // result), so use the full-page redirect flow there and keep popups on desktop.
   function msalUseRedirect() {
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 768;
+    const ua = navigator.userAgent;
+    // Safari (desktop + iOS, incl. iPadOS which reports as Macintosh) blocks or breaks popups
+    // frequently — use the redirect flow there too. Chrome/Edge/Firefox on desktop keep popups.
+    const isSafari = /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|FxiOS|Firefox/i.test(ua);
+    return isSafari || /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || window.innerWidth < 768;
   }
 
   async function msalLogin() {
@@ -1755,7 +1779,9 @@
 
     try {
       if (msalUseRedirect()) {
-        // Full-page redirect; handleRedirectPromise() in msalInit finishes the login on return
+        // Full-page redirect; handleRedirectPromise() in msalInit finishes the login on return.
+        // Remember where the user was so we can land them back there (navigateToLoginRequestUrl is off).
+        try { const h = window.location.hash.replace('#', ''); if (h && !isAuthHash()) localStorage.setItem('fmc_login_return', h); } catch (_) {}
         await msalInstance.loginRedirect({ scopes: ['User.Read'], prompt: 'select_account' });
         return;
       }
