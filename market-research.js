@@ -1705,6 +1705,7 @@
     _mapLeafletLoaded = true;
   }
 
+  let _mapResizeHandler = null;
   let _mapReady = null; // promise that resolves once the current map instance has finished its initial fit
   let _mapReadyResolve = null;
   async function _initMap() {
@@ -1874,14 +1875,25 @@
       // After the map settles, link viewport changes to the list filter.
       // Debounce so panning doesn't fire a query on every pixel.
       let moveTimer = null;
+      // Distinguish user drags/zooms from programmatic moves (fitBounds, setView, resize):
+      // only a user gesture should drop an active town-name search.
+      let userMoved = false;
+      _mapInstance.on('dragstart zoomstart', () => { if (!_mapBoundsSettling) userMoved = true; });
+      // Leaflet only measures its container once; when the window / sidebar / pane changes
+      // size the tiles render in the old rectangle. Re-measure on resize.
+      if (_mapResizeHandler) window.removeEventListener('resize', _mapResizeHandler);
+      let rsTimer = null;
+      _mapResizeHandler = () => { clearTimeout(rsTimer); rsTimer = setTimeout(() => { try { _mapInstance && _mapInstance.invalidateSize({ pan: false }); } catch (_) {} }, 150); };
+      window.addEventListener('resize', _mapResizeHandler);
       _mapInstance.on('moveend', () => {
-        if (_mapBoundsSettling) return;
+        if (_mapBoundsSettling) { userMoved = false; return; }
         if (moveTimer) clearTimeout(moveTimer);
         moveTimer = setTimeout(() => {
           const b = _mapInstance.getBounds();
           // Treat "showing whole US" as no filter to avoid spurious refetches
           const span = b.getNorth() - b.getSouth();
           if (span > 20) {
+            userMoved = false;
             if (_mapBounds) { _mapBounds = null; _page = 0; _refreshListOnly(); }
             return;
           }
@@ -1893,11 +1905,12 @@
           };
           // Panning/zooming the map means "show me what's here": drop a leftover town-name
           // search so the list matches the viewport instead of staying pinned to one town.
-          if ((_searchQuery || '').trim() && !_addressPin) {
+          if (userMoved && (_searchQuery || '').trim() && !_addressPin) {
             _searchQuery = '';
             const inp = document.getElementById('mrSearchInput'); if (inp) inp.value = '';
             _sgClose();
           }
+          userMoved = false;
           _page = 0;
           _refreshListOnly();
         }, 300);
