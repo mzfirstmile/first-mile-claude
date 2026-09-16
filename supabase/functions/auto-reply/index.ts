@@ -481,9 +481,30 @@ serve(async (req: Request) => {
         }
       }
     } else {
+      // Deal Tracking gate: if the email describes a prospective deal, deal-intake logs + scores it
+      // and returns the opportunity report as the reply. Anything else falls through to the generic reply.
+      let dealHtml: string | null = null;
+      try {
+        const diRes = await fetch(`${supabaseUrl}/functions/v1/deal-intake`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ emailId }),
+        });
+        if (diRes.ok) {
+          const di = await diRes.json();
+          if (di.is_deal && di.replyHtml) {
+            dealHtml = `<p>Thanks — I logged this as a prospective deal in Deal Tracking and scored it against our Market Research. Report below.</p>` + di.replyHtml;
+            console.log(`deal-intake logged deal ${di.deal_id} for email ${emailId}`);
+          }
+        } else {
+          console.warn(`deal-intake returned ${diRes.status}: ${await diRes.text()}`);
+        }
+      } catch (diErr) {
+        console.warn(`deal-intake failed, falling back to generic reply: ${diErr}`);
+      }
       // Standard email — generate reply via Claude
       try {
-        replyHtml = await generateReply(email);
+        replyHtml = dealHtml || await generateReply(email);
       } catch (genErr) {
         // Release the lock if reply generation fails
         await sb.from("emails").update({ replied_at: null }).eq("id", emailId);
