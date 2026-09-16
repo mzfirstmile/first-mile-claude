@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { KNOWLEDGE } from "./knowledge.ts";
 
 const MAILBOX = "aiassistant@firstmilecap.com";
 const GRAPH_SEND_URL = `https://graph.microsoft.com/v1.0/users/${MAILBOX}/sendMail`;
@@ -41,13 +42,14 @@ First Mile Capital is a real estate investment firm. The managing partner is Mor
 
 ## How to Respond
 - Be professional, warm, and concise
-- If the email is a question you can answer based on your knowledge of First Mile, answer it
-- If you don't know something specific, say you'll check with the team and get back to them
+- Answer questions about First Mile directly from the KNOWLEDGE BASE and LIVE DATA sections below — portfolio, agreements and reporting deadlines, lender requirements, initiatives, deals in Deal Tracking, upcoming tasks, how the portal works. Cite the specific figure/date/section you relied on.
+- If the answer isn't in the knowledge base or live data, say so plainly and offer to check with Morris — never guess at numbers, dates or terms
+- If the email is a reply in a Deal Tracking thread (THREAD CONTEXT below), answer about that deal specifically
 - If the email requires Morris's personal attention (legal, major decisions, sensitive topics), say you'll loop Morris in
 - Do NOT make up financial numbers or specific data you don't have
 - Do NOT include a signature in your reply — it will be appended automatically
 - Write your reply as plain HTML paragraphs (use <p> tags)
-- Keep replies brief and helpful — 2-4 paragraphs max
+- Keep replies brief and helpful — 2-4 paragraphs max (a short <ul> list is fine when listing dates/tasks/deals)
 - Match the tone of the sender — if they're casual, be casual; if formal, be formal`;
 
 const corsHeaders = {
@@ -247,8 +249,49 @@ ${notDoneSection}
   }
 }
 
-async function generateReply(email: any): Promise<string> {
+// ── Live context for general questions ──────────────────────
+async function buildLiveContext(sb: any, email: any): Promise<string> {
+  const parts: string[] = [];
+  try {
+    const today = new Date();
+    const in21 = new Date(today.getTime() + 21 * 864e5);
+    const [{ data: deals }, { data: inits }, { data: tasks }] = await Promise.all([
+      sb.from("deal_tracking").select("deal_name,city,state,asset_type,asking_price,cap_rate,market_name,opportunity_score,opportunity_tier,recommendation,status,submitted_by_name,created_at").order("created_at", { ascending: false }).limit(25),
+      sb.from("initiatives").select("name,status,category,summary").neq("status", "completed").order("updated_at", { ascending: false }).limit(30),
+      sb.from("calendar_tasks").select("property,description,team,owner,cadence,day_of_month,due_date,due_month,status").is("terminated_at", null).limit(200),
+    ]);
+    if (deals?.length) parts.push("### Deal Tracking — most recent deals\n" + deals.map((d: any) => `- ${d.deal_name} (${[d.city, d.state].filter(Boolean).join(", ")}; ${d.asset_type || "?"}) — ${d.recommendation || "—"}, score ${d.opportunity_score ?? "—"}/100 T${d.opportunity_tier ?? "—"}, market ${d.market_name || "—"}, status ${d.status}, submitted by ${d.submitted_by_name || "?"} on ${String(d.created_at).slice(0, 10)}${d.asking_price ? `, ask $${Number(d.asking_price).toLocaleString()}` : ""}${d.cap_rate ? `, ${d.cap_rate}% cap` : ""}`).join("\n"));
+    if (inits?.length) parts.push("### Active Initiatives (open)\n" + inits.map((i: any) => `- ${i.name} [${i.status}, ${i.category || "general"}]${i.summary ? ": " + String(i.summary).slice(0, 220) : ""}`).join("\n"));
+    if (tasks?.length) {
+      const m = today.getMonth() + 1, y = today.getFullYear();
+      const upcoming = tasks.filter((t: any) => {
+        if (t.status === "Done") return false;
+        if (t.due_date) { const d = new Date(t.due_date); return d >= new Date(today.getTime() - 7 * 864e5) && d <= in21; }
+        if (t.cadence === "Annual" && t.due_month && Number(t.due_month) !== m && Number(t.due_month) !== (m % 12) + 1) return false;
+        if (t.cadence === "Quarterly" && ![1, 4, 7, 10].includes(m) && ![1, 4, 7, 10].includes((m % 12) + 1)) return false;
+        return true;
+      }).slice(0, 60);
+      parts.push(`### Calendar tasks due around now (today ${today.toISOString().slice(0, 10)})\n` + upcoming.map((t: any) => `- ${t.property || "Company"}: ${t.description} — ${t.cadence}${t.due_date ? " due " + t.due_date : t.day_of_month ? " day " + t.day_of_month : ""}${t.due_month ? " month " + t.due_month : ""}; team ${t.team || "?"}${t.owner ? ", owner " + t.owner : ""}${t.status ? "; " + t.status : ""}`).join("\n"));
+    }
+    // Thread context: is this a reply inside a Deal Tracking conversation?
+    if (email.conversation_id) {
+      const { data: thread } = await sb.from("emails").select("id").eq("conversation_id", email.conversation_id).neq("id", email.id).limit(20);
+      const ids = (thread || []).map((r: any) => r.id);
+      if (ids.length) {
+        const { data: deal } = await sb.from("deal_tracking").select("deal_name,address,city,state,asset_type,deal_type,sf,asking_price,price_psf,noi,cap_rate,occupancy_pct,key_tenants,market_name,market_distance_mi,opportunity_score,opportunity_tier,recommendation,assessment,category_scores,nearby_markets,status,extracted").in("source_email_id", ids).limit(1).maybeSingle();
+        if (deal) parts.push("### THREAD CONTEXT — this email is a reply in the thread about this deal\n" + JSON.stringify({ ...deal, category_scores: (deal.category_scores || []).map((c: any) => ({ category: c.category, mean_res: c.mean_res, mean_office: c.mean_office })) }, null, 1).slice(0, 9000));
+      }
+    }
+  } catch (e) {
+    console.warn("buildLiveContext failed:", e);
+  }
+  return parts.join("\n\n");
+}
+
+async function generateReply(email: any, sb?: any): Promise<string> {
   const claudeKey = Deno.env.get("CLAUDE_API_KEY")!;
+  const live = sb ? await buildLiveContext(sb, email) : "";
+  const system = `${SYSTEM_PROMPT}\n\n# KNOWLEDGE BASE\n${KNOWLEDGE}\n\n# LIVE DATA (from the admin database, as of now)\n${live || "(unavailable)"}`;
 
   const emailContext = `From: ${email.from_name || email.from_address} <${email.from_address}>
 Subject: ${email.subject}
@@ -265,9 +308,9 @@ ${email.body_text || email.body_preview || "(empty email)"}`;
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 1024,
-      system: SYSTEM_PROMPT,
+      model: "claude-sonnet-4-6",
+      max_tokens: 1500,
+      system,
       messages: [
         {
           role: "user",
@@ -479,7 +522,7 @@ serve(async (req: Request) => {
         // Couldn't parse task completions — fall through to Claude
         console.log(`Could not parse task completions, falling back to Claude`);
         try {
-          replyHtml = await generateReply(email);
+          replyHtml = await generateReply(email, sb);
         } catch (genErr) {
           await sb.from("emails").update({ replied_at: null }).eq("id", emailId);
           throw genErr;
@@ -511,7 +554,7 @@ serve(async (req: Request) => {
       }
       // Standard email — generate reply via Claude
       try {
-        replyHtml = dealHtml || await generateReply(email);
+        replyHtml = dealHtml || await generateReply(email, sb);
       } catch (genErr) {
         // Release the lock if reply generation fails
         await sb.from("emails").update({ replied_at: null }).eq("id", emailId);
