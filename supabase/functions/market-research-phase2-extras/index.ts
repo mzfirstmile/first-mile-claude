@@ -4,10 +4,10 @@
 // score, using extra Census ACS variables.
 //
 // 1. Average Household Income — B19025_001E (aggregate income) / B11001_001E (households)
-//    target_min = $130,000  →  score = min(10, avg/13000)
+//    target_min = $130,000  →  score = min(100, avg/1300)   (scores are 0-100)
 // 2. High School Graduation Rate — % of 25+ with at least HS diploma
 //    = 100 × (B15003_017E + B15003_018E + ... + B15003_025E) / B15003_001E
-//    target_min = 94%  →  score = min(10, pct*10/94)
+//    target_min = 94%  →  score = min(100, pct*100/94)
 // 3. 10-Year Population Growth — % change 2012→2022 ACS 5-yr
 //    target band: 2-8% sweet spot. Tent function.
 //
@@ -42,13 +42,13 @@ function roundTo(n: number, d: number): number {
 }
 
 function scorePopGrowth(pct: number): number {
-  // Tent function: sweet spot 2-8%. Below 0 → 0, 0-2 ramps to 10, 2-8 stays 10,
+  // Tent function: sweet spot 2-8%. Below 0 → 0, 0-2 ramps to 100, 2-8 stays 100,
   // 8-20 decays to 0, above 20 → 0 (probably bubble/sprawl).
   if (pct == null) return 0;
   if (pct < 0 || pct > 20) return 0;
-  if (pct < 2) return roundTo((pct / 2) * 10, 1);
-  if (pct <= 8) return 10;
-  return roundTo(((20 - pct) / 12) * 10, 1);
+  if (pct < 2) return roundTo((pct / 2) * 100, 1);
+  if (pct <= 8) return 100;
+  return roundTo(((20 - pct) / 12) * 100, 1);
 }
 
 async function fetchAcs(stateFips: string, varList: string, key: string, year = "2022"): Promise<any[][] | null> {
@@ -174,8 +174,8 @@ serve(async (req: Request) => {
       const tgtO = cAvgHHI.target_min_office ?? tgtR;
       scoresToInsert.push({
         market_id: m.id, criterion_id: cAvgHHI.id,
-        value_numeric: roundTo(Math.min(10, avg / tgtR * 10), 1),
-        value_numeric_office: roundTo(Math.min(10, avg / tgtO * 10), 1),
+        value_numeric: roundTo(Math.min(100, avg / tgtR * 100), 1),
+        value_numeric_office: roundTo(Math.min(100, avg / tgtO * 100), 1),
         raw_value: avg,
         value_text: "$" + Math.round(avg).toLocaleString(),
         source: "https://data.census.gov/ (B19025/B11001 — agg income/households)",
@@ -189,8 +189,8 @@ serve(async (req: Request) => {
       const tgtO = cHSGrad.target_min_office ?? tgtR;
       scoresToInsert.push({
         market_id: m.id, criterion_id: cHSGrad.id,
-        value_numeric: roundTo(Math.min(10, pct / tgtR * 10), 1),
-        value_numeric_office: roundTo(Math.min(10, pct / tgtO * 10), 1),
+        value_numeric: roundTo(Math.min(100, pct / tgtR * 100), 1),
+        value_numeric_office: roundTo(Math.min(100, pct / tgtO * 100), 1),
         raw_value: pct,
         value_text: pct.toFixed(1) + "%",
         source: "https://data.census.gov/ (B15003 — educational attainment)",

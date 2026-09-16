@@ -14,7 +14,7 @@
 //   Office: 033 (Finance) + 036 (Real Estate) + 039 (Pro) + 042 (Mgmt) + 043 (Admin)
 //   Retail: 028 (Retail Trade)
 //
-// Score formula: pct/target * 10, capped at 10. Target = 10% for both.
+// Score formula: pct/target * 100, capped at 100 (scores are 0-100). Target = 10% for both.
 // Stores raw_value = pct so per-criterion re-score works on target edits.
 //
 // POST body: { batch_size: 250, market_ids?: [], only_unscored: true }
@@ -140,8 +140,8 @@ serve(async (req: Request) => {
       const tgtO = cOffice.target_min_office ?? tgtR;
       scoresToInsert.push({
         market_id: m.id, criterion_id: cOffice.id,
-        value_numeric: roundTo(Math.min(10, pctOffice / tgtR * 10), 1),
-        value_numeric_office: roundTo(Math.min(10, pctOffice / tgtO * 10), 1),
+        value_numeric: roundTo(Math.min(100, pctOffice / tgtR * 100), 1),
+        value_numeric_office: roundTo(Math.min(100, pctOffice / tgtO * 100), 1),
         raw_value: pctOffice,
         value_text: pctOffice.toFixed(1) + "%",
         source: "https://data.census.gov/ (ACS C24030 — Finance/Real Estate/Pro/Mgmt/Admin)",
@@ -153,8 +153,8 @@ serve(async (req: Request) => {
       const tgtO = cRetail.target_min_office ?? tgtR;
       scoresToInsert.push({
         market_id: m.id, criterion_id: cRetail.id,
-        value_numeric: roundTo(Math.min(10, pctRetail / tgtR * 10), 1),
-        value_numeric_office: roundTo(Math.min(10, pctRetail / tgtO * 10), 1),
+        value_numeric: roundTo(Math.min(100, pctRetail / tgtR * 100), 1),
+        value_numeric_office: roundTo(Math.min(100, pctRetail / tgtO * 100), 1),
         raw_value: pctRetail,
         value_text: pctRetail.toFixed(1) + "%",
         source: "https://data.census.gov/ (ACS C24030_028E — Retail Trade)",

@@ -24,7 +24,7 @@ Criteria written (updated_by='phase2_lodes', office view only, value_numeric NUL
   Office-Using Jobs in Town            office jobs                      linear to target (5,000)
   Office Share of Local Jobs           office / all jobs %              linear to target (35%)
   Jobs-to-Resident-Workers Ratio       WAC C000 / RAC C000              linear to target (1.0)
-  Office Job Growth (5-yr)             base_year → year office jobs %   -10%→0 · +25%→10
+  Office Job Growth (5-yr)             base_year → year office jobs %   -10%→0 · +25%→100   (all scores 0-100)
   High-Wage Office Jobs in Town        SE03 office jobs                 linear to target (3,000)
   Office Job Density                   office jobs / land sq mi         linear to target (1,000)
 Prior 'phase2_office' (ACS) rows for the same (market, criterion) are replaced —
@@ -153,14 +153,14 @@ def load_area_geoinfo(st, year=2023):
 def lin(v, tgt):
     if v is None or tgt is None or tgt <= 0 or v < 0:
         return None
-    return round(min(10.0, v / tgt * 10), 1)
+    return round(min(100.0, v / tgt * 100), 1)
 
 
 def growth_score(pct):
-    # −10% → 0, 0% → ~2.9, +10% → ~5.7, +25% → 10  (first national run: +15% cap gave 10/10 to 43% of towns)
+    # −10% → 0, 0% → ~29, +10% → ~57, +25% → 100  (first national run: +15% cap gave max score to 43% of towns)
     if pct is None:
         return None
-    return round(max(0.0, min(10.0, (pct + 10) / 35 * 10)), 1)
+    return round(max(0.0, min(100.0, (pct + 10) / 35 * 100)), 1)
 
 
 def agg_state(st, geoids, year, base_year):
@@ -320,7 +320,7 @@ def main():
 
     if a.recompute:
         print("recomputing composites + ranks…", flush=True)
-        sql("""WITH cat_means AS (SELECT s.market_id, c.category_id, AVG(CASE WHEN c.is_active_residential IS NOT FALSE THEN s.value_numeric ELSE NULL END) AS mean_res, AVG(CASE WHEN c.is_active_office IS NOT FALSE THEN s.value_numeric_office ELSE NULL END) AS mean_off FROM market_research_scores s JOIN market_research_criteria c ON c.id = s.criterion_id WHERE c.category_id IS NOT NULL GROUP BY s.market_id, c.category_id), composites AS (SELECT cm.market_id, SUM(cm.mean_res * cat.weight) / NULLIF(SUM(CASE WHEN cm.mean_res IS NOT NULL THEN cat.weight ELSE 0 END), 0) AS comp_res, SUM(cm.mean_off * cat.weight_office) / NULLIF(SUM(CASE WHEN cm.mean_off IS NOT NULL THEN cat.weight_office ELSE 0 END), 0) AS comp_off FROM cat_means cm JOIN market_research_categories cat ON cat.id = cm.category_id GROUP BY cm.market_id) UPDATE market_research_markets m SET score = ROUND(c.comp_res::numeric, 1), tier = CASE WHEN ROUND(c.comp_res::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_res::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_res::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END, office_score = ROUND(c.comp_off::numeric, 1), office_tier = CASE WHEN ROUND(c.comp_off::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_off::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_off::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END, updated_at = now() FROM composites c WHERE m.id = c.market_id""")
+        sql("""WITH cat_means AS (SELECT s.market_id, c.category_id, AVG(CASE WHEN c.is_active_residential IS NOT FALSE THEN s.value_numeric ELSE NULL END) AS mean_res, AVG(CASE WHEN c.is_active_office IS NOT FALSE THEN s.value_numeric_office ELSE NULL END) AS mean_off FROM market_research_scores s JOIN market_research_criteria c ON c.id = s.criterion_id WHERE c.category_id IS NOT NULL GROUP BY s.market_id, c.category_id), composites AS (SELECT cm.market_id, SUM(cm.mean_res * cat.weight) / NULLIF(SUM(CASE WHEN cm.mean_res IS NOT NULL THEN cat.weight ELSE 0 END), 0) AS comp_res, SUM(cm.mean_off * cat.weight_office) / NULLIF(SUM(CASE WHEN cm.mean_off IS NOT NULL THEN cat.weight_office ELSE 0 END), 0) AS comp_off FROM cat_means cm JOIN market_research_categories cat ON cat.id = cm.category_id GROUP BY cm.market_id) UPDATE market_research_markets m SET score = ROUND(c.comp_res::numeric, 1), tier = CASE WHEN ROUND(c.comp_res::numeric, 1) >= 85 THEN 1 WHEN ROUND(c.comp_res::numeric, 1) >= 70 THEN 2 WHEN ROUND(c.comp_res::numeric, 1) >= 40 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END, office_score = ROUND(c.comp_off::numeric, 1), office_tier = CASE WHEN ROUND(c.comp_off::numeric, 1) >= 85 THEN 1 WHEN ROUND(c.comp_off::numeric, 1) >= 70 THEN 2 WHEN ROUND(c.comp_off::numeric, 1) >= 40 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END, updated_at = now() FROM composites c WHERE m.id = c.market_id""")
         sql("WITH rr AS (SELECT id, ROW_NUMBER() OVER (ORDER BY score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE score IS NOT NULL) UPDATE market_research_markets m SET rank_residential = rr.r FROM rr WHERE m.id = rr.id")
         sql("WITH ro AS (SELECT id, ROW_NUMBER() OVER (ORDER BY office_score DESC NULLS LAST, median_household_income DESC NULLS LAST, name ASC) AS r FROM market_research_markets WHERE office_score IS NOT NULL) UPDATE market_research_markets m SET rank_office = ro.r FROM ro WHERE m.id = ro.id")
         print("done.", flush=True)

@@ -86,7 +86,7 @@ function buildSystemPrompt(criteria: Criterion[]): string {
   return `You are a real estate market research analyst for First Mile Capital. Your job is to score a specific US town against 4 categories of evaluation criteria that require web/qualitative research (the kind Census data alone can't answer): Governance & Barriers to Entry, Economic Activity, Quality of Life, and Transit & Access.
 
 For each sub-criterion below, return:
-- A 1-10 score (1 = far below target, 10 = meets or exceeds target).
+- A 0-100 score (0 = far below target, 100 = meets or exceeds target). Use the full range with one decimal, e.g. 72.5.
 - A brief value (≤ 60 chars) summarizing the data point (e.g. "Top 5% nationally", "AA+ rating", "Walking distance to Metro-North").
 - A sources array — 1 to 3 authoritative citations. Prefer URLs from the Research Websites list. Multiple sources are encouraged when more than one body of data supports the score (e.g. FBI UCR + Niche.com for crime).
 
@@ -101,7 +101,7 @@ ${RESEARCH_SOURCES}
 Return STRICT JSON in this exact shape, with no commentary outside the JSON:
 {
   "scores": [
-    {"criterion_name": "<exact name from list>", "score": <0-10 or null>, "value": "<short value>", "sources": ["<URL or label>", "<optional 2nd>", "<optional 3rd>"]}
+    {"criterion_name": "<exact name from list>", "score": <0-100 or null>, "value": "<short value>", "sources": ["<URL or label>", "<optional 2nd>", "<optional 3rd>"]}
   ],
   "thesis": "<2 concise paragraphs investment thesis>",
   "summary": "<one sentence executive summary, max 200 chars>"
@@ -196,7 +196,7 @@ async function recomputeMarketComposite(sb: any, marketId: string) {
   // Tier bands (unified across recompute paths, updated 2026-05-19):
   // T3 widened to 4.0-6.9 to accommodate the broader $100k+ HHI shortlist.
   // Mirror in market-research.js _recomputeMarketScore + phase2 edge fn.
-  const tier = score >= 8.5 ? 1 : score >= 7.0 ? 2 : score >= 4.0 ? 3 : 4;
+  const tier = score >= 85 ? 1 : score >= 70 ? 2 : score >= 40 ? 3 : 4; // 0-100 bands
   await sb.from("market_research_markets").update({ score, tier }).eq("id", marketId);
   return { score, tier, categories_with_data: byCat.size };
 }
@@ -209,7 +209,7 @@ async function processOne(sb: any, apiKey: string, system: string, m: Market, cr
     const crit = critByName.get((s.criterion_name || "").toLowerCase().trim());
     if (!crit) continue;
     if (s.score == null || s.score === "") continue;
-    const sc = Math.max(0, Math.min(10, parseFloat(s.score)));
+    const sc = Math.max(0, Math.min(100, parseFloat(s.score)));
     if (!Number.isFinite(sc)) continue;
     // Accept either sources[] (new) or source (legacy single string)
     const srcs: string[] = Array.isArray((s as any).sources)

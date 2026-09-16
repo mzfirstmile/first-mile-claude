@@ -4,14 +4,14 @@
 // Overpass API. For each market lat/lng, finds the nearest way tagged
 // highway IN ('motorway', 'trunk', 'motorway_link') within ~12 miles,
 // computes straight-line distance to the nearest node, converts to an
-// estimated drive time, and scores 0-10 against target_max=5 min.
+// estimated drive time, and scores 0-100 against target_max=5 min.
 //
 // Drive time estimate: distance × 2.0 min/mile (mixed local + ramp).
 // (5min ≈ 2.5mi straight-line, 15min ≈ 7.5mi.)
 //
 // Score formula (target_max=5):
-//   ≤5 min → 10
-//   5-15 min → linear decay 10 → 0
+//   ≤5 min → 100
+//   5-15 min → linear decay 100 → 0
 //   ≥15 min → 0
 //
 // POST body: { batch_size: 50, market_ids?: [], tier_filter?: [1] }
@@ -50,9 +50,9 @@ function hav(lat1: number, lon1: number, lat2: number, lon2: number): number {
 }
 
 function scoreFromMinutes(min: number): number {
-  if (min <= TARGET_MAX_MIN) return 10;
+  if (min <= TARGET_MAX_MIN) return 100;
   if (min >= MAX_MIN) return 0;
-  return roundTo(10 - ((min - TARGET_MAX_MIN) / (MAX_MIN - TARGET_MAX_MIN)) * 10, 1);
+  return roundTo(100 - ((min - TARGET_MAX_MIN) / (MAX_MIN - TARGET_MAX_MIN)) * 100, 1);
 }
 
 async function nearestHighwayDist(lat: number, lng: number): Promise<{ miles: number; type: string; debug?: string } | null> {

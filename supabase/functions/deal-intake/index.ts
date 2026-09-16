@@ -116,7 +116,7 @@ const marketLabel = (m: any) => (/,\s*[A-Z]{2}$/.test(String(m.name || "")) ? m.
 function tierFor(score: number | null): number | null {
   if (score == null) return null;
   const s = Math.round(score * 10) / 10;
-  return s >= 8.5 ? 1 : s >= 7.0 ? 2 : s >= 4.0 ? 3 : 4;
+  return s >= 85 ? 1 : s >= 70 ? 2 : s >= 40 ? 3 : 4; // 0-100 bands
 }
 
 // ── Step 3: market match ─────────────────────────────────────
@@ -178,7 +178,7 @@ const ASSESS_TOOL = {
   },
 };
 
-const ASSESS_SYSTEM = `You are the acquisitions analyst for First Mile Capital (NYC-based; owns suburban Class A office in NJ/CT, NYC retail/mixed-use, and does note purchases, recaps and ground-up development). First Mile's thesis: buy well-located assets in small affluent towns and employment nodes that the Market Research module ranks highly (composite 0-10; Tier 1 ≥ 8.5, Tier 2 7.0-8.4, Tier 3 4.0-6.9, Tier 4 < 4.0). The office view weights Office Demand (LEHD payroll jobs in town), Company Concentrations and Relation to Other Asset Classes; the residential view weights Demographics, Education and Quality of Life.
+const ASSESS_SYSTEM = `You are the acquisitions analyst for First Mile Capital (NYC-based; owns suburban Class A office in NJ/CT, NYC retail/mixed-use, and does note purchases, recaps and ground-up development). First Mile's thesis: buy well-located assets in small affluent towns and employment nodes that the Market Research module ranks highly (composite 0-100; Tier 1 ≥ 85, Tier 2 70-84.9, Tier 3 40-69.9, Tier 4 < 40). The office view weights Office Demand (LEHD payroll jobs in town), Company Concentrations and Relation to Other Asset Classes; the residential view weights Demographics, Education and Quality of Life.
 
 Rules: be direct and analytical; never invent numbers. LEAD WITH THE MARKET: the core of this assessment is how the location scores in our research (composite, tier, rank, category strengths/weaknesses, nearby researched towns). Deal-level financials are a secondary lens. Broker email blasts and calls-for-offers routinely omit price, NOI, cap rate, SF, occupancy and tenancy (they sit behind a deal-room login) — that is normal, not a red flag: mention missing items once, neutrally, as a single line and list them in the "questions" field; do NOT dwell on them or describe the deal as "problematic" for lacking them, and do not let missing data alone pull the recommendation down. Judge (a) market quality from the research scores first, (b) deal metrics vs. what you'd expect for the asset type only where they were actually provided, (c) fit with First Mile's playbook. Recommendation guidance: Pursue = Tier 1-2 market and nothing disclosed argues against it (including when financials are simply not yet disclosed — frame Pursue as "worth requesting the deal room / underwriting"); Review = mixed market signals, a Tier 3 market with an offsetting story, or disclosed deal metrics that look stretched; Pass = weak market (Tier 3-4 with no offsetting story) or clearly mispriced on disclosed numbers. If the nearest researched town is more than ${MATCH_RADIUS_MI} miles away, say the market is outside the research universe and weight your view accordingly.`;
 
@@ -191,8 +191,8 @@ const recColor = (r: string) => (r === "Pursue" ? "#059669" : r === "Pass" ? "#e
 
 function scoreBar(v: number | null): string {
   if (v == null) return `<span style="color:#94a3b8">—</span>`;
-  const pct = Math.max(0, Math.min(100, (v / 10) * 100));
-  const col = v >= 8.5 ? "#059669" : v >= 7 ? "#0ea5e9" : v >= 4 ? "#f59e0b" : "#ef4444";
+  const pct = Math.max(0, Math.min(100, v));
+  const col = v >= 85 ? "#059669" : v >= 70 ? "#0ea5e9" : v >= 40 ? "#f59e0b" : "#ef4444";
   return `<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:#e2e8f0;border-radius:4px;overflow:hidden;min-width:90px"><div style="width:${pct}%;height:100%;background:${col}"></div></div><b style="min-width:28px;text-align:right">${v.toFixed(1)}</b></div>`;
 }
 
@@ -221,8 +221,8 @@ function buildReport(d: any, m: any, cats: any[], nearby: any[], a: any, view: s
     ? `<table cellspacing="0" style="width:100%;border-collapse:collapse;margin-top:6px">
         ${row("Matched market", `<a href="${DASHBOARD}/#marketresearch&market=${m.id}" style="color:#0ea5e9;font-weight:600">${esc(marketLabel(m))}</a> <span style="color:#64748b">· ${d.market_distance_mi != null ? d.market_distance_mi.toFixed(1) + " mi from site" : ""}${d.market_distance_mi > MATCH_RADIUS_MI ? ' · <b style="color:#ef4444">outside research radius</b>' : ""}</span>`)}
         ${row("Population / Median HHI", `${fmtN(m.population)} / ${fmt$(m.median_household_income)}`)}
-        ${row("Office score", `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${tierColor(m.office_tier)};color:#fff;font-weight:700;font-size:12px">T${m.office_tier ?? "—"}</span> &nbsp;<b>${m.office_score ?? "—"}</b> / 10 &nbsp;<span style="color:#64748b">rank #${m.rank_office ?? "—"} of shortlist</span>`)}
-        ${row("Residential score", `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${tierColor(m.tier)};color:#fff;font-weight:700;font-size:12px">T${m.tier ?? "—"}</span> &nbsp;<b>${m.score ?? "—"}</b> / 10 &nbsp;<span style="color:#64748b">rank #${m.rank_residential ?? "—"}</span>`)}
+        ${row("Office score", `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${tierColor(m.office_tier)};color:#fff;font-weight:700;font-size:12px">T${m.office_tier ?? "—"}</span> &nbsp;<b>${m.office_score ?? "—"}</b> / 100 &nbsp;<span style="color:#64748b">rank #${m.rank_office ?? "—"} of shortlist</span>`)}
+        ${row("Residential score", `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${tierColor(m.tier)};color:#fff;font-weight:700;font-size:12px">T${m.tier ?? "—"}</span> &nbsp;<b>${m.score ?? "—"}</b> / 100 &nbsp;<span style="color:#64748b">rank #${m.rank_residential ?? "—"}</span>`)}
         ${m.thesis ? row("Market thesis", `<span style="color:#334155">${esc(m.thesis)}</span>`) : ""}
       </table>`
     : `<p style="color:#ef4444"><b>No researched market could be matched</b> — the address could not be geocoded or no shortlisted town is within ${NEARBY_RADIUS_MI} miles.</p>`;
@@ -248,7 +248,7 @@ function buildReport(d: any, m: any, cats: any[], nearby: any[], a: any, view: s
     <div style="font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#64748b">Deal Tracking · Opportunity Report</div>
     <div style="font-size:20px;font-weight:700;margin:2px 0">${esc(d.deal_name || "Prospective deal")}</div>
     <div style="margin-top:6px"><span style="display:inline-block;padding:3px 10px;border-radius:12px;background:${recColor(a.recommendation)};color:#fff;font-weight:700;font-size:13px">${esc(a.recommendation)}</span>
-      &nbsp; <b>Opportunity score ${d.opportunity_score != null ? Number(d.opportunity_score).toFixed(1) : "—"} / 10</b> <span style="color:#64748b">(Tier ${d.opportunity_tier ?? "—"}, ${viewLabel})</span></div>
+      &nbsp; <b>Opportunity score ${d.opportunity_score != null ? Number(d.opportunity_score).toFixed(1) : "—"} / 100</b> <span style="color:#64748b">(Tier ${d.opportunity_tier ?? "—"}, ${viewLabel})</span></div>
     <div style="margin-top:6px;font-size:15px">${esc(a.headline)}</div>
   </div>
 
@@ -327,7 +327,7 @@ function buildReplyIntro(deal: any, primary: any, a: any, view: string, xlsxCoun
 <p>Got it — I logged <b>${esc(deal.deal_name || "this deal")}</b> in Deal Tracking and scored it against our Market Research universe.</p>
 <ul style="margin:6px 0 10px 18px;padding:0;font-size:15px">
   ${li("Recommendation", `<b style="color:${recColor(a.recommendation)}">${esc(a.recommendation)}</b> — ${esc(a.headline || "")}`)}
-  ${li("Opportunity score", `<b>${score} / 10</b> (Tier ${deal.opportunity_tier ?? "—"}, ${view} view)`)}
+  ${li("Opportunity score", `<b>${score} / 100</b> (Tier ${deal.opportunity_tier ?? "—"}, ${view} view)`)}
   ${primary ? li("Market match", `<a href="${DASHBOARD}/#marketresearch&market=${primary.id}" style="color:#0ea5e9">${esc(marketLabel(primary))}</a>${deal.market_distance_mi != null ? ` (${Number(deal.market_distance_mi).toFixed(1)} mi)` : ""} — ranked <b>#${rank ?? "—"}</b> of ~1,870 researched towns in the ${view} view${deal.market_distance_mi > MATCH_RADIUS_MI ? ' · <b style="color:#ef4444">outside research radius</b>' : ""}`) : li("Market match", `<span style="color:#ef4444">none — address could not be matched to a researched town</span>`)}
 </ul>
 <p style="margin:8px 0">
@@ -382,7 +382,7 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
 
   // 5. assessment
   const marketCtx = primary
-    ? `Matched market: ${marketLabel(primary)} (${distance != null ? distance.toFixed(1) + " mi from site" : "name match"}); pop ${primary.population}, median HHI $${primary.median_household_income}. Office view: ${primary.office_score}/10 Tier ${primary.office_tier} (rank #${primary.rank_office} of ~1,870 shortlisted towns). Residential view: ${primary.score}/10 Tier ${primary.tier} (rank #${primary.rank_residential}). Market thesis: ${primary.thesis || "n/a"}.\nCategory means (${view} view): ${cats.map((c) => `${c.category}=${view === "office" ? c.mean_office : c.mean_res}`).join("; ")}.\nNotable criteria: ${cats.flatMap((c) => c.criteria.filter((k: any) => (view === "office" ? k.active_office : k.active_res)).slice(0, 4).map((k: any) => `${k.name}: ${k.value_text ?? (view === "office" ? k.value_office : k.value_res)}`)).join("; ")}.\nOther researched towns nearby: ${nearby.map((n) => `${marketLabel(n)} ${n.miles}mi (off ${n.office_score}/res ${n.score})`).join(", ") || "none within 25 mi"}.`
+    ? `Matched market: ${marketLabel(primary)} (${distance != null ? distance.toFixed(1) + " mi from site" : "name match"}); pop ${primary.population}, median HHI $${primary.median_household_income}. Office view: ${primary.office_score}/100 Tier ${primary.office_tier} (rank #${primary.rank_office} of ~1,870 shortlisted towns). Residential view: ${primary.score}/100 Tier ${primary.tier} (rank #${primary.rank_residential}). Market thesis: ${primary.thesis || "n/a"}.\nCategory means (${view} view): ${cats.map((c) => `${c.category}=${view === "office" ? c.mean_office : c.mean_res}`).join("; ")}.\nNotable criteria: ${cats.flatMap((c) => c.criteria.filter((k: any) => (view === "office" ? k.active_office : k.active_res)).slice(0, 4).map((k: any) => `${k.name}: ${k.value_text ?? (view === "office" ? k.value_office : k.value_res)}`)).join("; ")}.\nOther researched towns nearby: ${nearby.map((n) => `${marketLabel(n)} ${n.miles}mi (off ${n.office_score}/res ${n.score})`).join(", ") || "none within 25 mi"}.`
     : `No researched market matched (address not geocodable or none of the ~1,870 shortlisted towns is nearby).`;
   const dealCtx = `Deal facts: ${JSON.stringify(ex)}\nScoring view chosen: ${view}. Opportunity score (market composite): ${oppScore ?? "n/a"} (Tier ${oppTier ?? "n/a"}).`;
   const a = await claude(ASSESS_SYSTEM, `${dealCtx}\n\n${marketCtx}\n\nOriginal email:\n${opts.text.slice(0, 6000)}`, ASSESS_TOOL, 2500);

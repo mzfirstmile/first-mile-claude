@@ -209,7 +209,7 @@
           <div class="dt-meta" style="margin-top:4px">Submitted ${fmtDate(d.created_at)} by ${esc(d.submitted_by_name || d.submitted_by || d.source)}${d.email_subject ? ` · <i>${esc(d.email_subject)}</i>` : ''}${d.replied_at ? ' · report emailed' : ''}</div>
           <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
             ${recPill(d.recommendation)}
-            <span><b style="font-size:18px">${d.opportunity_score != null ? Number(d.opportunity_score).toFixed(1) : '—'}</b> <span style="color:#64748b">/ 10</span> ${tierPill(d.opportunity_tier)} <span class="dt-meta">${d.scoring_view || ''} view</span></span>
+            <span><b style="font-size:18px">${d.opportunity_score != null ? Number(d.opportunity_score).toFixed(1) : '—'}</b> <span style="color:#64748b">/ 100</span> ${tierPill(d.opportunity_tier)} <span class="dt-meta">${d.scoring_view || ''} view</span></span>
             ${d.market_id ? `<a href="#marketresearch&market=${d.market_id}" style="color:#0ea5e9;font-size:13.5px">📍 ${esc(d.market_name)} in Market Research ↗</a>` : ''}
           </div>
         </div>

@@ -1139,19 +1139,19 @@
               <span class="mr-tier-label">Tier:</span>
               <label class="mr-tier-pill mr-tier-pill-col" data-tier="1">
                 <span class="mr-tier-pill-row"><input type="checkbox" onchange="mrToggleTier(1, this.checked)"> Tier 1</span>
-                <span class="mr-tier-pill-range" style="color:#15803d;">≥ 8.5</span>
+                <span class="mr-tier-pill-range" style="color:#15803d;">≥ 85</span>
               </label>
               <label class="mr-tier-pill mr-tier-pill-col" data-tier="2">
                 <span class="mr-tier-pill-row"><input type="checkbox" onchange="mrToggleTier(2, this.checked)"> Tier 2</span>
-                <span class="mr-tier-pill-range" style="color:#1e40af;">7.0–8.4</span>
+                <span class="mr-tier-pill-range" style="color:#1e40af;">70–84.9</span>
               </label>
               <label class="mr-tier-pill mr-tier-pill-col" data-tier="3">
                 <span class="mr-tier-pill-row"><input type="checkbox" onchange="mrToggleTier(3, this.checked)"> Tier 3</span>
-                <span class="mr-tier-pill-range" style="color:#b45309;">4.0–6.9</span>
+                <span class="mr-tier-pill-range" style="color:#b45309;">40–69.9</span>
               </label>
               <label class="mr-tier-pill mr-tier-pill-col" data-tier="4">
                 <span class="mr-tier-pill-row"><input type="checkbox" onchange="mrToggleTier(4, this.checked)"> Tier 4</span>
-                <span class="mr-tier-pill-range" style="color:#64748b;">&lt; 4.0</span>
+                <span class="mr-tier-pill-range" style="color:#64748b;">&lt; 40</span>
               </label>
             </div>
             <div class="mr-geo-filter">
@@ -1510,9 +1510,9 @@
   // ── Helpers ──────────────────────────────────────────────
   function _scoreClass(score) {
     if (score == null) return '';
-    if (score >= 8) return 's8plus';
-    if (score >= 6) return 's6to8';
-    if (score >= 4) return 's4to6';
+    if (score >= 80) return 's8plus';
+    if (score >= 60) return 's6to8';
+    if (score >= 40) return 's4to6';
     return 'sUnder4';
   }
   function _tierClass(tier) {
@@ -2044,7 +2044,7 @@
     `;
 
     // Top metric cards — show BOTH Residential and Office score/tier
-    const scoreColor = (s) => s >= 8 ? '#15803d' : (s >= 6 ? '#65a30d' : (s >= 4 ? '#ca8a04' : (s != null ? '#b91c1c' : '#cbd5e1')));
+    const scoreColor = (s) => s >= 80 ? '#15803d' : (s >= 60 ? '#65a30d' : (s >= 40 ? '#ca8a04' : (s != null ? '#b91c1c' : '#cbd5e1')));
     document.getElementById('mrDetailMetrics').innerHTML = `
       <div class="mr-metric-card">
         <div class="mr-metric-label">🏠 Residential Score</div>
@@ -2145,12 +2145,12 @@
         //   1. value_text (Phase 3 stores actual data here, e.g. "Aaa/AAA Moody's")
         //   2. derived from market columns for the 3 Phase 2 criteria where we have raw data
         //   3. nothing (placeholder)
-        // The 0-10 score (value_numeric) is always shown as a small chip beside the value.
+        // The 0-100 score (value_numeric) is always shown as a small chip beside the value.
         let displayValue = s.value_text || '';
         if (!displayValue && _PHASE2_VALUE_FROM_MARKET[c.name]) {
           displayValue = _PHASE2_VALUE_FROM_MARKET[c.name](m) || '';
         }
-        // Use the view-specific 0-10 score column
+        // Use the view-specific 0-100 score column
         const scoreVal = view === 'office' ? s.value_numeric_office : s.value_numeric;
         const scoreNum = (scoreVal != null && scoreVal !== '') ? Number(scoreVal).toFixed(1) : null;
         const target = _fmtTarget(c);
@@ -2179,10 +2179,10 @@
               ${displayValue
                 ? `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                      <span style="font-size:13px;font-weight:600;color:#0f172a;">${_esc(displayValue)}</span>
-                     ${scoreNum != null ? `<span class="mr-score-chip ${_scoreClass(parseFloat(scoreNum))}">${scoreNum}/10</span>` : ''}
+                     ${scoreNum != null ? `<span class="mr-score-chip ${_scoreClass(parseFloat(scoreNum))}">${scoreNum}</span>` : ''}
                    </div>`
                 : (scoreNum != null
-                    ? `<span class="mr-score-chip ${_scoreClass(parseFloat(scoreNum))}">${scoreNum}/10</span>`
+                    ? `<span class="mr-score-chip ${_scoreClass(parseFloat(scoreNum))}">${scoreNum}</span>`
                     : `<span style="color:#cbd5e1;font-size:12px;">—</span>`)}
             </td>
             <td>
@@ -2261,7 +2261,7 @@
 
 You have access to:
 1. CRITERIA — 6 categories of evaluation criteria (Demographics, Governance/Barriers, Economic Activity, Education, Quality of Life, Transit). Each criterion has a target threshold.
-2. MARKETS — a list of candidate towns with their state, MSA, population, status, thesis, and any scored values.
+2. MARKETS — a list of candidate towns with their state, MSA, population, status, thesis, and any scored values. All scores are on a 0–100 scale (Tier 1 ≥ 85, Tier 2 70–84.9, Tier 3 40–69.9, Tier 4 < 40).
 
 Answer the user's question concisely (under 250 words unless the question is broad). When you reference specific towns or criteria, name them exactly. If the data doesn't contain enough info to answer, say so plainly and suggest what would need to be filled in.
 
@@ -2452,9 +2452,9 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
         )
         UPDATE market_research_markets m SET
           score        = ROUND(c.comp_res::numeric, 1),
-          tier         = CASE WHEN ROUND(c.comp_res::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_res::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_res::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
+          tier         = CASE WHEN ROUND(c.comp_res::numeric, 1) >= 85 THEN 1 WHEN ROUND(c.comp_res::numeric, 1) >= 70 THEN 2 WHEN ROUND(c.comp_res::numeric, 1) >= 40 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
           office_score = ROUND(c.comp_off::numeric, 1),
-          office_tier  = CASE WHEN ROUND(c.comp_off::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_off::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_off::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
+          office_tier  = CASE WHEN ROUND(c.comp_off::numeric, 1) >= 85 THEN 1 WHEN ROUND(c.comp_off::numeric, 1) >= 70 THEN 2 WHEN ROUND(c.comp_off::numeric, 1) >= 40 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
           updated_at = now()
         FROM composites c WHERE m.id = c.market_id`;
         const _runSql = async (q) => {
@@ -2517,9 +2517,9 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     if (totalWeight === 0) return;
     const composite = weightedSum / totalWeight;
     const score = Math.round(composite * 10) / 10;
-    // Tier bands — Tier 1 stays tight (≥8.5); Tier 3 widened (4.0–6.9) so it
+    // Tier bands (0-100 scale since 2026-09-16) — Tier 1 ≥85; Tier 3 40–69.9 so it
     // captures the broader $100k-HHI shortlist additions and isn't near-empty.
-    const tier = score >= 8.5 ? 1 : score >= 7.0 ? 2 : score >= 4.0 ? 3 : 4;
+    const tier = score >= 85 ? 1 : score >= 70 ? 2 : score >= 40 ? 3 : 4; // 0-100 bands
     await window.supaWrite('market_research_markets', 'PATCH', { score, tier }, `?id=eq.${marketId}`);
   }
 
@@ -2564,8 +2564,8 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     if (scoreNum == null) return '<span style="color:#cbd5e1; font-size:10px;">—</span>';
     const n = parseFloat(scoreNum);
     let bg = '#fee2e2', fg = '#991b1b';
-    if (n >= 7) { bg = '#dcfce7'; fg = '#166534'; }
-    else if (n >= 4) { bg = '#fef3c7'; fg = '#92400e'; }
+    if (n >= 70) { bg = '#dcfce7'; fg = '#166534'; }
+    else if (n >= 40) { bg = '#fef3c7'; fg = '#92400e'; }
     return `<span style="display:inline-block; background:${bg}; color:${fg}; font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px;">${scoreNum}</span>`;
   }
   function _exportMarketPDF() {
@@ -2827,7 +2827,7 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     const systemPrompt = `You are a real estate market research analyst for First Mile Capital. Your job is to score a specific US town against 4 categories of evaluation criteria that require web/qualitative research (the kind Census data alone can't answer): Governance & Barriers to Entry, Economic Activity, Quality of Life, and Transit & Access.
 
 For each sub-criterion below, return:
-- A 1–10 score (1 = far below target, 10 = meets or exceeds target).
+- A 0–100 score (0 = far below target, 100 = meets or exceeds target). Use the full range with one decimal, e.g. 72.5.
 - A brief value (≤ 60 chars) summarizing the data point (e.g. "Top 5% nationally", "AA+ rating", "Walking distance to Metro-North").
 - A sources array — 1 to 3 authoritative citations. Prefer URLs from the Research Websites list. Multiple sources are encouraged when more than one body of data supports the score (e.g. FBI UCR + Niche.com for crime).
 
@@ -2842,7 +2842,7 @@ ${sourceList}
 Return STRICT JSON in this exact shape, with no commentary outside the JSON:
 {
   "scores": [
-    {"criterion_name": "<exact name from list>", "score": <0-10 or null>, "value": "<short value>", "sources": ["<URL or label>", "<optional 2nd>", "<optional 3rd>"]}
+    {"criterion_name": "<exact name from list>", "score": <0-100 or null>, "value": "<short value>", "sources": ["<URL or label>", "<optional 2nd>", "<optional 3rd>"]}
   ],
   "thesis": "<2-3 paragraph investment thesis — why this town fits or doesn't fit FM's affluent-town acquisition strategy>",
   "summary": "<one sentence executive summary, max 200 chars>"
@@ -2895,7 +2895,7 @@ Research this town now and produce the scoring JSON.`;
         const crit = byName.get((s.criterion_name || '').toLowerCase().trim());
         if (!crit) continue;
         if (s.score == null || s.score === '') { skippedCount++; continue; }
-        const sc = Math.max(0, Math.min(10, parseFloat(s.score)));
+        const sc = Math.max(0, Math.min(100, parseFloat(s.score)));
         if (!Number.isFinite(sc)) { skippedCount++; continue; }
         // Accept either sources[] (new) or source (legacy single string)
         let srcs = Array.isArray(s.sources) ? s.sources.filter(Boolean) : (s.source ? [s.source] : []);
@@ -2951,7 +2951,7 @@ Research this town now and produce the scoring JSON.`;
             ${(parsed.scores || []).map(s => {
               const sc = s.score == null ? '—' : (Math.round(s.score * 10) / 10);
               const src = s.source ? `<span style="color:#94a3b8;">[${_esc(s.source.length > 70 ? s.source.slice(0,70)+'…' : s.source)}]</span>` : '';
-              return `<div><strong>${_esc(s.criterion_name)}</strong>: ${sc}/10 — ${_esc(s.value || '')} ${src}</div>`;
+              return `<div><strong>${_esc(s.criterion_name)}</strong>: ${sc}/100 — ${_esc(s.value || '')} ${src}</div>`;
             }).join('')}
           </div>
         </div>`;
@@ -3042,8 +3042,8 @@ Research this town now and produce the scoring JSON.`;
       </div>
       <div class="mr-modal-row">
         <div>
-          <label>Score (1-10)</label>
-          <input id="mrNewScore" type="number" step="0.1" min="1" max="10" placeholder="—">
+          <label>Score (0-100)</label>
+          <input id="mrNewScore" type="number" step="0.1" min="0" max="100" placeholder="—">
         </div>
         <div>
           <label>Tier (1-4)</label>
@@ -3121,8 +3121,8 @@ Research this town now and produce the scoring JSON.`;
       </div>
       <div class="mr-modal-row">
         <div>
-          <label>Score (1-10)</label>
-          <input id="mrEditScore" type="number" step="0.1" min="1" max="10" value="${m.score != null ? m.score : ''}">
+          <label>Score (0-100)</label>
+          <input id="mrEditScore" type="number" step="0.1" min="0" max="100" value="${m.score != null ? m.score : ''}">
         </div>
         <div>
           <label>Tier</label>
@@ -3422,12 +3422,12 @@ Research this town now and produce the scoring JSON.`;
     // Flush pending debounced PATCHes so the recompute SQL sees latest values
     await _flushAllPendingPatches();
     try {
-      // STEP 1: Re-score per-criterion 0-10 values based on current targets.
+      // STEP 1: Re-score per-criterion 0-100 values based on current targets.
       // Only touches Phase 2 rows that have a raw_value parsed. Phase 3 (Claude)
       // scores stay as-is. Town Population uses tent function (same score in
       // both views). Commute uses ≤target_max scoring. All other target_min-
-      // only criteria use linear `min(10, raw/target*10)` per view.
-      // Re-score per-criterion 0-10 values. raw_value > 0 skips sentinel rows
+      // only criteria use linear `min(100, raw/target*100)` per view.
+      // Re-score per-criterion 0-100 values. raw_value > 0 skips sentinel rows
       // (Tenant Sector Diversity, etc., where value_text is qualitative and
       // raw_value was set to -1 during backfill).
       const perCritSql = `
@@ -3448,7 +3448,7 @@ Research this town now and produce the scoring JSON.`;
                 ELSE ROUND((10 - (s.raw_value - 45)/7.5)::numeric, 1)
               END
             WHEN c.target_min IS NOT NULL AND c.target_max IS NULL AND s.raw_value > 0 AND c.target_min > 0 THEN
-              LEAST(10, ROUND((s.raw_value / c.target_min * 10)::numeric, 1))
+              LEAST(100, ROUND((s.raw_value / c.target_min * 100)::numeric, 1))
             ELSE s.value_numeric
           END,
           value_numeric_office = CASE
@@ -3466,7 +3466,7 @@ Research this town now and produce the scoring JSON.`;
                 ELSE ROUND((10 - (s.raw_value - 45)/7.5)::numeric, 1)
               END
             WHEN c.target_min_office IS NOT NULL AND c.target_max_office IS NULL AND s.raw_value > 0 AND c.target_min_office > 0 THEN
-              LEAST(10, ROUND((s.raw_value / c.target_min_office * 10)::numeric, 1))
+              LEAST(100, ROUND((s.raw_value / c.target_min_office * 100)::numeric, 1))
             ELSE s.value_numeric_office
           END
         FROM market_research_criteria c
@@ -3494,9 +3494,9 @@ Research this town now and produce the scoring JSON.`;
       )
       UPDATE market_research_markets m SET
         score = ROUND(c.comp_res::numeric, 1),
-        tier  = CASE WHEN ROUND(c.comp_res::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_res::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_res::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
+        tier  = CASE WHEN ROUND(c.comp_res::numeric, 1) >= 85 THEN 1 WHEN ROUND(c.comp_res::numeric, 1) >= 70 THEN 2 WHEN ROUND(c.comp_res::numeric, 1) >= 40 THEN 3 WHEN c.comp_res IS NOT NULL THEN 4 ELSE m.tier END,
         office_score = ROUND(c.comp_off::numeric, 1),
-        office_tier  = CASE WHEN ROUND(c.comp_off::numeric, 1) >= 8.5 THEN 1 WHEN ROUND(c.comp_off::numeric, 1) >= 7.0 THEN 2 WHEN ROUND(c.comp_off::numeric, 1) >= 4.0 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
+        office_tier  = CASE WHEN ROUND(c.comp_off::numeric, 1) >= 85 THEN 1 WHEN ROUND(c.comp_off::numeric, 1) >= 70 THEN 2 WHEN ROUND(c.comp_off::numeric, 1) >= 40 THEN 3 WHEN c.comp_off IS NOT NULL THEN 4 ELSE m.office_tier END,
         updated_at = now()
       FROM composites c WHERE m.id = c.market_id`;
       const runSql = async (q) => {
@@ -3748,13 +3748,13 @@ Research this town now and produce the scoring JSON.`;
   }
 
   // ── Weighted re-ranking ─────────────────────────────────
-  // For each criterion, normalize values across markets to a 0-10 scale:
-  //   • rating_1_10 / rating_1_5 → linear rescale to 0-10
-  //   • percent / number / currency → min-max rescaled to 0-10 across the populated markets
+  // For each criterion, normalize values across markets to a 0-100 scale:
+  //   • rating_1_10 / rating_1_5 → linear rescale to 0-100
+  //   • percent / number / currency → min-max rescaled to 0-100 across the populated markets
   //   • text / boolean → ignored (no numeric value to weight)
   // Then composite = SUM(weight × normalized) / SUM(weight). Markets with no
   // scores at all keep their existing score+tier (manual entries preserved).
-  // Tier buckets: ≥8.0=1, ≥6.5=2, ≥5.0=3, <5.0=4.
+  // Tier buckets (0-100): ≥85=1, ≥70=2, ≥40=3, <40=4.
   function _computeWeightedRankings() {
     const numericCriteria = _criteria.filter(c =>
       ['rating_1_10', 'rating_1_5', 'percent', 'number', 'currency'].includes(c.value_type)
@@ -3783,11 +3783,12 @@ Research this town now and produce the scoring JSON.`;
 
     const normalize = (val, c) => {
       if (val == null || isNaN(val)) return null;
-      if (c.value_type === 'rating_1_10') return Math.max(0, Math.min(10, val));
-      if (c.value_type === 'rating_1_5')  return Math.max(0, Math.min(10, val * 2));
+      // value_numeric is already a 0-100 score for every criterion (rescaled 2026-09-16)
+      if (c.value_type === 'rating_1_10') return Math.max(0, Math.min(100, val));
+      if (c.value_type === 'rating_1_5')  return Math.max(0, Math.min(100, val));
       const r = ranges[c.id];
-      if (!r || r.max === r.min) return 5; // single value or constant → neutral
-      return ((val - r.min) / (r.max - r.min)) * 10; // 0-10
+      if (!r || r.max === r.min) return 50; // single value or constant → neutral
+      return ((val - r.min) / (r.max - r.min)) * 100; // 0-100
     };
 
     const totalWeight = numericCriteria.reduce((s, c) => s + (parseFloat(c.weight) || 0), 0);
@@ -3807,11 +3808,11 @@ Research this town now and produce the scoring JSON.`;
         used++;
       });
       if (used === 0 || sumWeightUsed === 0) return; // skip — preserve manual entry
-      let composite = sumWeighted / sumWeightUsed;        // 0-10
-      composite = Math.max(1, Math.min(10, composite));   // clamp to seeding bounds
+      let composite = sumWeighted / sumWeightUsed;        // 0-100
+      composite = Math.max(0, Math.min(100, composite));  // clamp
       composite = Math.round(composite * 10) / 10;        // 1 decimal place
-      // Tier bands (unified across recompute paths) — T1 tight at ≥8.5
-      const tier = composite >= 8.5 ? 1 : (composite >= 6.5 ? 2 : (composite >= 4.5 ? 3 : 4));
+      // Tier bands (unified across recompute paths, 0-100) — T1 ≥85
+      const tier = composite >= 85 ? 1 : (composite >= 70 ? 2 : (composite >= 40 ? 3 : 4));
       // Only push update if value changed (avoid noisy writes)
       if (m.score !== composite || m.tier !== tier) {
         updates.push({ id: m.id, name: m.name, score: composite, tier, prevScore: m.score, prevTier: m.tier });
@@ -3971,9 +3972,9 @@ Research this town now and produce the scoring JSON.`;
   function _fmtMoney(n) { return n == null ? '—' : '$' + Math.round(n).toLocaleString(); }
   function _fmtInt(n)   { return n == null ? '—' : Math.round(n).toLocaleString(); }
   function _heat(v) {
-    // 0-10 → soft red → amber → green background
+    // 0-100 → soft red → amber → green background
     if (v == null || !isFinite(v)) return '#f1f5f9';
-    const t = Math.max(0, Math.min(1, v / 10));
+    const t = Math.max(0, Math.min(1, v / 100));
     const h = Math.round(t * 120);           // 0=red, 120=green
     return `hsl(${h} 70% ${92 - t * 22}%)`;
   }
@@ -4035,7 +4036,7 @@ Research this town now and produce the scoring JSON.`;
     const avgPop = markets.filter(m => m.population).reduce((a, m, _, arr) => a + Number(m.population) / arr.length, 0);
     const tierCount = { 1: 0, 2: 0, 3: 0, 4: 0 }; markets.forEach(m => { if (m[tCol]) tierCount[m[tCol]]++; });
     const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6', 4: '#94a3b8' };
-    const areaTier = areaComposite >= 8.5 ? 1 : areaComposite >= 7 ? 2 : areaComposite >= 4 ? 3 : 4;
+    const areaTier = areaComposite >= 85 ? 1 : areaComposite >= 70 ? 2 : areaComposite >= 40 ? 3 : 4;
 
     // ── SVG: triangulation plot (pin at center, rings every 15 mi) ──
     const R = 205, cx = 320, cy = 250;
@@ -4069,11 +4070,11 @@ Research this town now and produce the scoring JSON.`;
 
     // ── SVG: category radar (area-weighted bold + top 3 markets thin) ──
     const nA = cats.length, RR = 120, rcx = 230, rcy = 175;
-    const axisPt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / nA; const r = RR * v / 10; return [rcx + r * Math.cos(a), rcy + r * Math.sin(a)]; };
+    const axisPt = (i, v) => { const a = -Math.PI / 2 + i * 2 * Math.PI / nA; const r = RR * v / 100; return [rcx + r * Math.cos(a), rcy + r * Math.sin(a)]; };
     let radar = `<svg viewBox="0 0 460 350" width="100%" style="max-width:480px;display:block;margin:0 auto;">`;
     [2.5, 5, 7.5, 10].forEach(lv => { radar += `<polygon points="${cats.map((_, i) => axisPt(i, lv).join(',')).join(' ')}" fill="none" stroke="#e2e8f0"/>`; });
     cats.forEach((c, i) => {
-      const [x, y] = axisPt(i, 10); const [lx, ly] = axisPt(i, 12.6);
+      const [x, y] = axisPt(i, 100); const [lx, ly] = axisPt(i, 126);
       radar += `<line x1="${rcx}" y1="${rcy}" x2="${x}" y2="${y}" stroke="#cbd5e1"/>`;
       radar += `<text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="9" fill="#475569">${_esc(c.name)}</text>`;
     });
@@ -4177,7 +4178,7 @@ Research this town now and produce the scoring JSON.`;
 
 <h2>Category score matrix</h2>
 ${catTable}
-<div class="note">Cells are 0–10 category means of the underlying criteria. <b>Area</b> column = distance-weighted average across the ${markets.length} markets (weight = 1 / (miles + 2)), so the closest towns count most. Composite uses category weights (Wt) from the ${isOffice ? 'office' : 'residential'} scoring model. Tier bands: T1 ≥ 8.5 · T2 7.0–8.4 · T3 4.0–6.9 · T4 &lt; 4.0.</div>
+<div class="note">Cells are 0–100 category means of the underlying criteria. <b>Area</b> column = distance-weighted average across the ${markets.length} markets (weight = 1 / (miles + 2)), so the closest towns count most. Composite uses category weights (Wt) from the ${isOffice ? 'office' : 'residential'} scoring model. Tier bands: T1 ≥ 8.5 · T2 7.0–8.4 · T3 4.0–6.9 · T4 &lt; 4.0.</div>
 
 <h2>Market roster (nearest first)</h2>
 ${roster}
@@ -4319,7 +4320,7 @@ ${appendix}
   // Swap _photonSuggest for Google Places Autocomplete if a billed key is ever added.
   let _sgTimer = null, _sgAbort = null, _sgItems = [], _sgActive = -1, _sgSeq = 0;
   const _PHOTON = 'https://photon.komoot.io/api/';
-  const _sgScoreColor = (s) => s >= 8 ? '#15803d' : (s >= 6 ? '#65a30d' : (s >= 4 ? '#ca8a04' : (s != null ? '#b91c1c' : '#cbd5e1')));
+  const _sgScoreColor = (s) => s >= 80 ? '#15803d' : (s >= 60 ? '#65a30d' : (s >= 40 ? '#ca8a04' : (s != null ? '#b91c1c' : '#cbd5e1')));
   function _sgEl() { return document.getElementById('mrSuggest'); }
   function _sgClose() { const el = _sgEl(); if (el) { el.classList.remove('open'); el.innerHTML = ''; } _sgItems = []; _sgActive = -1; }
   function _sgHighlight(text, q) {

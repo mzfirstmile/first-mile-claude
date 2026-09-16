@@ -9,10 +9,10 @@
 // Reverse-engineered scoring formulas (validated against existing 1,046 scores):
 //   - Town Population: tent function, peak 25k-50k:
 //       <5000 or >75000 → 0
-//       5000-25000      → (pop-5000)/2000  (linear ramp 0-10)
+//       5000-25000      → (pop-5000)/200  (linear ramp 0-100)
 //       25000-50000     → 10
 //       50000-75000     → (75000-pop)/2500 (linear decay 10-0)
-//   - Generic target_min criterion: min(10, value/target_min*10)
+//   - Generic target_min criterion: min(100, value/target_min*100)
 //     Used for: MHI ($200k), Home ($1.5M), HHs $200k+ (35%), Bachelor's (70%), Grad (30%)
 //
 // POST body (all optional):
@@ -46,7 +46,9 @@ const STATE_FIPS: Record<string, string> = {
   WI: "55", WY: "56", PR: "72",
 };
 
-const TIER_T1 = 8.5, TIER_T2 = 7.0, TIER_T3 = 4.0;
+// Scores are 0-100 (rescaled from 0-10 on 2026-09-16); tier bands 85 / 70 / 40
+const MAX_SCORE = 100;
+const TIER_T1 = 85, TIER_T2 = 70, TIER_T3 = 40;
 
 interface Market {
   id: string;
@@ -76,14 +78,14 @@ function roundTo(n: number, d: number): number {
 
 function scorePopulation(pop: number | null): number {
   if (pop == null || pop < 5000 || pop > 75000) return 0;
-  if (pop < 25000) return roundTo((pop - 5000) / 2000, 1);
-  if (pop <= 50000) return 10;
-  return roundTo((75000 - pop) / 2500, 1);
+  if (pop < 25000) return roundTo((pop - 5000) / 200, 1);
+  if (pop <= 50000) return MAX_SCORE;
+  return roundTo((75000 - pop) / 250, 1);
 }
 
 function scoreTargetMin(value: number | null, targetMin: number): number {
   if (value == null || value <= 0) return 0;
-  return roundTo(Math.min(10, (value / targetMin) * 10), 1);
+  return roundTo(Math.min(MAX_SCORE, (value / targetMin) * MAX_SCORE), 1);
 }
 
 async function fetchCensusForState(stateFips: string): Promise<Map<string, any> | null> {
@@ -289,7 +291,7 @@ serve(async (req) => {
       const pct = (acs.hh_200k / acs.hh_total) * 100;
       rows.push({
         name: "Households Earning $200k+",
-        vn: roundTo(Math.min(10, (pct / 35) * 10), 1),
+        vn: roundTo(Math.min(MAX_SCORE, (pct / 35) * MAX_SCORE), 1),
         vt: pct.toFixed(1) + "%",
         src: "https://data.census.gov/ (B19001 brackets)",
       });
@@ -300,7 +302,7 @@ serve(async (req) => {
       const pct = (bachPlus / acs.edu_total) * 100;
       rows.push({
         name: "Bachelor's Degree Attainment",
-        vn: roundTo(Math.min(10, (pct / 70) * 10), 1),
+        vn: roundTo(Math.min(MAX_SCORE, (pct / 70) * MAX_SCORE), 1),
         vt: pct.toFixed(1) + "%",
         src: "https://data.census.gov/ (B15003 brackets)",
       });
@@ -311,7 +313,7 @@ serve(async (req) => {
       const pct = (gradPlus / acs.edu_total) * 100;
       rows.push({
         name: "Professional / Graduate Degrees",
-        vn: roundTo(Math.min(10, (pct / 30) * 10), 1),
+        vn: roundTo(Math.min(MAX_SCORE, (pct / 30) * MAX_SCORE), 1),
         vt: pct.toFixed(1) + "%",
         src: "https://data.census.gov/ (B15003 brackets)",
       });

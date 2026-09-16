@@ -20,7 +20,7 @@
 //   1. Office-Using Jobs in Town        = S0804 total × office share      target 5,000
 //   2. Office Share of Local Jobs       = office % of in-town jobs         target 35%
 //   3. Jobs-to-Resident-Workers Ratio   = S0804 total / B08301 total       target 1.0
-//   4. Office Job Growth (5-yr)         = 2013-17 → 2018-22 office jobs   ≤−15%→0 … ≥+25%→10
+//   4. Office Job Growth (5-yr)         = 2013-17 → 2018-22 office jobs   ≤−15%→0 … ≥+25%→100  (all scores 0-100)
 //   5. Resident Remote-Work Share       = WFH / employed residents         target 25%
 //
 // Variable IDs are resolved at runtime from the ACS group metadata
@@ -75,15 +75,15 @@ function roundTo(n: number, d = 1): number {
 }
 function linScore(value: number, target: number): number {
   if (!(target > 0) || !(value >= 0)) return 0;
-  return roundTo(Math.min(10, (value / target) * 10), 1);
+  return roundTo(Math.min(100, (value / target) * 100), 1);
 }
 function growthScore(pct: number): number {
-  // ≤ −15% → 0 ; linear to +25% → 10 ; ≥ +25% → 10
+  // ≤ −15% → 0 ; linear to +25% → 100 ; ≥ +25% → 100
   // (+10% cap gave 10/10 to two-thirds of NJ towns — ACS 5-yr deltas on small bases are noisy)
   if (pct == null || !isFinite(pct)) return 0;
   if (pct <= -15) return 0;
-  if (pct >= 25) return 10;
-  return roundTo(((pct + 15) / 40) * 10, 1);
+  if (pct >= 25) return 100;
+  return roundTo(((pct + 15) / 40) * 100, 1);
 }
 const fmtInt = (n: number) => Math.round(n).toLocaleString("en-US");
 const fmtPct = (n: number) => n.toFixed(1) + "%";
