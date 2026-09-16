@@ -1171,8 +1171,8 @@
           </div>
           <div style="display:flex;gap:8px;align-items:center;">
             <select class="mr-sort" id="mrSort" onchange="mrChangeSort(this.value)">
+              <option value="score_desc" selected>Sort: Score (high → low)</option>
               <option value="distance_asc" id="mrSortDistanceOpt" style="display:none;">Sort: Distance (nearest first)</option>
-              <option value="score_desc">Sort: Score (high → low)</option>
               <option value="tier_asc">Sort: Tier (1 → 4)</option>
               <option value="name_asc">Sort: Name (A → Z)</option>
               <option value="updated_desc">Sort: Recently updated</option>
@@ -1288,6 +1288,10 @@
     // Favorites chip always constrains when active; tier multi-select is the
     // primary surface for filtering the scored universe.
     if (_activeFilter === 'favorites') parts.push('is_favorite=eq.true');
+    // The list/map only ever show researched (shortlisted) towns. The 24k unscored universe rows
+    // are reachable through the search box (so an unresearched town still shows its Census facts),
+    // but they must not pad the default list ("Showing 1–500 of 25,961") or the map fetch.
+    if (!isNameSearching && !_addressPin) parts.push('phase=eq.shortlisted');
     if (hasTierFilter) {
       const tiers = Array.from(_activeTiers).sort().join(',');
       parts.push(`${_tierCol()}=in.(${tiers})`);
@@ -1701,14 +1705,17 @@
     _mapLeafletLoaded = true;
   }
 
+  let _mapReady = null; // promise that resolves once the current map instance has finished its initial fit
+  let _mapReadyResolve = null;
   async function _initMap() {
+    _mapReady = new Promise(res => { _mapReadyResolve = res; });
     try {
       await _ensureLeaflet();
       const L = window.L;
       const mapEl = document.getElementById('mrMap');
       if (!mapEl) return;
       // Always rebuild — _renderGrid replaces innerHTML
-      if (_mapInstance) { try { _mapInstance.remove(); } catch {} _mapInstance = null; }
+      if (_mapInstance) { try { _mapInstance.stop(); _mapInstance.closePopup(); } catch {} try { _mapInstance.remove(); } catch {} _mapInstance = null; }
       _mapInstance = L.map(mapEl).setView([39.5, -98.35], 4); // US center
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 18,
@@ -1861,6 +1868,9 @@
         setTimeout(() => { _mapBoundsSettling = false; }, 600);
       }
 
+      // Initial fit issued — anyone waiting to fly to a town (mrViewOnMap) may proceed after it settles
+      setTimeout(() => { if (_mapReadyResolve) { _mapReadyResolve(); _mapReadyResolve = null; } }, 650);
+
       // After the map settles, link viewport changes to the list filter.
       // Debounce so panning doesn't fire a query on every pixel.
       let moveTimer = null;
@@ -1881,12 +1891,20 @@
             east:  b.getEast().toFixed(4),
             west:  b.getWest().toFixed(4),
           };
+          // Panning/zooming the map means "show me what's here": drop a leftover town-name
+          // search so the list matches the viewport instead of staying pinned to one town.
+          if ((_searchQuery || '').trim() && !_addressPin) {
+            _searchQuery = '';
+            const inp = document.getElementById('mrSearchInput'); if (inp) inp.value = '';
+            _sgClose();
+          }
           _page = 0;
           _refreshListOnly();
         }, 300);
       });
     } catch (e) {
       console.warn('[mr] map init failed:', e);
+      if (_mapReadyResolve) { _mapReadyResolve(); _mapReadyResolve = null; }
     }
   }
 
@@ -3934,7 +3952,11 @@ Research this town now and produce the scoring JSON.`;
   };
   window.mrCopyResidentialToOffice = _copyResidentialToOffice;
   window.mrFinishCriteriaEdit = _finishCriteriaEdit;
-  window.mrViewOnMap = (lat, lng, name) => {
+  window.mrViewOnMap = async (lat, lng, name) => {
+    if (!_mapInstance) return;
+    // If the map is still doing its initial fitBounds (e.g. the list just re-rendered after a
+    // search), wait for it — otherwise the fit lands after our setView and undoes the zoom.
+    if (_mapReady) { try { await Promise.race([_mapReady, new Promise(r => setTimeout(r, 2000))]); } catch (_) {} }
     if (!_mapInstance) return;
     _mapBoundsSettling = true;
     _mapInstance.setView([lat, lng], 11, { animate: true });
@@ -4424,13 +4446,13 @@ ${appendix}
       if (section !== lastKind) { html += `<div class="mr-suggest-head">${section}</div>`; lastKind = section; }
       if (it.kind === 'market') {
         const tierCls = _tierClass(it.tier);
-        html += `<div class="mr-suggest-item${i === _sgActive ? ' active' : ''}" data-i="${i}" onmousedown="event.preventDefault()" onclick="mrSuggestPick(${i})">
+        html += `<div class="mr-suggest-item${i === _sgActive ? ' active' : ''}" data-i="${i}" onmousedown="event.preventDefault(); mrSuggestPick(${i})" ontouchstart="event.preventDefault(); mrSuggestPick(${i})">
           <span class="mr-sg-ico">🏙️</span>
           <span class="mr-sg-main">${_sgHighlight(it.label, q)}<span class="mr-sg-sub">${_esc(it.sub)}</span></span>
           <span class="mr-sg-right">${it.score != null ? `<span style="font-weight:700;color:${_sgScoreColor(it.score)};">${Number(it.score).toFixed(1)}</span>` : ''}${it.tier ? `<span class="mr-tier ${tierCls}" style="font-size:10px;">T${it.tier}</span>` : ''}</span>
         </div>`;
       } else {
-        html += `<div class="mr-suggest-item${i === _sgActive ? ' active' : ''}" data-i="${i}" onmousedown="event.preventDefault()" onclick="mrSuggestPick(${i})">
+        html += `<div class="mr-suggest-item${i === _sgActive ? ' active' : ''}" data-i="${i}" onmousedown="event.preventDefault(); mrSuggestPick(${i})" ontouchstart="event.preventDefault(); mrSuggestPick(${i})">
           <span class="mr-sg-ico">${it.kind === 'address' ? '📍' : '🗺️'}</span>
           <span class="mr-sg-main">${_sgHighlight(it.main, q)}<span class="mr-sg-sub">${_esc(it.sub)}</span></span>
           <span class="mr-sg-right">${_esc(it.typeTag)} · ${_ADDRESS_RADIUS_MILES} mi radius</span>
