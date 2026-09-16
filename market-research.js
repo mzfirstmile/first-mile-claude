@@ -3928,7 +3928,7 @@ Research this town now and produce the scoring JSON.`;
   function _changeSort() { _renderGrid(); }
 
   // ── Public API ─────────────────────────────────────────
-  window.mrOpenMarket     = (id) => _openMarket(id);
+  window.mrOpenMarket     = (id) => { if (Date.now() - _sgPickedAt < 500) return; _openMarket(id); };
   window.mrBackToList     = ()    => _backToList();
   window.mrNewMarket      = ()    => _newMarket();
   window.mrSaveNewMarket  = ()    => _saveNewMarket();
@@ -4464,10 +4464,14 @@ ${appendix}
     el.innerHTML = html;
     el.classList.add('open');
   }
+  let _sgPickedAt = 0; // timestamp of the last dropdown pick — the trailing mouseup/click must not hit the list beneath
   window.mrSuggestPick = (i) => {
     const it = _sgItems[i]; if (!it) return;
     const inp = document.getElementById('mrSearchInput');
-    _sgClose();
+    _sgPickedAt = Date.now();
+    // Close on the next tick so the click that follows this mousedown still lands on the
+    // (inert) dropdown instead of falling through to a list row underneath.
+    _sgItems = []; setTimeout(_sgClose, 60);
     if (it.kind === 'market') {
       _searchQuery = it.label; if (inp) inp.value = it.label;
       // Show the picked town in the list too, then open its detail
