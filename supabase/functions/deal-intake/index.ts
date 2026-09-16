@@ -180,7 +180,7 @@ const ASSESS_TOOL = {
 
 const ASSESS_SYSTEM = `You are the acquisitions analyst for First Mile Capital (NYC-based; owns suburban Class A office in NJ/CT, NYC retail/mixed-use, and does note purchases, recaps and ground-up development). First Mile's thesis: buy well-located assets in small affluent towns and employment nodes that the Market Research module ranks highly (composite 0-100; Tier 1 ≥ 85, Tier 2 70-84.9, Tier 3 40-69.9, Tier 4 < 40). The office view weights Office Demand (LEHD payroll jobs in town), Company Concentrations and Relation to Other Asset Classes; the residential view weights Demographics, Education and Quality of Life.
 
-Rules: be direct and analytical; never invent numbers. LEAD WITH THE MARKET: the core of this assessment is how the location scores in our research (composite, tier, rank, category strengths/weaknesses, nearby researched towns). Deal-level financials are a secondary lens. Broker email blasts and calls-for-offers routinely omit price, NOI, cap rate, SF, occupancy and tenancy (they sit behind a deal-room login) — that is normal, not a red flag: mention missing items once, neutrally, as a single line and list them in the "questions" field; do NOT dwell on them or describe the deal as "problematic" for lacking them, and do not let missing data alone pull the recommendation down. Judge (a) market quality from the research scores first, (b) deal metrics vs. what you'd expect for the asset type only where they were actually provided, (c) fit with First Mile's playbook. Recommendation guidance: Pursue = Tier 1-2 market and nothing disclosed argues against it (including when financials are simply not yet disclosed — frame Pursue as "worth requesting the deal room / underwriting"); Review = mixed market signals, a Tier 3 market with an offsetting story, or disclosed deal metrics that look stretched; Pass = weak market (Tier 3-4 with no offsetting story) or clearly mispriced on disclosed numbers. If the nearest researched town is more than ${MATCH_RADIUS_MI} miles away, say the market is outside the research universe and weight your view accordingly.`;
+Rules: be direct and analytical; never invent numbers. LEAD WITH THE MARKET: the core of this assessment is how the location scores in our research (composite, tier, rank, category strengths/weaknesses, nearby researched towns). Deal-level financials are a secondary lens. Broker email blasts and calls-for-offers routinely omit price, NOI, cap rate, SF, occupancy and tenancy (they sit behind a deal-room login) — that is normal, not a red flag: mention missing items once, neutrally, as a single line and list them in the "questions" field; do NOT dwell on them or describe the deal as "problematic" for lacking them, and do not let missing data alone pull the recommendation down. Judge (a) market quality from the research scores first, (b) deal metrics vs. what you'd expect for the asset type only where they were actually provided, (c) fit with First Mile's playbook. Recommendation guidance: Pursue = Tier 1-2 market and nothing disclosed argues against it (including when financials are simply not yet disclosed — frame Pursue as "worth requesting the deal room / underwriting"); Review = mixed market signals, a Tier 3 market with an offsetting story, or disclosed deal metrics that look stretched; Pass = weak market (Tier 3-4 with no offsetting story) or clearly mispriced on disclosed numbers. If the nearest researched town is more than ${MATCH_RADIUS_MI} miles away, say the market is outside the research universe and weight your view accordingly. If an IMPORTANT MARKET CAVEAT says the asset sits in a large city / CBD, say plainly that the research score is a proxy for the surrounding metro, not the CBD itself, and base the recommendation mainly on the disclosed deal metrics and what you know about that CBD submarket (naming it as your own view, not research data). Do not describe a CBD location as a "location mismatch" — First Mile does buy NYC and other urban assets; the research module simply doesn't cover cities.`;
 
 // ── Report HTML ──────────────────────────────────────────────
 const fmt$ = (n: any) => (n == null || isNaN(Number(n)) ? "—" : "$" + Number(n).toLocaleString("en-US", { maximumFractionDigits: 0 }));
@@ -259,6 +259,7 @@ function buildReport(d: any, m: any, cats: any[], nearby: any[], a: any, view: s
 
   <h3 style="font-size:14px;margin:18px 0 4px;color:#0f172a">Market match — Market Research module</h3>
   ${marketBlock}
+  ${d.extracted?.market_note ? `<p style="margin:8px 0 0;font-size:13.5px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px"><b>Proxy market:</b> ${esc(d.extracted.market_note)}</p>` : ""}
   ${a.market_fit_note ? `<p style="margin:8px 0 0;font-size:14px;color:#334155"><b>Fit:</b> ${esc(a.market_fit_note)}</p>` : ""}
 
   ${catRows ? `<h3 style="font-size:14px;margin:18px 0 4px;color:#0f172a">Category scores — ${viewLabel}</h3>
@@ -328,7 +329,7 @@ function buildReplyIntro(deal: any, primary: any, a: any, view: string, xlsxCoun
 <ul style="margin:6px 0 10px 18px;padding:0;font-size:15px">
   ${li("Recommendation", `<b style="color:${recColor(a.recommendation)}">${esc(a.recommendation)}</b> — ${esc(a.headline || "")}`)}
   ${li("Opportunity score", `<b>${score} / 100</b> (Tier ${deal.opportunity_tier ?? "—"}, ${view} view)`)}
-  ${primary ? li("Market match", `<a href="${DASHBOARD}/#marketresearch&market=${primary.id}" style="color:#0ea5e9">${esc(marketLabel(primary))}</a>${deal.market_distance_mi != null ? ` (${Number(deal.market_distance_mi).toFixed(1)} mi)` : ""} — ranked <b>#${rank ?? "—"}</b> of ~1,870 researched towns in the ${view} view${deal.market_distance_mi > MATCH_RADIUS_MI ? ' · <b style="color:#ef4444">outside research radius</b>' : ""}`) : li("Market match", `<span style="color:#ef4444">none — address could not be matched to a researched town</span>`)}
+  ${primary ? li("Market match", `<a href="${DASHBOARD}/#marketresearch&market=${primary.id}" style="color:#0ea5e9">${esc(marketLabel(primary))}</a>${deal.market_distance_mi != null ? ` (${Number(deal.market_distance_mi).toFixed(1)} mi)` : ""} — ranked <b>#${rank ?? "—"}</b> of ~1,870 researched towns in the ${view} view${deal.market_distance_mi > MATCH_RADIUS_MI ? ' · <b style="color:#ef4444">outside research radius</b>' : ""}${deal.extracted?.market_note ? ' · <b style="color:#b45309">proxy — large-city asset</b>' : ""}`) : li("Market match", `<span style="color:#ef4444">none — address could not be matched to a researched town</span>`)}
 </ul>
 <p style="margin:8px 0">
   <a href="${DASHBOARD}/#dealtracking&deal=${deal.id}" style="display:inline-block;background:#0ea5e9;color:#fff;text-decoration:none;font-weight:600;padding:8px 14px;border-radius:8px;margin-right:8px">Open this deal</a>
@@ -375,6 +376,19 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
   }
   const cats = primary ? await categoryScores(sb, primary.id) : [];
 
+  // Large-city check: the research universe is small affluent towns (pop 4k–75k). A CBD or big-city
+  // asset (Manhattan, Orlando, Plano…) is never itself shortlisted, so the "nearest researched town"
+  // is only a proxy for the surrounding metro. Look the deal's own city up in the full universe.
+  let cityNote: string | null = null, cityRow: any = null;
+  if (ex.city) {
+    const { data: cityRows } = await sb.from("market_research_markets").select("name,state,population,median_household_income,phase")
+      .ilike("name", `${String(ex.city).replace(/[%_]/g, "")}%`).eq("state", ex.state || "").limit(5);
+    cityRow = (cityRows || []).find((r: any) => townOf(r).toLowerCase() === String(ex.city).toLowerCase()) || null;
+    if (cityRow && cityRow.phase !== "shortlisted" && Number(cityRow.population) > 75000) {
+      cityNote = `${townOf(cityRow)}, ${cityRow.state} (pop ${Number(cityRow.population).toLocaleString()}) is a large city outside the small-town research universe (4k–75k pop). ${primary ? marketLabel(primary) + " is used as a proxy for the surrounding submarket" : "No proxy market"} — treat the market score as directional; CBD fundamentals (submarket vacancy, absorption, transit, tenant base) must be underwritten separately.`;
+    }
+  }
+
   // 4. scoring view + opportunity score
   const view = ["office", "medical", "mixed_use"].includes(ex.asset_type) ? "office" : "residential";
   const oppScore = primary ? (view === "office" ? primary.office_score : primary.score) : null;
@@ -384,8 +398,9 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
   const marketCtx = primary
     ? `Matched market: ${marketLabel(primary)} (${distance != null ? distance.toFixed(1) + " mi from site" : "name match"}); pop ${primary.population}, median HHI $${primary.median_household_income}. Office view: ${primary.office_score}/100 Tier ${primary.office_tier} (rank #${primary.rank_office} of ~1,870 shortlisted towns). Residential view: ${primary.score}/100 Tier ${primary.tier} (rank #${primary.rank_residential}). Market thesis: ${primary.thesis || "n/a"}.\nCategory means (${view} view): ${cats.map((c) => `${c.category}=${view === "office" ? c.mean_office : c.mean_res}`).join("; ")}.\nNotable criteria: ${cats.flatMap((c) => c.criteria.filter((k: any) => (view === "office" ? k.active_office : k.active_res)).slice(0, 4).map((k: any) => `${k.name}: ${k.value_text ?? (view === "office" ? k.value_office : k.value_res)}`)).join("; ")}.\nOther researched towns nearby: ${nearby.map((n) => `${marketLabel(n)} ${n.miles}mi (off ${n.office_score}/res ${n.score})`).join(", ") || "none within 25 mi"}.`
     : `No researched market matched (address not geocodable or none of the ~1,870 shortlisted towns is nearby).`;
+  const cityCtx = cityNote ? `\nIMPORTANT MARKET CAVEAT: ${cityNote}` : "";
   const dealCtx = `Deal facts: ${JSON.stringify(ex)}\nScoring view chosen: ${view}. Opportunity score (market composite): ${oppScore ?? "n/a"} (Tier ${oppTier ?? "n/a"}).`;
-  const a = await claude(ASSESS_SYSTEM, `${dealCtx}\n\n${marketCtx}\n\nOriginal email:\n${opts.text.slice(0, 6000)}`, ASSESS_TOOL, 2500);
+  const a = await claude(ASSESS_SYSTEM, `${dealCtx}\n\n${marketCtx}${cityCtx}\n\nOriginal email:\n${opts.text.slice(0, 6000)}`, ASSESS_TOOL, 2500);
 
   // 6. persist
   const rowBase: any = {
@@ -394,7 +409,7 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
     latitude: geo?.lat ?? null, longitude: geo?.lng ?? null,
     asset_type: ex.asset_type, deal_type: ex.deal_type, sf: ex.sf, units: ex.units, asking_price: ex.asking_price, price_psf: ex.price_psf,
     noi: ex.noi, cap_rate: ex.cap_rate, occupancy_pct: ex.occupancy_pct, year_built: ex.year_built, broker: ex.broker, seller: ex.seller, key_tenants: ex.key_tenants,
-    extracted: ex,
+    extracted: { ...ex, market_note: cityNote },
     market_id: primary?.id ?? null, market_name: primary ? marketLabel(primary) : null, market_distance_mi: distance != null ? Math.round(distance * 10) / 10 : null,
     market_score_res: primary?.score ?? null, market_tier_res: primary?.tier ?? null, market_rank_res: primary?.rank_residential ?? null,
     market_score_office: primary?.office_score ?? null, market_tier_office: primary?.office_tier ?? null, market_rank_office: primary?.rank_office ?? null,
