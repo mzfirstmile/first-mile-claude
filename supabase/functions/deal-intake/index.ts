@@ -15,6 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import * as XLSX from "https://esm.sh/xlsx@0.18.5";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,6 +108,10 @@ function distMi(lat1: number, lon1: number, lat2: number, lon2: number): number 
   const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+// market_research_markets.name already carries the state ("Florham Park, NJ") — normalize once
+const townOf = (m: any) => String(m.name || "").replace(/,\s*[A-Z]{2}$/, "");
+const marketLabel = (m: any) => (/,\s*[A-Z]{2}$/.test(String(m.name || "")) ? m.name : `${m.name}, ${m.state}`);
 
 function tierFor(score: number | null): number | null {
   if (score == null) return null;
@@ -214,7 +219,7 @@ function buildReport(d: any, m: any, cats: any[], nearby: any[], a: any, view: s
   const viewLabel = view === "office" ? "Office view" : "Residential view";
   const marketBlock = m
     ? `<table cellspacing="0" style="width:100%;border-collapse:collapse;margin-top:6px">
-        ${row("Matched market", `<a href="${DASHBOARD}/#marketresearch&market=${m.id}" style="color:#0ea5e9;font-weight:600">${esc(m.name)}, ${esc(m.state)}</a> <span style="color:#64748b">· ${d.market_distance_mi != null ? d.market_distance_mi.toFixed(1) + " mi from site" : ""}${d.market_distance_mi > MATCH_RADIUS_MI ? ' · <b style="color:#ef4444">outside research radius</b>' : ""}</span>`)}
+        ${row("Matched market", `<a href="${DASHBOARD}/#marketresearch&market=${m.id}" style="color:#0ea5e9;font-weight:600">${esc(marketLabel(m))}</a> <span style="color:#64748b">· ${d.market_distance_mi != null ? d.market_distance_mi.toFixed(1) + " mi from site" : ""}${d.market_distance_mi > MATCH_RADIUS_MI ? ' · <b style="color:#ef4444">outside research radius</b>' : ""}</span>`)}
         ${row("Population / Median HHI", `${fmtN(m.population)} / ${fmt$(m.median_household_income)}`)}
         ${row("Office score", `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${tierColor(m.office_tier)};color:#fff;font-weight:700;font-size:12px">T${m.office_tier ?? "—"}</span> &nbsp;<b>${m.office_score ?? "—"}</b> / 10 &nbsp;<span style="color:#64748b">rank #${m.rank_office ?? "—"} of shortlist</span>`)}
         ${row("Residential score", `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:${tierColor(m.tier)};color:#fff;font-weight:700;font-size:12px">T${m.tier ?? "—"}</span> &nbsp;<b>${m.score ?? "—"}</b> / 10 &nbsp;<span style="color:#64748b">rank #${m.rank_residential ?? "—"}</span>`)}
@@ -232,7 +237,7 @@ function buildReport(d: any, m: any, cats: any[], nearby: any[], a: any, view: s
     .join("");
 
   const nearbyRows = nearby
-    .map((n) => `<tr><td ${td}><a href="${DASHBOARD}/#marketresearch&market=${n.id}" style="color:#0ea5e9">${esc(n.name)}, ${esc(n.state)}</a></td><td ${tdx("padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:14px;text-align:right")}>${n.miles.toFixed(1)}</td><td ${tdx("padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:14px;text-align:center")}><span style="color:${tierColor(n.office_tier)};font-weight:700">${n.office_score ?? "—"}</span> <span style="color:#94a3b8">T${n.office_tier ?? "—"}</span></td><td ${tdx("padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:14px;text-align:center")}><span style="color:${tierColor(n.tier)};font-weight:700">${n.score ?? "—"}</span> <span style="color:#94a3b8">T${n.tier ?? "—"}</span></td></tr>`)
+    .map((n) => `<tr><td ${td}><a href="${DASHBOARD}/#marketresearch&market=${n.id}" style="color:#0ea5e9">${esc(marketLabel(n))}</a></td><td ${tdx("padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:14px;text-align:right")}>${n.miles.toFixed(1)}</td><td ${tdx("padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:14px;text-align:center")}><span style="color:${tierColor(n.office_tier)};font-weight:700">${n.office_score ?? "—"}</span> <span style="color:#94a3b8">T${n.office_tier ?? "—"}</span></td><td ${tdx("padding:6px 10px;border-bottom:1px solid #f1f5f9;font-size:14px;text-align:center")}><span style="color:${tierColor(n.tier)};font-weight:700">${n.score ?? "—"}</span> <span style="color:#94a3b8">T${n.tier ?? "—"}</span></td></tr>`)
     .join("");
 
   const list = (arr: string[] | undefined) => (arr?.length ? `<ul style="margin:6px 0 0 18px;padding:0">${arr.map((s) => `<li style="margin:3px 0">${esc(s)}</li>`).join("")}</ul>` : `<p style="color:#94a3b8;margin:4px 0">—</p>`);
@@ -274,6 +279,65 @@ function buildReport(d: any, m: any, cats: any[], nearby: any[], a: any, view: s
 </div>`;
 }
 
+// ── Excel export of the whole deal table (attached to every reply) ──
+async function buildDealsXlsx(sb: any): Promise<{ name: string; contentType: string; contentBytes: string; count: number }> {
+  const { data, error } = await sb
+    .from("deal_tracking")
+    .select("id,created_at,submitted_by_name,submitted_by,deal_name,address,city,state,asset_type,deal_type,sf,units,asking_price,price_psf,noi,cap_rate,occupancy_pct,key_tenants,market_name,market_distance_mi,market_score_office,market_tier_office,market_rank_office,market_score_res,market_tier_res,market_rank_res,scoring_view,opportunity_score,opportunity_tier,recommendation,status,notes")
+    .order("created_at", { ascending: false })
+    .limit(1000);
+  if (error) throw new Error(`xlsx export: ${error.message}`);
+  const num = (v: any) => (v == null ? null : Number(v));
+  const rows = (data || []).map((d: any) => ({
+    "Deal": d.deal_name, "Status": d.status, "Recommendation": d.recommendation,
+    "Opportunity Score": num(d.opportunity_score), "Opp. Tier": d.opportunity_tier, "Scoring View": d.scoring_view,
+    "Address": d.address, "City": d.city, "State": d.state, "Asset Type": d.asset_type, "Deal Type": d.deal_type,
+    "SF": num(d.sf), "Units": d.units, "Asking Price": num(d.asking_price), "$/SF": num(d.price_psf), "NOI": num(d.noi), "Cap Rate %": num(d.cap_rate), "Occupancy %": num(d.occupancy_pct),
+    "Key Tenants": d.key_tenants,
+    "Matched Market": d.market_name, "Miles to Market": num(d.market_distance_mi),
+    "Office Score": num(d.market_score_office), "Office Tier": d.market_tier_office, "Office Rank": d.market_rank_office,
+    "Residential Score": num(d.market_score_res), "Residential Tier": d.market_tier_res, "Residential Rank": d.market_rank_res,
+    "Submitted By": d.submitted_by_name || d.submitted_by, "Submitted": d.created_at ? new Date(d.created_at) : null,
+    "Notes": d.notes, "Portal Link": `${DASHBOARD}/#dealtracking&deal=${d.id}`,
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows, { cellDates: true });
+  const headers = Object.keys(rows[0] || { Deal: 1 });
+  ws["!cols"] = headers.map((h) => ({ wch: Math.min(48, Math.max(10, h.length + 2, ...rows.map((r: any) => String(r[h] ?? "").length).slice(0, 200))) }));
+  ws["!autofilter"] = { ref: ws["!ref"] };
+  // number formats
+  const fmtFor: Record<string, string> = { "Asking Price": "$#,##0", "$/SF": "$#,##0", "NOI": "$#,##0", "SF": "#,##0", "Cap Rate %": "0.00", "Occupancy %": "0.0", "Miles to Market": "0.0", "Submitted": "yyyy-mm-dd" };
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const h = headers[c], f = fmtFor[h]; if (!f) continue;
+    for (let r = 1; r <= range.e.r; r++) { const cell = ws[XLSX.utils.encode_cell({ r, c })]; if (cell && cell.v != null) cell.z = f; }
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Deal Tracking");
+  const b64 = XLSX.write(wb, { type: "base64", bookType: "xlsx", cellDates: true });
+  const stamp = new Date().toISOString().slice(0, 10);
+  return { name: `First_Mile_Deal_Tracking_${stamp}.xlsx`, contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", contentBytes: b64, count: rows.length };
+}
+
+// Acknowledgement + headline numbers that lead the email reply (the full report follows)
+function buildReplyIntro(deal: any, primary: any, a: any, view: string, xlsxCount: number): string {
+  const score = deal.opportunity_score != null ? Number(deal.opportunity_score).toFixed(1) : "—";
+  const rank = primary ? (view === "office" ? primary.rank_office : primary.rank_residential) : null;
+  const li = (k: string, v: string) => `<li style="margin:3px 0"><span style="color:#64748b">${k}:</span> ${v}</li>`;
+  return `
+<p>Got it — I logged <b>${esc(deal.deal_name || "this deal")}</b> in Deal Tracking and scored it against our Market Research universe.</p>
+<ul style="margin:6px 0 10px 18px;padding:0;font-size:15px">
+  ${li("Recommendation", `<b style="color:${recColor(a.recommendation)}">${esc(a.recommendation)}</b> — ${esc(a.headline || "")}`)}
+  ${li("Opportunity score", `<b>${score} / 10</b> (Tier ${deal.opportunity_tier ?? "—"}, ${view} view)`)}
+  ${primary ? li("Market match", `<a href="${DASHBOARD}/#marketresearch&market=${primary.id}" style="color:#0ea5e9">${esc(marketLabel(primary))}</a>${deal.market_distance_mi != null ? ` (${Number(deal.market_distance_mi).toFixed(1)} mi)` : ""} — ranked <b>#${rank ?? "—"}</b> of ~1,870 researched towns in the ${view} view${deal.market_distance_mi > MATCH_RADIUS_MI ? ' · <b style="color:#ef4444">outside research radius</b>' : ""}`) : li("Market match", `<span style="color:#ef4444">none — address could not be matched to a researched town</span>`)}
+</ul>
+<p style="margin:8px 0">
+  <a href="${DASHBOARD}/#dealtracking&deal=${deal.id}" style="display:inline-block;background:#0ea5e9;color:#fff;text-decoration:none;font-weight:600;padding:8px 14px;border-radius:8px;margin-right:8px">Open this deal</a>
+  <a href="${DASHBOARD}/#dealtracking" style="display:inline-block;background:#f1f5f9;color:#0f172a;text-decoration:none;font-weight:600;padding:8px 14px;border-radius:8px">View all deals on the portal</a>
+</p>
+<p style="color:#64748b;font-size:13px">Attached: Excel export of the full Deal Tracking table (${xlsxCount} deal${xlsxCount === 1 ? "" : "s"}). Full opportunity report below.</p>
+<hr style="border:none;border-top:1px solid #e2e8f0;margin:14px 0">`;
+}
+
 // ── Main pipeline ────────────────────────────────────────────
 async function intake(sb: any, opts: { text: string; from?: string; fromName?: string; subject?: string; emailId?: string; force?: boolean; existing?: any; source?: string }) {
   // 1. extract (or reuse stored facts on re-score)
@@ -301,13 +365,13 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
   if (geo) {
     const ranked = markets.filter((m) => m.latitude != null).map((m) => ({ ...m, miles: distMi(geo.lat, geo.lng, m.latitude, m.longitude) })).sort((a, b) => a.miles - b.miles);
     // prefer exact town-name match within radius, else nearest
-    const named = ex.city ? ranked.find((m) => m.name.toLowerCase() === String(ex.city).toLowerCase() && (!ex.state || m.state === ex.state) && m.miles <= NEARBY_RADIUS_MI) : null;
+    const named = ex.city ? ranked.find((m) => townOf(m).toLowerCase() === String(ex.city).toLowerCase() && (!ex.state || m.state === ex.state) && m.miles <= NEARBY_RADIUS_MI) : null;
     primary = named || ranked[0] || null;
     if (primary) distance = primary.miles;
     nearby = ranked.filter((m) => m.id !== primary?.id && m.miles <= NEARBY_RADIUS_MI).slice(0, NEARBY_LIMIT)
       .map((m) => ({ id: m.id, name: m.name, state: m.state, miles: Math.round(m.miles * 10) / 10, score: m.score, tier: m.tier, office_score: m.office_score, office_tier: m.office_tier }));
   } else if (ex.city) {
-    primary = markets.find((m) => m.name.toLowerCase() === String(ex.city).toLowerCase() && (!ex.state || m.state === ex.state)) || null;
+    primary = markets.find((m) => townOf(m).toLowerCase() === String(ex.city).toLowerCase() && (!ex.state || m.state === ex.state)) || null;
   }
   const cats = primary ? await categoryScores(sb, primary.id) : [];
 
@@ -318,7 +382,7 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
 
   // 5. assessment
   const marketCtx = primary
-    ? `Matched market: ${primary.name}, ${primary.state} (${distance != null ? distance.toFixed(1) + " mi from site" : "name match"}); pop ${primary.population}, median HHI $${primary.median_household_income}. Office view: ${primary.office_score}/10 Tier ${primary.office_tier} (rank #${primary.rank_office} of ~1,870 shortlisted towns). Residential view: ${primary.score}/10 Tier ${primary.tier} (rank #${primary.rank_residential}). Market thesis: ${primary.thesis || "n/a"}.\nCategory means (${view} view): ${cats.map((c) => `${c.category}=${view === "office" ? c.mean_office : c.mean_res}`).join("; ")}.\nNotable criteria: ${cats.flatMap((c) => c.criteria.filter((k: any) => (view === "office" ? k.active_office : k.active_res)).slice(0, 4).map((k: any) => `${k.name}: ${k.value_text ?? (view === "office" ? k.value_office : k.value_res)}`)).join("; ")}.\nOther researched towns nearby: ${nearby.map((n) => `${n.name} ${n.state} ${n.miles}mi (off ${n.office_score}/res ${n.score})`).join(", ") || "none within 25 mi"}.`
+    ? `Matched market: ${marketLabel(primary)} (${distance != null ? distance.toFixed(1) + " mi from site" : "name match"}); pop ${primary.population}, median HHI $${primary.median_household_income}. Office view: ${primary.office_score}/10 Tier ${primary.office_tier} (rank #${primary.rank_office} of ~1,870 shortlisted towns). Residential view: ${primary.score}/10 Tier ${primary.tier} (rank #${primary.rank_residential}). Market thesis: ${primary.thesis || "n/a"}.\nCategory means (${view} view): ${cats.map((c) => `${c.category}=${view === "office" ? c.mean_office : c.mean_res}`).join("; ")}.\nNotable criteria: ${cats.flatMap((c) => c.criteria.filter((k: any) => (view === "office" ? k.active_office : k.active_res)).slice(0, 4).map((k: any) => `${k.name}: ${k.value_text ?? (view === "office" ? k.value_office : k.value_res)}`)).join("; ")}.\nOther researched towns nearby: ${nearby.map((n) => `${marketLabel(n)} ${n.miles}mi (off ${n.office_score}/res ${n.score})`).join(", ") || "none within 25 mi"}.`
     : `No researched market matched (address not geocodable or none of the ~1,870 shortlisted towns is nearby).`;
   const dealCtx = `Deal facts: ${JSON.stringify(ex)}\nScoring view chosen: ${view}. Opportunity score (market composite): ${oppScore ?? "n/a"} (Tier ${oppTier ?? "n/a"}).`;
   const a = await claude(ASSESS_SYSTEM, `${dealCtx}\n\n${marketCtx}\n\nOriginal email:\n${opts.text.slice(0, 6000)}`, ASSESS_TOOL, 2500);
@@ -331,7 +395,7 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
     asset_type: ex.asset_type, deal_type: ex.deal_type, sf: ex.sf, units: ex.units, asking_price: ex.asking_price, price_psf: ex.price_psf,
     noi: ex.noi, cap_rate: ex.cap_rate, occupancy_pct: ex.occupancy_pct, year_built: ex.year_built, broker: ex.broker, seller: ex.seller, key_tenants: ex.key_tenants,
     extracted: ex,
-    market_id: primary?.id ?? null, market_name: primary ? `${primary.name}, ${primary.state}` : null, market_distance_mi: distance != null ? Math.round(distance * 10) / 10 : null,
+    market_id: primary?.id ?? null, market_name: primary ? marketLabel(primary) : null, market_distance_mi: distance != null ? Math.round(distance * 10) / 10 : null,
     market_score_res: primary?.score ?? null, market_tier_res: primary?.tier ?? null, market_rank_res: primary?.rank_residential ?? null,
     market_score_office: primary?.office_score ?? null, market_tier_office: primary?.office_tier ?? null, market_rank_office: primary?.rank_office ?? null,
     scoring_view: view, nearby_markets: nearby, category_scores: cats,
@@ -350,7 +414,11 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
   }
   const html = buildReport({ ...deal, market_distance_mi: deal.market_distance_mi != null ? Number(deal.market_distance_mi) : null }, primary, cats, nearby, a, view);
   await sb.from("deal_tracking").update({ report_html: html }).eq("id", deal.id);
-  return { is_deal: true, deal_id: deal.id, deal: { ...deal, report_html: html }, replyHtml: html };
+  // Excel export of the whole table + acknowledgement intro for the email reply
+  let attachment: any = null, xlsxCount = 0;
+  try { attachment = await buildDealsXlsx(sb); xlsxCount = attachment.count; } catch (e) { console.warn(`xlsx export failed: ${e}`); }
+  const replyHtml = buildReplyIntro(deal, primary, a, view, xlsxCount) + html;
+  return { is_deal: true, deal_id: deal.id, deal: { ...deal, report_html: html }, replyHtml, attachments: attachment ? [{ name: attachment.name, contentType: attachment.contentType, contentBytes: attachment.contentBytes }] : [] };
 }
 
 serve(async (req: Request) => {

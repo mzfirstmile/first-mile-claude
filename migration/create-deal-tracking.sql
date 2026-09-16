@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS deal_tracking (
 CREATE INDEX IF NOT EXISTS idx_deal_tracking_created ON deal_tracking(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_deal_tracking_status ON deal_tracking(status);
 CREATE INDEX IF NOT EXISTS idx_deal_tracking_market ON deal_tracking(market_id);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_deal_tracking_source_email ON deal_tracking(source_email_id) WHERE source_email_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_deal_tracking_source_email ON deal_tracking(source_email_id); -- plain (not partial): PostgREST upsert ON CONFLICT cannot target a partial index; NULLs are distinct
 ALTER TABLE deal_tracking ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS deal_tracking_all ON deal_tracking;
 CREATE POLICY deal_tracking_all ON deal_tracking FOR ALL USING (true) WITH CHECK (true);

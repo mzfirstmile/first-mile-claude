@@ -1854,6 +1854,15 @@
     if (currentView === 'calendar') { calInited = false; calInit(); }
     else if (currentView === 'financials') fbInit();
     else if (currentView === 'exec2' && typeof exec2Init === 'function') exec2Init();
+    // External-script modules (initiatives.js, market-research.js, deal-tracking.js) load AFTER the
+    // hash-router IIFE runs, so their init was a no-op on a hard refresh → blank view until the user
+    // clicked the sidebar. Re-run them here (auth is ready and all scripts are loaded by now).
+    else if (currentView === 'initiatives' && typeof initiativesInit === 'function') initiativesInit();
+    else if (currentView === 'marketresearch' && typeof marketResearchInit === 'function') marketResearchInit();
+    else if (currentView === 'dealtracking' && typeof dealTrackingInit === 'function') dealTrackingInit();
+    else if (currentView === 'properties') loadProperties();
+    else if (currentView === 'users') loadUsers();
+    else if (currentView === 'jobs') loadCronJobs();
   }
 
   async function checkUserAccess(email, displayName) {
@@ -2148,7 +2157,8 @@
     const initialView = getViewFromHash();
     if (initialView && initialView !== 'home') {
       // Replace current history entry so first back goes to previous page, not home
-      history.replaceState({ view: initialView }, '', `#${initialView}`);
+      // Keep any deep-link params (e.g. #dealtracking&deal=<id>) so modules can read them on init
+      history.replaceState({ view: initialView }, '', window.location.hash || `#${initialView}`);
       switchView(initialView, false);
       // If navigating to financials with a property name, select that property
       if (initialView === 'financials') {

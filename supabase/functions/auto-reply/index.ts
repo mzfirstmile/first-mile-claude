@@ -286,8 +286,10 @@ ${email.body_text || email.body_preview || "(empty email)"}`;
   return data.content[0]?.text || "<p>Thank you for your email. I'll look into this and get back to you shortly.</p>";
 }
 
-async function sendReply(token: string, original: any, replyHtml: string): Promise<void> {
+async function sendReply(token: string, original: any, replyHtml: string, attachments: { name: string; contentType: string; contentBytes: string }[] = []): Promise<void> {
   const fullBody = `${replyHtml}\n<br>\n${SIGNATURE_HTML}`;
+  // Graph fileAttachment shape (base64 contentBytes); < 3MB each for a single-call send
+  const graphAttachments = (attachments || []).map((a) => ({ "@odata.type": "#microsoft.graph.fileAttachment", name: a.name, contentType: a.contentType, contentBytes: a.contentBytes }));
 
   // If we have the original Graph message ID, use the /reply endpoint
   // This properly threads the response (conversationId, In-Reply-To, References headers)
@@ -323,6 +325,7 @@ async function sendReply(token: string, original: any, replyHtml: string): Promi
     if (ccRecipients.length > 0) {
       payload.message.ccRecipients = ccRecipients;
     }
+    if (graphAttachments.length) payload.message.attachments = graphAttachments;
 
     const res = await fetch(GRAPH_REPLY_URL(original.graph_id), {
       method: "POST",
@@ -383,6 +386,7 @@ async function sendReply(token: string, original: any, replyHtml: string): Promi
   if (ccRecipients.length > 0) {
     message.ccRecipients = ccRecipients;
   }
+  if (graphAttachments.length) message.attachments = graphAttachments;
 
   const res = await fetch(GRAPH_SEND_URL, {
     method: "POST",
@@ -464,6 +468,7 @@ serve(async (req: Request) => {
 
     // Check if this is a reply to a task reminder email
     let replyHtml: string;
+    let replyAttachments: { name: string; contentType: string; contentBytes: string }[] = [];
     if (isTaskReminderReply(email.subject)) {
       console.log(`Detected task reminder reply from ${email.from_address}`);
       const taskResult = await handleTaskReminderReply(sb, email);
@@ -484,6 +489,7 @@ serve(async (req: Request) => {
       // Deal Tracking gate: if the email describes a prospective deal, deal-intake logs + scores it
       // and returns the opportunity report as the reply. Anything else falls through to the generic reply.
       let dealHtml: string | null = null;
+      replyAttachments = [];
       try {
         const diRes = await fetch(`${supabaseUrl}/functions/v1/deal-intake`, {
           method: "POST",
@@ -493,7 +499,8 @@ serve(async (req: Request) => {
         if (diRes.ok) {
           const di = await diRes.json();
           if (di.is_deal && di.replyHtml) {
-            dealHtml = `<p>Thanks — I logged this as a prospective deal in Deal Tracking and scored it against our Market Research. Report below.</p>` + di.replyHtml;
+            dealHtml = di.replyHtml; // already includes acknowledgement + score/rank/recommendation + portal links + report
+            replyAttachments = Array.isArray(di.attachments) ? di.attachments : [];
             console.log(`deal-intake logged deal ${di.deal_id} for email ${emailId}`);
           }
         } else {
@@ -514,7 +521,7 @@ serve(async (req: Request) => {
 
     // Send via Graph API
     const token = await getGraphToken();
-    await sendReply(token, email, replyHtml);
+    await sendReply(token, email, replyHtml, replyAttachments);
 
     // replied_at already set by atomic lock above — no need to update again
 
