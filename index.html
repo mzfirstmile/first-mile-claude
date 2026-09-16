@@ -2139,9 +2139,14 @@
     // Only switch modules when the module actually changed — re-running a module's
     // init on every back/forward reset its list state and caused the "lost my place" feeling.
     if (view !== currentView) switchView(view, false);
-    // Hand detail-screen state (a market id, a project id, a property name…) to the module
+    // Hand detail-screen state (a market id, a project id, a property name…) to the module.
+    // A plain hashchange (link clicked inside the app, e.g. a deal report's "Open in Market
+    // Research" link, or a URL pasted into the address bar) arrives with e.state === null, so
+    // fall back to the id in the hash itself (&market=…, &deal=…, &project=…, &prop=…).
     const handler = _subNavHandlers[view];
-    if (handler) { try { handler(st.sub || null); } catch (err) { console.error('subnav', view, err); } }
+    const SUB_PARAM = { marketresearch: 'market', dealtracking: 'deal', initiatives: 'project', financials: 'prop' };
+    const sub = st.sub || (e.state == null && SUB_PARAM[view] ? getHashParam(SUB_PARAM[view]) : null);
+    if (handler) { try { handler(sub || null); } catch (err) { console.error('subnav', view, err); } }
   });
 
   // ── Sub-navigation: detail screens inside modules share the browser history ──
