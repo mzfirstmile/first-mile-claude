@@ -1785,10 +1785,23 @@
         await msalInstance.loginRedirect({ scopes: ['User.Read'], prompt: 'select_account' });
         return;
       }
-      const result = await msalInstance.loginPopup({
-        scopes: ['User.Read'],
-        prompt: 'select_account',
-      });
+      let result;
+      try {
+        result = await msalInstance.loginPopup({
+          scopes: ['User.Read'],
+          prompt: 'select_account',
+        });
+      } catch (pe) {
+        // Popup blocked or closed by a strict browser (embedded browsers, Safari, corporate
+        // Chrome policies) → fall back to the full-page redirect flow instead of failing.
+        if (pe && /popup_window_error|empty_window_error|user_cancelled|monitor_window_timeout/i.test(pe.errorCode || pe.message || '')) {
+          console.warn('Popup login unavailable (' + pe.errorCode + '), falling back to redirect');
+          try { const h = window.location.hash.replace('#', ''); if (h && !isAuthHash()) localStorage.setItem('fmc_login_return', h); } catch (_) {}
+          await msalInstance.loginRedirect({ scopes: ['User.Read'], prompt: 'select_account' });
+          return;
+        }
+        throw pe;
+      }
       await handleAuthResult(result.account);
     } catch (e) {
       console.error('Login error:', e);
