@@ -1102,7 +1102,11 @@
               </span>
             </p>
           </div>
-          <div class="mr-actions">
+          <div class="mr-actions" style="align-items:center;">
+            <span style="display:inline-flex;align-items:center;gap:6px;border:1px solid #e2e8f0;border-radius:8px;padding:2px 6px 2px 10px;font-size:12px;color:#475569;background:#fff;" title="Exports the current list (filters, tier chips, search and Office/Residential sort respected) to Excel">
+              Top <input id="mrExportN" type="number" min="1" max="5000" step="1" value="100" style="width:64px;border:1px solid #e2e8f0;border-radius:6px;padding:3px 6px;font-size:12px;" onkeydown="if(event.key==='Enter')mrExportExcel()">
+              <button class="mr-btn" id="mrExportBtn" onclick="mrExportExcel()" style="margin:0;">⬇ Export Excel</button>
+            </span>
             <button class="mr-btn" onclick="mrManageCriteria()">⚙ Criteria</button>
             <button class="mr-btn mr-btn-primary" onclick="mrNewMarket()">+ New Market</button>
           </div>
@@ -4497,6 +4501,120 @@ ${appendix}
   window.mrPageGoto = (p) => { _page = Math.max(0, p); _refreshPage(); };
   window.mrDeepResearch = (id) => _deepResearch(id);
   window.mrDeepResearchCurrent = () => { if (_currentMarket) _deepResearch(_currentMarket.id); };
+  // ── Excel export of the current list (top N) ─────────────
+  function _loadSheetJS() {
+    if (window.XLSX) return Promise.resolve();
+    return new Promise((res, rej) => {
+      const sc = document.createElement('script');
+      sc.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      sc.onload = res; sc.onerror = () => rej(new Error('Could not load the Excel library (cdnjs)'));
+      document.head.appendChild(sc);
+    });
+  }
+  async function _exportExcel() {
+    const btn = document.getElementById('mrExportBtn');
+    const nEl = document.getElementById('mrExportN');
+    let n = parseInt(nEl && nEl.value, 10); if (!n || n < 1) n = 100; n = Math.min(n, 5000);
+    if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
+    try {
+      await _loadSheetJS();
+      // Markets: same filters + sort as the list, paged past the 1k cap
+      const base = _buildFilterQuery();
+      const hdr = { apikey: window.SUPABASE_KEY, Authorization: 'Bearer ' + window.SUPABASE_KEY };
+      let markets = [];
+      if (_addressPin && Array.isArray(_proximityAll) && _proximityAll.length) {
+        markets = _proximityAll.slice(0, n);
+      } else {
+        for (let off = 0; off < n; off += 1000) {
+          const parts = base.slice();
+          parts.push('select=id,name,state,population,median_household_income,median_home_value,nearest_top50_city,miles_to_top50,score,tier,rank_residential,office_score,office_tier,rank_office,is_favorite,status,phase,thesis,summary,phase2_ran_at,phase3_ran_at,latitude,longitude');
+          parts.push(`order=${_scoreCol()}.desc.nullslast,median_household_income.desc.nullslast,name.asc`);
+          parts.push(`offset=${off}`); parts.push(`limit=${Math.min(1000, n - off)}`);
+          const r = await fetch(`${window.SUPABASE_URL}/rest/v1/market_research_markets?` + parts.join('&'), { headers: hdr });
+          if (!r.ok) throw new Error(`Supabase ${r.status}`);
+          const rows = await r.json(); markets.push(...rows);
+          if (rows.length < Math.min(1000, n - off)) break;
+        }
+      }
+      if (!markets.length) { _toast('Nothing to export for the current filter', true); return; }
+
+      // Category means per market (both views) + criterion detail — chunked by market to dodge the 1k cap
+      const catById = {}; (_categories || []).forEach(c => { catById[c.id] = c; });
+      const critById = {}; (_criteria || []).forEach(c => { critById[c.id] = c; });
+      const catMeans = {}; const detail = [];
+      const wantDetail = markets.length <= 300;
+      const ids = markets.map(m => m.id);
+      for (let i = 0; i < ids.length; i += 15) {
+        const chunk = ids.slice(i, i + 15);
+        const r = await fetch(`${window.SUPABASE_URL}/rest/v1/market_research_scores?select=market_id,criterion_id,value_numeric,value_numeric_office,value_text,source,updated_by&market_id=in.(${chunk.join(',')})&limit=1000`, { headers: hdr });
+        if (!r.ok) continue;
+        const rows = await r.json();
+        rows.forEach(sc => {
+          const cr = critById[sc.criterion_id]; if (!cr) return;
+          const cat = catById[cr.category_id]; if (!cat) return;
+          const cm = (catMeans[sc.market_id] = catMeans[sc.market_id] || {});
+          const slot = (cm[cat.slug] = cm[cat.slug] || { res: [], off: [] });
+          if (cr.is_active_residential !== false && sc.value_numeric != null) slot.res.push(Number(sc.value_numeric));
+          if (cr.is_active_office !== false && sc.value_numeric_office != null) slot.off.push(Number(sc.value_numeric_office));
+          if (wantDetail) detail.push({ market_id: sc.market_id, category: cat.name, criterion: cr.name, value_res: sc.value_numeric, value_office: sc.value_numeric_office, value_text: sc.value_text, source: sc.source, updated_by: sc.updated_by });
+        });
+      }
+      const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 10) / 10 : null;
+      const viewLabel = _viewType === 'office' ? 'Office' : 'Residential';
+      const rowsOut = markets.map((m, i) => {
+        const o = {
+          'Rank (export order)': i + 1, 'Market': m.name, 'State': m.state, 'Population': m.population, 'Median HHI': m.median_household_income, 'Median Home Value': m.median_home_value,
+          'Nearest Metro': m.nearest_top50_city, 'Miles to Metro': m.miles_to_top50,
+          'Office Score': m.office_score, 'Office Tier': m.office_tier, 'Office Rank': m.rank_office,
+          'Residential Score': m.score, 'Residential Tier': m.tier, 'Residential Rank': m.rank_residential,
+        };
+        if (m.miles != null) o['Miles from Address'] = Math.round(m.miles * 10) / 10;
+        const cm = catMeans[m.id] || {};
+        _CAT_ORDER.forEach(slug => {
+          const label = (_CAT_LABELS[slug] || slug); const c = cm[slug];
+          o[`${label} (Office)`] = c ? avg(c.off) : null; o[`${label} (Res)`] = c ? avg(c.res) : null;
+        });
+        o['Favorite'] = m.is_favorite ? 'Yes' : ''; o['Status'] = m.status; o['Phase 3 done'] = m.phase3_ran_at ? String(m.phase3_ran_at).slice(0, 10) : '';
+        o['Thesis'] = m.thesis || ''; o['Summary'] = m.summary || '';
+        o['Portal Link'] = `https://admin.firstmilecap.com/#marketresearch&market=${m.id}`;
+        return o;
+      });
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rowsOut);
+      const heads = Object.keys(rowsOut[0]);
+      ws['!cols'] = heads.map(h => ({ wch: /Thesis|Summary/.test(h) ? 60 : Math.min(28, Math.max(9, h.length + 2)) }));
+      ws['!autofilter'] = { ref: ws['!ref'] };
+      ws['!freeze'] = { xSplit: 2, ySplit: 1 };
+      XLSX.utils.book_append_sheet(wb, ws, `Markets (${viewLabel} sort)`);
+      if (wantDetail && detail.length) {
+        const nameById = {}; markets.forEach(m => { nameById[m.id] = m.name; });
+        const dRows = detail.map(d => ({ 'Market': nameById[d.market_id], 'Category': d.category, 'Criterion': d.criterion, 'Score (Res)': d.value_res, 'Score (Office)': d.value_office, 'Value': d.value_text, 'Source': d.source, 'Scored by': d.updated_by }))
+          .sort((a, b) => (a.Market || '').localeCompare(b.Market || '') || a.Category.localeCompare(b.Category) || a.Criterion.localeCompare(b.Criterion));
+        const ws2 = XLSX.utils.json_to_sheet(dRows);
+        ws2['!cols'] = [{ wch: 26 }, { wch: 26 }, { wch: 44 }, { wch: 11 }, { wch: 13 }, { wch: 32 }, { wch: 50 }, { wch: 14 }];
+        ws2['!autofilter'] = { ref: ws2['!ref'] };
+        XLSX.utils.book_append_sheet(wb, ws2, 'Criteria detail');
+      }
+      const about = [
+        ['First Mile Capital — Market Research export'], ['Exported', new Date().toLocaleString()], ['Rows', rowsOut.length], ['Sort / view', `${viewLabel} score, descending`],
+        ['Filter', _activeFilter + (_activeTiers && _activeTiers.size ? ` · tiers ${Array.from(_activeTiers).sort().join(',')}` : '') + (_searchQuery ? ` · search "${_searchQuery}"` : '') + (_addressPin ? ` · within ${_ADDRESS_RADIUS_MILES} mi of ${_addressPin.label || 'address'}` : '')],
+        ['Scale', 'All scores 0–100 (one decimal). Tier 1 ≥ 85 · Tier 2 70–84.9 · Tier 3 40–69.9 · Tier 4 < 40'],
+        ['Category means', 'Simple mean of active criteria in that view; composite = weighted mean of category means using category weights (Criteria panel)'],
+        wantDetail ? ['Criteria detail', 'Included (≤300 markets)'] : ['Criteria detail', 'Omitted for exports over 300 markets — export a smaller set for criterion-level rows'],
+      ];
+      const ws3 = XLSX.utils.aoa_to_sheet(about); ws3['!cols'] = [{ wch: 18 }, { wch: 110 }];
+      XLSX.utils.book_append_sheet(wb, ws3, 'About');
+      const stamp = new Date().toISOString().slice(0, 10);
+      XLSX.writeFile(wb, `FMC_Market_Research_Top${rowsOut.length}_${viewLabel}_${stamp}.xlsx`);
+      _toast(`Exported ${rowsOut.length} markets`);
+    } catch (e) {
+      console.error(e); _toast('Export failed: ' + e.message, true);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '⬇ Export Excel'; }
+    }
+  }
+  window.mrExportExcel = () => _exportExcel();
+
   window.mrExportPDF = () => _exportMarketPDF();
   window.mrBulkPhase3 = () => _bulkPhase3();
   window.mrBulkPhase3Cancel = () => _bulkPhase3Cancel();
