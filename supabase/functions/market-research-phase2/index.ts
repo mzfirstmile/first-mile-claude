@@ -8,10 +8,9 @@
 //
 // Reverse-engineered scoring formulas (validated against existing 1,046 scores):
 //   - Town Population: tent function, peak 25k-50k:
-//       <5000 or >75000 → 0
-//       5000-25000      → (pop-5000)/200  (linear ramp 0-100)
-//       25000-50000     → 10
-//       50000-75000     → (75000-pop)/2500 (linear decay 10-0)
+//       <5000           → 0
+//       5000-25000      → (pop-5000)/200  (linear ramp 0-100); ≥25k → 100 (no decay above 50k since 2026-09-16)
+//       ≥25000          → 100 (flat; decay above 50k removed 2026-09-16)
 //   - Generic target_min criterion: min(100, value/target_min*100)
 //     Used for: MHI ($200k), Home ($1.5M), HHs $200k+ (35%), Bachelor's (70%), Grad (30%)
 //
@@ -76,11 +75,13 @@ function roundTo(n: number, d: number): number {
   return Math.round(n * f) / f;
 }
 
+// Town Population: ramp 5k → 25k, then full marks. The old tent (decay 50k → 75k, zero above) was
+// dropped 2026-09-16 when the shortlist was opened to affluent places above 75k — size is not a
+// negative for an office/retail market, and the 4k–75k Phase 1 screen already did the "small town" work.
 function scorePopulation(pop: number | null): number {
-  if (pop == null || pop < 5000 || pop > 75000) return 0;
+  if (pop == null || pop < 5000) return 0;
   if (pop < 25000) return roundTo((pop - 5000) / 200, 1);
-  if (pop <= 50000) return MAX_SCORE;
-  return roundTo((75000 - pop) / 250, 1);
+  return MAX_SCORE;
 }
 
 function scoreTargetMin(value: number | null, targetMin: number): number {
