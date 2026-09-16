@@ -29,6 +29,9 @@ jobs:
           sed -i "s|__SUPABASE_KEY__|${{ secrets.SUPABASE_KEY }}|g" index.html exec.html
           sed -i "s|__MSAL_CLIENT_ID__|${{ secrets.MSAL_CLIENT_ID }}|g" index.html
           sed -i "s|__MSAL_TENANT_ID__|${{ secrets.MSAL_TENANT_ID }}|g" index.html
+          # Cache-bust module scripts: GitHub Pages serves JS with a 10-min max-age and browsers
+          # kept stale market-research.js etc. after deploys. Local dev sees "?v=__BUILD__" (harmless).
+          sed -i "s|__BUILD__|${GITHUB_SHA::7}|g" index.html
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
