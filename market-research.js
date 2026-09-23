@@ -19,6 +19,9 @@
   let _criteria = [];   // sub-criteria, linked via category_id
   let _scores = []; // shortlist scores only
   let _currentMarket = null; // detail view
+  let _loans = [];           // CRED iQ loans for the open market (market_loans)
+  let _loanFilter = 'live';  // live | opps | all
+  let _loanIndex = {};       // market_id -> {live, debt, mat24, distress} for list badges
   let _currentUser = null;
   let _activeFilter = 'all'; // 'all' | 'favorites'; tier multi-select drives the real filter
   let _searchQuery = '';
@@ -374,6 +377,22 @@
       #mrRoot .mr-scorecard .mr-cell-source {
         font-size: 11px; color: #94a3b8; margin-top: 2px;
       }
+
+      /* Debt & Loans (CRED iQ) */
+      #mrRoot .mr-loan-chips { display:flex; flex-wrap:wrap; gap:8px; padding:12px 18px; border-bottom:1px solid #f1f5f9; }
+      #mrRoot .mr-loan-chip { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:6px 10px; font-size:11px; color:#64748b; }
+      #mrRoot .mr-loan-chip b { display:block; font-size:15px; color:#1e293b; }
+      #mrRoot .mr-loan-chip.hot { background:#fef2f2; border-color:#fecaca; } #mrRoot .mr-loan-chip.hot b { color:#b91c1c; }
+      #mrRoot .mr-loan-chip.warm { background:#fffbeb; border-color:#fde68a; } #mrRoot .mr-loan-chip.warm b { color:#b45309; }
+      #mrRoot .mr-loan-flag { display:inline-block; font-size:10px; font-weight:600; border-radius:10px; padding:1px 7px; margin:1px 3px 1px 0; white-space:nowrap; }
+      #mrRoot .mr-loan-flag.red { background:#fee2e2; color:#991b1b; }
+      #mrRoot .mr-loan-flag.amber { background:#fef3c7; color:#92400e; }
+      #mrRoot .mr-loan-flag.blue { background:#e0f2fe; color:#075985; }
+      #mrRoot .mr-loan-flag.grey { background:#f1f5f9; color:#64748b; }
+      #mrRoot .mr-loan-tbl { overflow-x:auto; }
+      #mrRoot .mr-loan-tbl td, #mrRoot .mr-loan-tbl th { padding:8px 10px; font-size:12px; white-space:nowrap; }
+      #mrRoot .mr-loan-tbl td.num, #mrRoot .mr-loan-tbl th.num { text-align:right; }
+      #mrRoot .mr-loan-tbl a { color:#0369a1; text-decoration:none; } #mrRoot .mr-loan-tbl a:hover { text-decoration:underline; }
 
       /* Narrative blocks */
       #mrRoot .mr-narrative {
@@ -1238,6 +1257,18 @@
           <div id="mrScorecardBody"></div>
         </div>
 
+        <div class="mr-scorecard" id="mrLoansCard">
+          <div class="mr-scorecard-header">
+            <h3>🏦 Debt &amp; Loans <span style="font-weight:400;color:#94a3b8;font-size:12px;">· CRED iQ</span></h3>
+            <span class="mr-asset-toggle" id="mrLoanToggle" style="margin-left:auto;">
+              <button data-f="live" onclick="mrSetLoanFilter('live')">Live</button>
+              <button data-f="opps" onclick="mrSetLoanFilter('opps')">🎯 Opportunities</button>
+              <button data-f="all" onclick="mrSetLoanFilter('all')">All history</button>
+            </span>
+          </div>
+          <div id="mrLoansBody"></div>
+        </div>
+
         <div class="mr-narrative">
           <h4>Notes</h4>
           <div id="mrNotesDisplay"></div>
@@ -1466,6 +1497,7 @@
     _loadShortlistForChatbot();
     _loadNameIndex();
     _loadGeoFilterOptions();
+    _loadLoanIndex();
   }
 
   // Load scores for a specific market (used by detail view).
@@ -2005,7 +2037,7 @@
         <div class="mr-card" onclick="mrOpenMarket('${m.id}')">
           <div class="mr-card-row">
             <div style="min-width:0;flex:1;">
-              <h3 class="mr-card-title">${_esc(m.name)}</h3>
+              <h3 class="mr-card-title">${_esc(m.name)}${_loanBadge(m.id)}</h3>
               ${stateLine ? `<div class="mr-card-state">${_esc(stateLine)}</div>` : ''}
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;">
@@ -2067,7 +2099,7 @@
                             onclick="event.stopPropagation(); mrToggleFavorite('${m.id}')">${m.is_favorite ? '❤' : '♡'}</button>
                   </td>
                   <td>
-                    <div class="mr-table-name">${_esc(m.name)}</div>
+                    <div class="mr-table-name">${_esc(m.name)}${_loanBadge(m.id)}</div>
                     ${m.latitude != null && m.longitude != null
                       ? `<a class="mr-view-on-map" onclick="event.stopPropagation(); mrViewOnMap(${m.latitude}, ${m.longitude}, '${_esc(m.name)}')">view on map</a>`
                       : ''}
@@ -2112,7 +2144,7 @@
     }
     if (!_currentMarket) return;
     // Load this market's scores (per-market avoids 1000-row PostgREST cap)
-    await _loadScoresForMarket(id);
+    await Promise.all([_loadScoresForMarket(id), _loadLoansForMarket(id)]);
     document.getElementById('mrListView').classList.add('hidden');
     document.getElementById('mrDetailView').classList.add('show');
     _renderDetail();
@@ -2173,6 +2205,140 @@
 
     // Scorecard
     _renderScorecard();
+    _renderLoans();
+  }
+
+
+  // Per-market loan signal summary for list/grid badges (live loans only).
+  async function _loadLoanIndex() {
+    try {
+      const idx = {};
+      for (let off = 0; off < 20000; off += 1000) {
+        const rows = await window.supaFetch('market_loans', `?select=market_id,current_balance,maturity_date,watchlist,special_serviced,payment_status&current_balance=gt.0&market_id=not.is.null&order=id.asc&offset=${off}&limit=1000`);
+        (rows || []).forEach(l => {
+          if (!_loanIsLive(l)) return;
+          const e = idx[l.market_id] || (idx[l.market_id] = { live: 0, debt: 0, mat24: 0, distress: 0 });
+          e.live++; e.debt += Number(l.current_balance) || 0;
+          const mo = _monthsTo(l.maturity_date); if (mo != null && mo <= 24) e.mat24++;
+          const ps = (l.payment_status || '').toLowerCase();
+          if (l.special_serviced || l.watchlist || (ps && ps !== 'current' && !ps.startsWith('performing matured'))) e.distress++;
+        });
+        if (!rows || rows.length < 1000) break;
+      }
+      _loanIndex = idx;
+      if (Object.keys(idx).length && document.getElementById('mrListView') && !document.getElementById('mrListView').classList.contains('hidden')) _renderGrid();
+    } catch (e) { /* table may not exist yet */ }
+  }
+  function _loanBadge(id) {
+    const e = _loanIndex[id]; if (!e) return '';
+    const hot = e.distress > 0, warm = e.mat24 > 0;
+    const bg = hot ? '#fee2e2;color:#991b1b' : (warm ? '#fef3c7;color:#92400e' : '#e0f2fe;color:#075985');
+    const tip = `${e.live} live loans · ${_fmtMoney(e.debt)} debt · ${e.mat24} maturing ≤24mo · ${e.distress} watchlist/SS/delinquent (CRED iQ)`;
+    return ` <span title="${_esc(tip)}" style="display:inline-block;font-size:10px;font-weight:600;border-radius:10px;padding:1px 7px;margin-left:4px;background:${bg};white-space:nowrap;">🏦 ${e.live}${e.mat24 ? ` · ⏳${e.mat24}` : ''}${e.distress ? ` · ⚑${e.distress}` : ''}</span>`;
+  }
+
+  // ── Debt & Loans (CRED iQ, table market_loans) ─────────────
+  async function _loadLoansForMarket(marketId) {
+    try {
+      const rows = await window.supaFetch('market_loans', `?select=*&market_id=eq.${marketId}&order=maturity_date.asc.nullslast&limit=1000`);
+      _loans = rows || [];
+    } catch (e) { _loans = []; }
+  }
+  function _monthsTo(d) {
+    if (!d) return null;
+    const t = new Date(d + 'T00:00:00'), n = new Date();
+    return (t.getFullYear() - n.getFullYear()) * 12 + (t.getMonth() - n.getMonth());
+  }
+  function _loanIsLive(l) {
+    if (!(Number(l.current_balance) > 0)) return false;
+    const ps = (l.payment_status || '').toLowerCase();
+    const mo = _monthsTo(l.maturity_date);
+    // Past maturity with a balance still showing = matured/extended (still interesting) unless explicitly paid off
+    return !(ps.includes('paid off')) && (mo == null || mo >= -24);
+  }
+  // Opportunity flags — each {label, cls, pts}. pts drive the opportunity sort.
+  function _loanFlags(l) {
+    const f = [];
+    const mo = _monthsTo(l.maturity_date);
+    const ps = (l.payment_status || '').toLowerCase();
+    if (l.special_serviced) f.push({ label: 'Special servicing', cls: 'red', pts: 5 });
+    if (ps && !['current', ''].includes(ps) && !ps.startsWith('performing matured')) f.push({ label: l.payment_status, cls: 'red', pts: 4 });
+    if (ps.startsWith('performing matured')) f.push({ label: 'Matured – performing', cls: 'amber', pts: 3 });
+    if (l.watchlist) f.push({ label: 'Watchlist', cls: 'amber', pts: 3 });
+    if (mo != null && mo < 0 && !ps.includes('matured')) f.push({ label: 'Past maturity', cls: 'red', pts: 4 });
+    else if (mo != null && mo <= 12 && mo >= 0) f.push({ label: `Matures ${mo}mo`, cls: 'red', pts: 3 });
+    else if (mo != null && mo <= 24 && mo > 12) f.push({ label: `Matures ${mo}mo`, cls: 'amber', pts: 2 });
+    if (l.mortgage_rate != null && Number(l.mortgage_rate) < 4.5 && mo != null && mo <= 36) f.push({ label: `Refi gap (${Number(l.mortgage_rate).toFixed(2)}%)`, cls: 'amber', pts: 2 });
+    if (l.ltv != null && Number(l.ltv) >= 75) f.push({ label: `LTV ${Number(l.ltv).toFixed(0)}%`, cls: 'amber', pts: 1 });
+    if (l.debt_yield != null && Number(l.debt_yield) > 0 && Number(l.debt_yield) < 8) f.push({ label: `DY ${Number(l.debt_yield).toFixed(1)}%`, cls: 'amber', pts: 1 });
+    if (l.latest_dscr != null && Number(l.latest_dscr) > 0 && Number(l.latest_dscr) < 1.2) f.push({ label: `DSCR ${Number(l.latest_dscr).toFixed(2)}x`, cls: 'red', pts: 3 });
+    if (l.modified) f.push({ label: 'Modified', cls: 'grey', pts: 1 });
+    return f;
+  }
+  function _fmtMoney(n) {
+    if (n == null || n === '') return '—';
+    const v = Number(n); if (!isFinite(v)) return '—';
+    if (Math.abs(v) >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
+    if (Math.abs(v) >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+    if (Math.abs(v) >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'K';
+    return '$' + v.toFixed(0);
+  }
+  function _fmtDate(d) {
+    if (!d) return '—';
+    const t = new Date(d + 'T00:00:00');
+    return t.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  }
+  function _renderLoans() {
+    const el = document.getElementById('mrLoansBody');
+    if (!el) return;
+    document.querySelectorAll('#mrLoanToggle button').forEach(b => b.classList.toggle('active', b.dataset.f === _loanFilter));
+    if (!_loans.length) {
+      el.innerHTML = `<div style="padding:16px 18px;font-size:13px;color:#94a3b8;">No CRED iQ loan data loaded for this market yet. (Trial coverage: WA, PA, NC — full coverage once the API is connected.)</div>`;
+      return;
+    }
+    const live = _loans.filter(_loanIsLive);
+    const withFlags = live.map(l => ({ l, f: _loanFlags(l) }));
+    const opps = withFlags.filter(x => x.f.length);
+    const liveDebt = live.reduce((a, l) => a + (Number(l.current_balance) || 0), 0);
+    const mat24 = live.filter(l => { const m = _monthsTo(l.maturity_date); return m != null && m <= 24; });
+    const mat24Debt = mat24.reduce((a, l) => a + (Number(l.current_balance) || 0), 0);
+    const distress = live.filter(l => l.special_serviced || l.watchlist || ((l.payment_status || '').toLowerCase() && !['current', 'performing matured'].includes((l.payment_status || '').toLowerCase())));
+    const props = new Set(live.map(l => l.source_location_id || l.property_name)).size;
+    const asOf = _loans.map(l => l.data_as_of).filter(Boolean).sort().pop();
+    const chips = `
+      <div class="mr-loan-chips">
+        <div class="mr-loan-chip"><b>${live.length}</b>live loans · ${props} properties</div>
+        <div class="mr-loan-chip"><b>${_fmtMoney(liveDebt)}</b>outstanding debt</div>
+        <div class="mr-loan-chip ${mat24.length ? 'warm' : ''}"><b>${mat24.length} · ${_fmtMoney(mat24Debt)}</b>maturing ≤ 24 mo</div>
+        <div class="mr-loan-chip ${distress.length ? 'hot' : ''}"><b>${distress.length}</b>watchlist / special servicing / delinquent</div>
+        <div class="mr-loan-chip ${opps.length ? 'warm' : ''}"><b>${opps.length}</b>flagged opportunities</div>
+        ${asOf ? `<div class="mr-loan-chip" style="margin-left:auto;"><b style="font-size:12px;">${_esc(asOf)}</b>data as of</div>` : ''}
+      </div>`;
+    let rows;
+    if (_loanFilter === 'opps') rows = opps.sort((a, b) => b.f.reduce((s, x) => s + x.pts, 0) - a.f.reduce((s, x) => s + x.pts, 0) || (Number(b.l.current_balance) || 0) - (Number(a.l.current_balance) || 0));
+    else if (_loanFilter === 'all') rows = _loans.map(l => ({ l, f: _loanIsLive(l) ? _loanFlags(l) : [{ label: 'Paid off / retired', cls: 'grey', pts: 0 }] }));
+    else rows = withFlags;
+    const tr = rows.map(({ l, f }) => {
+      const mo = _monthsTo(l.maturity_date);
+      const moTxt = mo == null ? '' : (mo < 0 ? `${-mo}mo ago` : `${mo}mo`);
+      const name = _esc(l.property_name || l.loan_name || '—');
+      const link = l.source_url ? `<a href="${_esc(l.source_url)}" target="_blank" rel="noopener">${name} ↗</a>` : name;
+      return `<tr>
+        <td>${link}<div class="mr-cell-source">${_esc(l.address || '')}</div></td>
+        <td>${_esc(l.property_type || '—')}${l.building_size ? `<div class="mr-cell-source">${Number(l.building_size).toLocaleString()} ${_esc(l.size_unit || '')}</div>` : ''}</td>
+        <td class="num">${_fmtMoney(l.current_balance)}<div class="mr-cell-source">orig ${_fmtMoney(l.original_balance)}</div></td>
+        <td class="num">${l.mortgage_rate != null ? Number(l.mortgage_rate).toFixed(2) + '%' : '—'}</td>
+        <td>${_fmtDate(l.maturity_date)}<div class="mr-cell-source">${moTxt}</div></td>
+        <td class="num">${l.ltv != null ? Number(l.ltv).toFixed(0) + '%' : '—'}<div class="mr-cell-source">${l.debt_yield != null ? 'DY ' + Number(l.debt_yield).toFixed(1) + '%' : ''}</div></td>
+        <td>${_esc(l.deal_name || '—')}<div class="mr-cell-source">${_esc([l.deal_type, l.originator].filter(Boolean).join(' · '))}</div></td>
+        <td style="white-space:normal;min-width:160px;">${f.map(x => `<span class="mr-loan-flag ${x.cls}">${_esc(x.label)}</span>`).join('') || '<span class="mr-loan-flag blue">Current</span>'}</td>
+      </tr>`;
+    }).join('');
+    el.innerHTML = chips + (rows.length ? `
+      <div class="mr-loan-tbl"><table>
+        <thead><tr><th>Property</th><th>Type</th><th class="num">Balance</th><th class="num">Rate</th><th>Maturity</th><th class="num">LTV / DY</th><th>Deal · Originator</th><th>Signals</th></tr></thead>
+        <tbody>${tr}</tbody>
+      </table></div>` : `<div style="padding:14px 18px;font-size:13px;color:#94a3b8;">No loans match this filter.</div>`);
   }
   function _renderNarrative(elId, value, field, placeholder) {
     const el = document.getElementById(elId);
@@ -4018,6 +4184,7 @@ Research this town now and produce the scoring JSON.`;
   window.mrSaveCriterionLabel = _saveCriterionLabel;
   window.mrSaveCriterionActive = _saveCriterionActive;
   window.mrSetCriteriaModalView = _setCriteriaModalView;
+  window.mrSetLoanFilter = (f) => { _loanFilter = f; _renderLoans(); };
   window.mrSetScorecardView = (v) => {
     if (!['residential', 'office'].includes(v)) return;
     if (_scorecardView === v) return;
