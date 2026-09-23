@@ -2275,7 +2275,7 @@
     try {
       const idx = {};
       for (let off = 0; off < 20000; off += 1000) {
-        const rows = await window.supaFetch('market_loans', `?select=market_id,current_balance,maturity_date,watchlist,special_serviced,payment_status&current_balance=gt.0&market_id=not.is.null&order=id.asc&offset=${off}&limit=1000`);
+        const rows = await window.supaFetch('market_loans', `?select=market_id,current_balance,maturity_date,watchlist,special_serviced,payment_status,detail&current_balance=gt.0&market_id=not.is.null&order=id.asc&offset=${off}&limit=1000`);
         (rows || []).forEach(l => {
           if (!_loanIsLive(l)) return;
           const e = idx[l.market_id] || (idx[l.market_id] = { live: 0, debt: 0, mat24: 0, distress: 0 });
@@ -2312,10 +2312,13 @@
   }
   function _loanIsLive(l) {
     if (!(Number(l.current_balance) > 0)) return false;
+    // No servicer remittance in the last 4 months = paid off / retired (CRED iQ keeps the last reported balance)
+    const dd = l.detail && l.detail.distribution_date;
+    if (dd) { const m = _monthsTo(dd); if (m != null && m < -4) return false; }
     const ps = (l.payment_status || '').toLowerCase();
     const mo = _monthsTo(l.maturity_date);
     // Past maturity with a balance still showing = matured/extended (still interesting) unless explicitly paid off
-    return !(ps.includes('paid off')) && (mo == null || mo >= -24);
+    return !(ps.includes('paid off')) && (mo == null || mo >= -36);
   }
   // Opportunity flags — each {label, cls, pts}. pts drive the opportunity sort.
   function _loanFlags(l) {
