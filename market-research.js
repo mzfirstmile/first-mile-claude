@@ -2611,7 +2611,7 @@
         let t = `The ${r.toFixed(2)}% coupon resets to ~${mr.toFixed(1)}% at refinance: interest rises from ${_fmtLoanMoney(curInt)} to ${_fmtLoanMoney(newInt)}/yr (+${Math.round((newInt / curInt - 1) * 100)}%)`;
         if (noi && noi / curInt >= 0.3) {
           const dscr = noi / newInt;
-          t += `; on ${_fmtLoanMoney(noi)} NOI that is only <b>${dscr.toFixed(2)}x</b> interest coverage`;
+          t += dscr >= 1.5 ? `; on ${_fmtLoanMoney(noi)} NOI coverage is still <b>${dscr.toFixed(2)}x</b> — refinanceable, so the pressure is on returns/proceeds rather than solvency (a motivated but not forced seller)` : `; on ${_fmtLoanMoney(noi)} NOI that is only <b>${dscr.toFixed(2)}x</b> interest coverage`;
           if (dscr < 1.25) {
             const sup = noi / 1.25 / (mr / 100);
             t += ` — a 1.25x lender sizes a new loan at ~${_fmtLoanMoney(sup)}, a <b>${_fmtLoanMoney(bal - sup)} gap</b> the owner has to fill with fresh equity`;
