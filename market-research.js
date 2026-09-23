@@ -2461,6 +2461,10 @@
       }
       a.notes.push(l);
       a.current_balance += Number(l.current_balance) || 0;
+      const dj = l.detail || {};
+      if (dj.alloc_bal != null) a.alloc_balance = (a.alloc_balance || 0) + Number(dj.alloc_bal);
+      if (dj.num_props != null) a.num_props = Math.max(a.num_props || 0, Number(dj.num_props));
+      if (l.loan_name && !(a.loan_names || (a.loan_names = [])).includes(l.loan_name)) a.loan_names.push(l.loan_name);
       a.original_balance += Number(l.original_balance) || 0;
       if (l.maturity_date && (!a.maturity_date || l.maturity_date < a.maturity_date)) a.maturity_date = l.maturity_date;
       ['mortgage_rate', 'ltv', 'debt_yield', 'appraised_value', 'uw_noi', 'latest_noi'].forEach(k => { if (l[k] != null && a[k] == null) a[k] = Number(l[k]); });
@@ -2476,6 +2480,13 @@
       if (l.data_as_of && (!a.data_as_of || l.data_as_of > a.data_as_of)) a.data_as_of = l.data_as_of;
     });
     _opps = [...by.values()].map(a => {
+      a.isPortfolio = _isPortfolioLoan(a);
+      a.effBal = a.alloc_balance != null ? a.alloc_balance : (a.isPortfolio ? null : a.current_balance);
+      // CRED iQ's LTV is per note — recompute for the whole loan when we can, else drop implausible values
+      if (!a.isPortfolio && a.appraised_value && a.current_balance) a.ltv = a.current_balance / a.appraised_value * 100;
+      else if (a.isPortfolio || a.notes.length > 1) a.ltv = null;
+      if (a.isPortfolio || a.notes.length > 1) { a.debt_yield = a.noi && !a.isPortfolio ? null : null; a.latest_dscr = a.isPortfolio ? null : a.latest_dscr; }
+      a.noi = a.uw_noi || a.latest_noi || null;
       a.flags = _loanFlags(a);
       a.points = a.flags.reduce((s, f) => s + f.pts, 0);
       const mo = _monthsTo(a.maturity_date), ps = (a.payment_status || '').toLowerCase();
@@ -2511,20 +2522,38 @@
       if (_oppSig === 'refi' && !a.isRefi) return false;
       if (t && a.property_type !== t) return false;
       if (st && a.market.state !== st) return false;
-      if (a.current_balance < min) return false;
+      if ((a.effBal != null ? a.effBal : a.current_balance) < min) return false;
       if (q && ![a.property_name, a.address, a.market.name, a.deals.join(' '), a.originators.join(' ')].join(' ').toLowerCase().includes(q)) return false;
       return true;
     });
     const mat = a => a.maturity_date || '9999';
     if (sort === 'maturity') r.sort((a, b) => mat(a) < mat(b) ? -1 : mat(a) > mat(b) ? 1 : 0);
-    else if (sort === 'debt') r.sort((a, b) => b.current_balance - a.current_balance);
+    else if (sort === 'debt') r.sort((a, b) => (b.effBal || 0) - (a.effBal || 0));
     else if (sort === 'market') r.sort((a, b) => (b.mktScore || 0) - (a.mktScore || 0) || b.points - a.points);
-    else r.sort((a, b) => b.points - a.points || (b.mktScore || 0) - (a.mktScore || 0) || b.current_balance - a.current_balance);
+    else r.sort((a, b) => b.points - a.points || (b.mktScore || 0) - (a.mktScore || 0) || (b.effBal || 0) - (a.effBal || 0));
     return r;
   }
 
   // Rule-based acquisition thesis for a distressed-opportunity row. Pure function of
   // the aggregated loan facts + our market scoring — no model call, so every row gets one.
+  // A property whose loan also secures other assets: CRED iQ lists the whole loan under each collateral
+  // property, so balance / NOI / appraisal are portfolio-level and not this asset's.
+  function _isPortfolioLoan(a) {
+    if (a.num_props > 1) return true;
+    const names = a.loan_names || [];
+    if (names.some(n => /portfolio|pool|roll-?up|\(\d+\)/i.test(n))) return true;
+    const words = (t) => new Set(String(t || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(w => w.length >= 4 && !['apartments', 'apartment', 'drive', 'road', 'street', 'avenue', 'center', 'office', 'plaza', 'park'].includes(w)));
+    const pw = new Set([...words(a.property_name), ...words(a.address)]);
+    const numOf = (t) => (String(t || '').match(/^\s*(\d+)/) || [])[1];
+    const unrelated = names.length && names.every(n => { const nw = words(n); const shared = [...nw].some(w => pw.has(w)); const sameNum = numOf(n) && numOf(n) === numOf(a.property_name); return !shared && !sameNum; });
+    if (unrelated) return true;
+    // Implausible debt basis → the balance must cover more than this building
+    if (a.building_size) {
+      const per = a.current_balance / Number(a.building_size), u = (a.size_unit || '').toLowerCase();
+      if ((u.includes('unit') && per > 900000) || (u.includes('room') && per > 800000) || (u === 'sf' || u.includes('sf')) && per > 1500) return true;
+    }
+    return false;
+  }
   const _MKT_RATE = { office: 7.0, multifamily: 6.0, hotel: 7.5, lodging: 7.5, retail: 6.75, industrial: 6.5, default: 6.75 };
   function _oppThesis(a) {
     const out = [];
@@ -2536,9 +2565,9 @@
     const type = (a.property_type || 'property').toLowerCase();
     const mo = _monthsTo(a.maturity_date);
     const ps = (a.payment_status || '').toLowerCase();
-    const bal = a.current_balance;
+    const bal = a.effBal != null ? a.effBal : a.current_balance;
     const sizeUnit = (a.size_unit || '').toLowerCase();
-    const perUnit = a.building_size ? bal / Number(a.building_size) : null;
+    const perUnit = (a.building_size && !(a.isPortfolio && a.alloc_balance == null)) ? bal / Number(a.building_size) : null;
     const basis = perUnit ? (sizeUnit.includes('unit') ? `$${Math.round(perUnit / 1000)}K/unit` : sizeUnit.includes('room') ? `$${Math.round(perUnit / 1000)}K/key` : `$${Math.round(perUnit)}/SF`) : null;
 
     // 1) Why the location
@@ -2568,15 +2597,19 @@
       if (play === 'Monitor') play = mo <= 12 ? 'Approach the owner now — offer a sale/recap ahead of the maturity' : 'Put on the watch list; approach the owner ~12 mo before maturity';
     }
 
+    if (a.isPortfolio) {
+      const ln = (a.loan_names || []).filter(n => n !== a.property_name)[0] || (a.loan_names || [])[0];
+      out.push(`Collateral in a <b>multi-property loan</b>${ln ? ` (“${_esc(ln)}”)` : ''}${a.num_props > 1 ? ` covering ${a.num_props} properties` : ''} — the ${_fmtLoanMoney(a.current_balance)} is portfolio debt${a.alloc_balance != null ? `; this asset's allocated share is ~<b>${_fmtLoanMoney(a.alloc_balance)}</b>` : ', not this asset\'s'}. Distress at the portfolio level often shakes loose single-asset sales or partial releases.`);
+    }
     // 3) Refinance math (the "why can't they refi" argument)
     const r = a.mortgage_rate;
     const mr = _MKT_RATE[type] || _MKT_RATE[Object.keys(_MKT_RATE).find(k => type.includes(k))] || _MKT_RATE.default;
-    const noi = a.latest_noi || a.uw_noi;
-    if (r != null && bal > 0) {
+    const noi = a.isPortfolio ? null : a.noi;
+    if (r != null && bal > 0 && !(a.isPortfolio && a.alloc_balance == null)) {
       const curInt = bal * r / 100, newInt = bal * mr / 100;
       if (mr - r >= 1.0) {
         let t = `The ${r.toFixed(2)}% coupon resets to ~${mr.toFixed(1)}% at refinance: interest rises from ${_fmtLoanMoney(curInt)} to ${_fmtLoanMoney(newInt)}/yr (+${Math.round((newInt / curInt - 1) * 100)}%)`;
-        if (noi) {
+        if (noi && noi / curInt >= 0.3) {
           const dscr = noi / newInt;
           t += `; on ${_fmtLoanMoney(noi)} NOI that is only <b>${dscr.toFixed(2)}x</b> interest coverage`;
           if (dscr < 1.25) {
@@ -2586,17 +2619,17 @@
         }
         out.push(t + '.');
         if (play === 'Monitor' && mo != null && mo <= 36) play = 'Approach the owner ~12–18 mo before maturity with a recap or purchase';
-      } else if (noi && (noi / newInt) < 1.2) {
+      } else if (noi && noi / curInt >= 0.3 && (noi / newInt) < 1.2) {
         out.push(`Even at today's rates NOI of ${_fmtLoanMoney(noi)} covers interest only <b>${(noi / newInt).toFixed(2)}x</b>.`);
       }
     }
-    if (a.latest_dscr != null && a.latest_dscr < 1.2 && !(noi && r != null)) out.push(`Latest reported DSCR is <b>${a.latest_dscr.toFixed(2)}x</b> — thin coverage.`);
-    if (a.ltv != null && a.ltv >= 75) out.push(`Leverage is high (<b>${a.ltv.toFixed(0)}% LTV</b>) — the owner's equity is thin or under water, which raises the odds of a discounted exit.`);
-    else if (a.ltv != null && a.ltv > 0 && a.ltv <= 40 && (a.special_serviced || (mo != null && mo < 0))) out.push(`Leverage is low (${a.ltv.toFixed(0)}% LTV at origination) — distress is a liquidity/refi problem, not a value wipe-out; expect a negotiated sale rather than a fire sale.`);
+    if (!a.isPortfolio && a.latest_dscr != null && a.latest_dscr < 1.2 && !(noi && r != null)) out.push(`Latest reported DSCR is <b>${a.latest_dscr.toFixed(2)}x</b> — thin coverage.`);
+    if (a.ltv != null && a.ltv >= 75) out.push(`Leverage is high (<b>${a.ltv.toFixed(0)}% of last appraisal</b>) — the owner's equity is thin or under water, which raises the odds of a discounted exit.`);
+    else if (a.ltv != null && a.ltv > 0 && a.ltv <= 40 && (a.special_serviced || (mo != null && mo < 0))) out.push(`Leverage is low (${a.ltv.toFixed(0)}% of last appraisal) — distress is a liquidity/refi problem, not a value wipe-out; expect a negotiated sale rather than a fire sale.`);
 
     // 4) Basis
-    if (basis) out.push(`Debt basis is ~<b>${basis}</b>${a.appraised_value ? ` vs. an appraisal of ${_fmtLoanMoney(a.appraised_value)}` : ''} — a reference point for what the lender needs to be made whole.`);
-    else if (a.appraised_value) out.push(`Last appraisal ${_fmtLoanMoney(a.appraised_value)} vs. ${_fmtLoanMoney(bal)} of debt.`);
+    if (basis) out.push(`Debt basis is ~<b>${basis}</b>${a.appraised_value && !a.isPortfolio ? ` vs. an appraisal of ${_fmtLoanMoney(a.appraised_value)}` : ''} — a reference point for what the lender needs to be made whole.`);
+    else if (a.appraised_value && !a.isPortfolio) out.push(`Last appraisal ${_fmtLoanMoney(a.appraised_value)} vs. ${_fmtLoanMoney(bal)} of debt.`);
     if (!a.mortgage_rate && !a.property_type) out.push(`<i>Loan detail still loading from CRED iQ — rate, status and NOI will sharpen this thesis.</i>`);
 
     return { html: out.join(' '), play, text: out.join(' ').replace(/<[^>]+>/g, '') };
@@ -2605,13 +2638,13 @@
     const body = document.getElementById('mrOppBody'); if (!body || !_opps) return;
     document.querySelectorAll('#mrOppView .mr-opp-chip').forEach(c => c.classList.toggle('active', c.dataset.sig === _oppSig));
     const all = _opps, flagged = all.filter(a => a.flags.length);
-    const sum = arr => arr.reduce((s, a) => s + a.current_balance, 0);
+    const sum = arr => arr.reduce((s, a) => s + (a.effBal || 0), 0);
     const dis = all.filter(a => a.isDistress), wat = all.filter(a => a.isWatch), m24 = all.filter(a => a.isMat24);
     const asOf = all.map(a => a.data_as_of).filter(Boolean).sort().pop();
     const asEl = document.getElementById('mrOppAsOf'); if (asEl) asEl.textContent = asOf ? `· data as of ${asOf}` : '';
     document.getElementById('mrOppKpis').innerHTML = `
       <div class="mr-loan-chip"><b>${all.length}</b>properties with live loans · ${new Set(all.map(a => a.market_id)).size} markets</div>
-      <div class="mr-loan-chip ${flagged.length ? 'warm' : ''}"><b>${flagged.length} · ${_fmtLoanMoney(sum(flagged))}</b>flagged opportunities</div>
+      <div class="mr-loan-chip ${flagged.length ? 'warm' : ''}" title="$ totals exclude portfolio loans without an allocated balance"><b>${flagged.length} · ${_fmtLoanMoney(sum(flagged))}</b>flagged opportunities</div>
       <div class="mr-loan-chip ${dis.length ? 'hot' : ''}"><b>${dis.length} · ${_fmtLoanMoney(sum(dis))}</b>distress</div>
       <div class="mr-loan-chip ${wat.length ? 'warm' : ''}"><b>${wat.length} · ${_fmtLoanMoney(sum(wat))}</b>watchlist</div>
       <div class="mr-loan-chip ${m24.length ? 'warm' : ''}"><b>${m24.length} · ${_fmtLoanMoney(sum(m24))}</b>maturing ≤ 24 mo</div>`;
@@ -2635,7 +2668,7 @@
           <td style="white-space:normal;min-width:200px;">${link}<div class="mr-cell-source">${_esc(a.address || '')}</div>${why ? `<div class="mr-cell-source" style="color:#b91c1c;">${why}</div>` : ''}</td>
           <td><span class="mr-opp-town" onclick="mrOpenMarket('${a.market_id}')">${_esc(a.market.name || '—')}</span><div class="mr-cell-source">${_viewType === 'office' ? '🏢' : '🏠'} ${ms} ${tierPill(mt)}</div></td>
           <td>${_esc(a.property_type || '—')}${a.building_size ? `<div class="mr-cell-source">${Number(a.building_size).toLocaleString()} ${_esc(a.size_unit || '')}</div>` : ''}</td>
-          <td class="num">${_fmtLoanMoney(a.current_balance)}<div class="mr-cell-source">${a.notes.length > 1 ? a.notes.length + ' notes' : _esc(a.deals[0] || '')}</div></td>
+          <td class="num">${a.isPortfolio ? (a.alloc_balance != null ? `${_fmtLoanMoney(a.alloc_balance)}<div class="mr-cell-source">allocated · of ${_fmtLoanMoney(a.current_balance)}</div>` : `<span style="color:#94a3b8;">${_fmtLoanMoney(a.current_balance)}</span><div class="mr-cell-source">portfolio loan</div>`) : `${_fmtLoanMoney(a.current_balance)}<div class="mr-cell-source">${a.notes.length > 1 ? a.notes.length + ' notes' : _esc(a.deals[0] || '')}</div>`}</td>
           <td class="num">${a.mortgage_rate != null ? a.mortgage_rate.toFixed(2) + '%' : '—'}</td>
           <td>${_fmtDate(a.maturity_date)}<div class="mr-cell-source">${moTxt}</div></td>
           <td class="num">${a.ltv != null ? a.ltv.toFixed(0) + '%' : '—'} / ${a.debt_yield != null ? a.debt_yield.toFixed(1) + '%' : '—'} / ${a.latest_dscr != null ? a.latest_dscr.toFixed(2) + 'x' : '—'}</td>
@@ -2693,7 +2726,7 @@
       const rows = _filteredOpps().map((a, i) => ({
         '#': i + 1, Property: a.property_name, Address: a.address, Market: a.market.name, State: a.market.state,
         'Office Score': a.market.office_score, 'Office Tier': a.market.office_tier, 'Res Score': a.market.score, 'Res Tier': a.market.tier,
-        'Property Type': a.property_type, Size: a.building_size, Unit: a.size_unit, 'Current Debt': a.current_balance, Notes: a.notes.length,
+        'Property Type': a.property_type, Size: a.building_size, Unit: a.size_unit, 'Current Debt (loan)': a.current_balance, 'Allocated Debt': a.alloc_balance, 'Portfolio Loan': a.isPortfolio ? 'Yes' : '', 'Loan Name(s)': (a.loan_names || []).join(', '), Notes: a.notes.length,
         'Rate %': a.mortgage_rate, Maturity: a.maturity_date, 'Months to Maturity': _monthsTo(a.maturity_date),
         'Payment Status': a.payment_status, 'Special Servicing': a.special_serviced ? 'Yes' : '', 'SS Reason': a.ss_reason, Workout: a.workout_strategy,
         Watchlist: a.watchlist ? 'Yes' : '', 'LTV %': a.ltv, 'Debt Yield %': a.debt_yield, DSCR: a.latest_dscr, 'Appraised Value': a.appraised_value,

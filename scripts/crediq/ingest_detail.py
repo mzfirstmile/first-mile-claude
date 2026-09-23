@@ -1,5 +1,5 @@
 import json, subprocess, os, datetime, re
-KEY=re.search(r"SUPABASE_KEY = '([^']+)", open(os.environ.get('FMC_CONFIG', os.environ['HOME']+'/mnt/first-mile-claude/config.js')).read()).group(1)
+KEY=re.search(r"SUPABASE_KEY = '([^']+)", open(os.environ['HOME']+'/mnt/first-mile-claude/config.js').read()).group(1)
 def sql(q):
     out=subprocess.run([os.environ['HOME']+"/sq.sh"],input=q,capture_output=True,text=True).stdout
     return out
@@ -61,7 +61,7 @@ for d in rows:
       'servicer_commentary':nz(d.get('commentary')) if d.get('commentary') and 'No recent commentary' not in d.get('commentary') else None,
     }
     sets=", ".join(f"{k}={lit(v)}" for k,v in upd.items())
-    extra=json.dumps({'defeasance':nz(d.get('defeasance')),'term_months':nz(d.get('term')),'wl_added':nz(d.get('wl_added')),'financials_raw':d.get('fin'),'crediq_updated':nz(d.get('updated'))})
+    extra=json.dumps({'num_props':num(d.get('num_props')),'alloc_bal':num(d.get('alloc_bal')),'orig_alloc':num(d.get('orig_alloc')),'fin_dates':nz(d.get('fin_dates')),'defeasance':nz(d.get('defeasance')),'term_months':nz(d.get('term')),'wl_added':nz(d.get('wl_added')),'financials_raw':d.get('fin'),'crediq_updated':nz(d.get('updated'))})
     stmts.append(f"update market_loans set {sets}, detail = coalesce(detail,'{{}}'::jsonb) || {lit(extra)}::jsonb, updated_at=now() where source='crediq' and detail->>'crediq_loan_pk'={lit(d['loan_pk'])}")
 for i in range(0,len(stmts),20):
     r=sql("; ".join(stmts[i:i+20])); n+=1
