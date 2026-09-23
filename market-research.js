@@ -398,7 +398,7 @@
       #mrRoot .mr-loan-tbl td.num, #mrRoot .mr-loan-tbl th.num { text-align:right; }
       #mrRoot .mr-loan-tbl a { color:#0369a1; text-decoration:none; } #mrRoot .mr-loan-tbl a:hover { text-decoration:underline; }
 
-      /* Loan Opportunities tab */
+      /* Distressed Opportunities tab */
       #mrRoot .mr-tabs { display:flex; gap:4px; border-bottom:1px solid #e2e8f0; margin:0 0 16px 0; }
       #mrRoot .mr-tabs button { background:none; border:0; border-bottom:2px solid transparent; padding:8px 14px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; margin-bottom:-1px; }
       #mrRoot .mr-tabs button.active { color:#0369a1; border-bottom-color:#0ea5e9; }
@@ -414,6 +414,11 @@
       #mrRoot .mr-opp-town:hover { text-decoration:underline; }
       #mrRoot .mr-opp-logbtn { border:1px solid #cbd5e1; background:#fff; border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer; white-space:nowrap; }
       #mrRoot .mr-opp-logbtn:hover { background:#f1f5f9; }
+      #mrRoot .mr-opp-thesis td { padding-top:0 !important; border-bottom:1px solid #e2e8f0 !important; white-space:normal !important; }
+      #mrRoot .mr-opp-thesis .t { font-size:12px; line-height:1.5; color:#334155; background:#f8fafc; border-left:3px solid #0ea5e9; border-radius:4px; padding:7px 12px; }
+      #mrRoot .mr-opp-thesis .t b { color:#0f172a; }
+      #mrRoot .mr-opp-thesis .play { display:inline-block; margin-left:6px; font-size:11px; font-weight:700; color:#0369a1; }
+      #mrRoot .mr-opp-main td { border-bottom:0 !important; }
       #mrRoot .mr-opp-logbtn.done { color:#15803d; border-color:#bbf7d0; background:#f0fdf4; cursor:default; }
 
       /* Narrative blocks */
@@ -1133,14 +1138,14 @@
       <!-- List View -->
       <div class="mr-tabs" id="mrTabs">
         <button data-tab="markets" class="active" onclick="mrShowTab('markets')">📍 Markets</button>
-        <button data-tab="opps" onclick="mrShowTab('opps')">🎯 Loan Opportunities<span class="mr-tab-count" id="mrOppTabCount" style="display:none;"></span></button>
+        <button data-tab="opps" onclick="mrShowTab('opps')">🎯 Distressed Opportunities<span class="mr-tab-count" id="mrOppTabCount" style="display:none;"></span></button>
       </div>
 
       <div class="mr-opp" id="mrOppView">
         <div class="mr-header">
           <div>
-            <h2>Loan Opportunities</h2>
-            <p class="mr-subtitle">Properties in our shortlisted markets with loan distress, near-term maturities or refi pressure · CRED iQ <span id="mrOppAsOf" style="color:#94a3b8;"></span></p>
+            <h2>Distressed Opportunities</h2>
+            <p class="mr-subtitle">Assets in our top-ranked markets whose owners are under debt pressure — potential acquisitions of the property (directly, via note purchase, or at a workout) · loan data: CRED iQ <span id="mrOppAsOf" style="color:#94a3b8;"></span></p>
           </div>
           <div class="mr-actions" style="align-items:center;">
             <button class="mr-btn" onclick="mrOppExport()" id="mrOppExportBtn">⬇ Export Excel</button>
@@ -1162,11 +1167,11 @@
             <option value="0">Any size</option><option value="5000000">≥ $5M</option><option value="10000000">≥ $10M</option><option value="25000000">≥ $25M</option><option value="50000000">≥ $50M</option><option value="100000000">≥ $100M</option>
           </select>
           <select id="mrOppSort" onchange="mrOppRender()">
-            <option value="signal">Sort: signal strength</option><option value="maturity">Sort: maturity (soonest)</option><option value="debt">Sort: debt (largest)</option><option value="market">Sort: market score</option>
+            <option value="signal">Sort: distress signal strength</option><option value="maturity">Sort: maturity (soonest)</option><option value="debt">Sort: debt (largest)</option><option value="market">Sort: market score</option>
           </select>
         </div>
         <div class="mr-scorecard"><div class="mr-loan-tbl mr-opp-tbl" id="mrOppBody"><div style="padding:16px 18px;font-size:13px;color:#94a3b8;">Loading…</div></div></div>
-        <p style="font-size:11px;color:#94a3b8;margin-top:8px;">Balances sum every note of a loan (CMBS loans are often split pari-passu across several deals). "Log deal" adds the property to Deal Tracking with its loan facts. Trial coverage: WA, PA, NC.</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:8px;">Debt sums every note of a loan (CMBS loans are often split pari-passu across several deals). Theses are generated from the loan facts + our market scoring; refinance math assumes today's market rates of ~7.0% office / 6.0% multifamily / 7.5% hotel / 6.75% other. "Log deal" adds the asset to Deal Tracking with its thesis. Trial coverage: WA, PA, NC.</p>
       </div>
 
       <div class="mr-list" id="mrListView">
@@ -2517,6 +2522,85 @@
     else r.sort((a, b) => b.points - a.points || (b.mktScore || 0) - (a.mktScore || 0) || b.current_balance - a.current_balance);
     return r;
   }
+
+  // Rule-based acquisition thesis for a distressed-opportunity row. Pure function of
+  // the aggregated loan facts + our market scoring — no model call, so every row gets one.
+  const _MKT_RATE = { office: 7.0, multifamily: 6.0, hotel: 7.5, lodging: 7.5, retail: 6.75, industrial: 6.5, default: 6.75 };
+  function _oppThesis(a) {
+    const out = [];
+    const m = a.market || {};
+    const town = (m.name || '').replace(/,\s*[A-Z]{2}$/, '');
+    const view = /office|medical|mixed/i.test(a.property_type || '') ? 'office' : (a.property_type ? 'residential' : _viewType);
+    const ms = view === 'office' ? m.office_score : m.score, mt = view === 'office' ? m.office_tier : m.tier;
+    const rk = view === 'office' ? m.rank_office : m.rank_residential;
+    const type = (a.property_type || 'property').toLowerCase();
+    const mo = _monthsTo(a.maturity_date);
+    const ps = (a.payment_status || '').toLowerCase();
+    const bal = a.current_balance;
+    const sizeUnit = (a.size_unit || '').toLowerCase();
+    const perUnit = a.building_size ? bal / Number(a.building_size) : null;
+    const basis = perUnit ? (sizeUnit.includes('unit') ? `$${Math.round(perUnit / 1000)}K/unit` : sizeUnit.includes('room') ? `$${Math.round(perUnit / 1000)}K/key` : `$${Math.round(perUnit)}/SF`) : null;
+
+    // 1) Why the location
+    if (ms != null) {
+      const strength = mt === 1 ? 'one of our top-ranked' : mt === 2 ? 'a strong' : 'a secondary';
+      out.push(`<b>${_esc(town)}</b> is ${strength} ${view} market${rk ? ` (#${rk.toLocaleString()} of 1,971 shortlisted, ${Number(ms).toFixed(1)} T${mt})` : ''}${mt <= 2 ? ' — a location we would want to own long-term' : ''}.`);
+    }
+
+    // 2) Why the owner may have to sell / why the price may be right
+    let play = 'Monitor';
+    if (a.special_serviced) {
+      out.push(`Loan is in <b>special servicing</b>${a.ss_reason ? ` (${_esc(a.ss_reason.replace(/\s*\(.*\)$/, ''))})` : ''}${a.workout_strategy ? `; servicer workout strategy: <b>${_esc(a.workout_strategy)}</b>` : ''} — the special servicer, not the sponsor, now drives the outcome.`);
+      play = /reo|foreclos/i.test(a.workout_strategy || '') ? 'Buy from the special servicer (REO) or bid the note' : 'Approach the special servicer — note purchase, DPO with the sponsor, or a pre-foreclosure sale';
+    } else if (mo != null && mo < 0) {
+      out.push(`Loan <b>matured ${-mo} months ago</b> and is still outstanding${ps.includes('non-performing') ? ' and <b>non-performing</b>' : ''} — the owner could not refinance or sell at par, so it is living on an extension.`);
+      play = 'Approach the owner/lender with a take-out: acquisition or recap at today\'s value';
+    } else if (ps && !['current', 'performing matured'].includes(ps)) {
+      out.push(`Payment status is <b>${_esc(a.payment_status)}</b> — early sign of cash-flow stress.`);
+      play = 'Track closely; approach the sponsor before it transfers to special servicing';
+    }
+    if (a.watchlist) {
+      out.push(`On the <b>servicer watchlist</b>${a.watchlist_reason ? ` (${_esc(a.watchlist_reason)})` : ''} — the servicer already sees risk to performance.`);
+      if (play === 'Monitor') play = 'Approach the sponsor early — pre-emptive purchase or recap before a default';
+    }
+    if (mo != null && mo >= 0 && mo <= 24) {
+      out.push(`<b>${_fmtLoanMoney(bal)} matures ${_fmtDate(a.maturity_date)}</b> (${mo} mo)${a.notes.length > 1 ? `, split across ${a.notes.length} CMBS notes` : ''} — the owner must refinance or sell into today's market.`);
+      if (play === 'Monitor') play = mo <= 12 ? 'Approach the owner now — offer a sale/recap ahead of the maturity' : 'Put on the watch list; approach the owner ~12 mo before maturity';
+    }
+
+    // 3) Refinance math (the "why can't they refi" argument)
+    const r = a.mortgage_rate;
+    const mr = _MKT_RATE[type] || _MKT_RATE[Object.keys(_MKT_RATE).find(k => type.includes(k))] || _MKT_RATE.default;
+    const noi = a.latest_noi || a.uw_noi;
+    if (r != null && bal > 0) {
+      const curInt = bal * r / 100, newInt = bal * mr / 100;
+      if (mr - r >= 1.0) {
+        let t = `The ${r.toFixed(2)}% coupon resets to ~${mr.toFixed(1)}% at refinance: interest rises from ${_fmtLoanMoney(curInt)} to ${_fmtLoanMoney(newInt)}/yr (+${Math.round((newInt / curInt - 1) * 100)}%)`;
+        if (noi) {
+          const dscr = noi / newInt;
+          t += `; on ${_fmtLoanMoney(noi)} NOI that is only <b>${dscr.toFixed(2)}x</b> interest coverage`;
+          if (dscr < 1.25) {
+            const sup = noi / 1.25 / (mr / 100);
+            t += ` — a 1.25x lender sizes a new loan at ~${_fmtLoanMoney(sup)}, a <b>${_fmtLoanMoney(bal - sup)} gap</b> the owner has to fill with fresh equity`;
+          }
+        }
+        out.push(t + '.');
+        if (play === 'Monitor' && mo != null && mo <= 36) play = 'Approach the owner ~12–18 mo before maturity with a recap or purchase';
+      } else if (noi && (noi / newInt) < 1.2) {
+        out.push(`Even at today's rates NOI of ${_fmtLoanMoney(noi)} covers interest only <b>${(noi / newInt).toFixed(2)}x</b>.`);
+      }
+    }
+    if (a.latest_dscr != null && a.latest_dscr < 1.2 && !(noi && r != null)) out.push(`Latest reported DSCR is <b>${a.latest_dscr.toFixed(2)}x</b> — thin coverage.`);
+    if (a.ltv != null && a.ltv >= 75) out.push(`Leverage is high (<b>${a.ltv.toFixed(0)}% LTV</b>) — the owner's equity is thin or under water, which raises the odds of a discounted exit.`);
+    else if (a.ltv != null && a.ltv > 0 && a.ltv <= 40 && (a.special_serviced || (mo != null && mo < 0))) out.push(`Leverage is low (${a.ltv.toFixed(0)}% LTV at origination) — distress is a liquidity/refi problem, not a value wipe-out; expect a negotiated sale rather than a fire sale.`);
+
+    // 4) Basis
+    if (basis) out.push(`Debt basis is ~<b>${basis}</b>${a.appraised_value ? ` vs. an appraisal of ${_fmtLoanMoney(a.appraised_value)}` : ''} — a reference point for what the lender needs to be made whole.`);
+    else if (a.appraised_value) out.push(`Last appraisal ${_fmtLoanMoney(a.appraised_value)} vs. ${_fmtLoanMoney(bal)} of debt.`);
+    if (!a.mortgage_rate && !a.property_type) out.push(`<i>Loan detail still loading from CRED iQ — rate, status and NOI will sharpen this thesis.</i>`);
+
+    return { html: out.join(' '), play, text: out.join(' ').replace(/<[^>]+>/g, '') };
+  }
   function _renderOpps() {
     const body = document.getElementById('mrOppBody'); if (!body || !_opps) return;
     document.querySelectorAll('#mrOppView .mr-opp-chip').forEach(c => c.classList.toggle('active', c.dataset.sig === _oppSig));
@@ -2545,7 +2629,8 @@
         const ms = a.mktScore != null ? Number(a.mktScore).toFixed(1) : '—';
         const mt = _viewType === 'office' ? a.market.office_tier : a.market.tier;
         const logged = _loggedDeals.has(a.key);
-        return `<tr>
+        const th = _oppThesis(a);
+        return `<tr class="mr-opp-main">
           <td style="color:#94a3b8;">${i + 1}</td>
           <td style="white-space:normal;min-width:200px;">${link}<div class="mr-cell-source">${_esc(a.address || '')}</div>${why ? `<div class="mr-cell-source" style="color:#b91c1c;">${why}</div>` : ''}</td>
           <td><span class="mr-opp-town" onclick="mrOpenMarket('${a.market_id}')">${_esc(a.market.name || '—')}</span><div class="mr-cell-source">${_viewType === 'office' ? '🏢' : '🏠'} ${ms} ${tierPill(mt)}</div></td>
@@ -2556,7 +2641,8 @@
           <td class="num">${a.ltv != null ? a.ltv.toFixed(0) + '%' : '—'} / ${a.debt_yield != null ? a.debt_yield.toFixed(1) + '%' : '—'} / ${a.latest_dscr != null ? a.latest_dscr.toFixed(2) + 'x' : '—'}</td>
           <td style="white-space:normal;min-width:170px;">${a.flags.map(x => `<span class="mr-loan-flag ${x.cls}">${_esc(x.label)}</span>`).join('') || '<span class="mr-loan-flag blue">Current</span>'}</td>
           <td>${logged ? `<span class="mr-opp-logbtn done">✓ Logged</span>` : `<button class="mr-opp-logbtn" onclick="mrOppLog('${_esc(a.key)}', this)">➕ Log deal</button>`}</td>
-        </tr>`; }).join('')}</tbody></table>`;
+        </tr>
+        <tr class="mr-opp-thesis"><td></td><td colspan="9"><div class="t">💡 ${th.html}${th.play !== 'Monitor' ? `<span class="play">→ Play: ${_esc(th.play)}</span>` : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
   }
   async function _logOpp(key, btn) {
     const a = (_opps || []).find(x => x.key === key); if (!a) return;
@@ -2580,15 +2666,15 @@
       const who = (window.currentUser && (window.currentUser.email || window.currentUser.mail)) || null;
       const row = {
         source: 'crediq', submitted_by: who, submitted_by_name: who, deal_name: a.property_name, address: a.address,
-        state: a.market.state || null, asset_type: (a.property_type || '').toLowerCase() || null, deal_type: 'debt_opportunity',
+        state: a.market.state || null, asset_type: (a.property_type || '').toLowerCase() || null, deal_type: 'distressed_acquisition',
         sf: /sf/i.test(a.size_unit || '') ? a.building_size : null, units: /unit/i.test(a.size_unit || '') ? a.building_size : null,
         noi: a.latest_noi || a.uw_noi || null, market_id: a.market_id, market_name: a.market.name, market_distance_mi: 0,
         market_score_res: a.market.score, market_tier_res: a.market.tier, market_rank_res: a.market.rank_residential,
         market_score_office: a.market.office_score, market_tier_office: a.market.office_tier, market_rank_office: a.market.rank_office,
         scoring_view: view, opportunity_score: mScore, opportunity_tier: mTier, recommendation: 'Review', status: 'new',
-        raw_text: summary, notes: summary,
+        raw_text: summary, notes: (() => { const th = _oppThesis(a); return th.text + (th.play !== 'Monitor' ? ' Play: ' + th.play + '.' : '') + '\n\nLoan facts: ' + summary; })(),
         extracted: { crediq_key: a.key, source_url: a.source_url, loans: a.notes.map(n => ({ loan_id: n.source_loan_id, deal: n.deal_name, balance: n.current_balance, rate: n.mortgage_rate, maturity: n.maturity_date, status: n.payment_status })), signals: a.flags.map(f => f.label) },
-        assessment: { headline: `CRED iQ loan signal: ${a.flags.map(f => f.label).join(', ') || 'live loan'}`, summary },
+        assessment: (() => { const th = _oppThesis(a); return { headline: `Distressed opportunity: ${a.flags.map(f => f.label).join(', ') || 'debt pressure'}`, summary: th.text, play: th.play, loan_facts: summary }; })(),
       };
       await window.supaWrite('deal_tracking', 'POST', row);
       _loggedDeals.add(key);
@@ -2612,12 +2698,12 @@
         'Payment Status': a.payment_status, 'Special Servicing': a.special_serviced ? 'Yes' : '', 'SS Reason': a.ss_reason, Workout: a.workout_strategy,
         Watchlist: a.watchlist ? 'Yes' : '', 'LTV %': a.ltv, 'Debt Yield %': a.debt_yield, DSCR: a.latest_dscr, 'Appraised Value': a.appraised_value,
         'UW NOI': a.uw_noi, Deals: a.deals.join(', '), Originators: a.originators.join(', '), Signals: a.flags.map(f => f.label).join(', '),
-        'Signal Points': a.points, 'CRED iQ Link': a.source_url,
+        'Signal Points': a.points, Thesis: _oppThesis(a).text, Play: _oppThesis(a).play, 'CRED iQ Link': a.source_url,
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!autofilter'] = { ref: ws['!ref'] };
-      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Loan Opportunities');
-      XLSX.writeFile(wb, `First_Mile_Loan_Opportunities_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Distressed Opportunities');
+      XLSX.writeFile(wb, `First_Mile_Distressed_Opportunities_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (e) { _toast('Export failed: ' + e.message, true); }
     finally { if (btn) { btn.disabled = false; btn.textContent = '⬇ Export Excel'; } }
   }
