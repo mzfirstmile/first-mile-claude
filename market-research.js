@@ -21,6 +21,10 @@
   let _currentMarket = null; // detail view
   let _loans = [];           // CRED iQ loans for the open market (market_loans)
   let _loanFilter = 'live';  // live | opps | all
+  let _mrTab = 'markets';     // markets | opps (top-level tab)
+  let _opps = null;          // aggregated opportunity rows (per property)
+  let _oppSig = 'flagged';
+  let _loggedDeals = new Set();
   let _loanIndex = {};       // market_id -> {live, debt, mat24, distress} for list badges
   let _currentUser = null;
   let _activeFilter = 'all'; // 'all' | 'favorites'; tier multi-select drives the real filter
@@ -393,6 +397,24 @@
       #mrRoot .mr-loan-tbl td, #mrRoot .mr-loan-tbl th { padding:8px 10px; font-size:12px; white-space:nowrap; }
       #mrRoot .mr-loan-tbl td.num, #mrRoot .mr-loan-tbl th.num { text-align:right; }
       #mrRoot .mr-loan-tbl a { color:#0369a1; text-decoration:none; } #mrRoot .mr-loan-tbl a:hover { text-decoration:underline; }
+
+      /* Loan Opportunities tab */
+      #mrRoot .mr-tabs { display:flex; gap:4px; border-bottom:1px solid #e2e8f0; margin:0 0 16px 0; }
+      #mrRoot .mr-tabs button { background:none; border:0; border-bottom:2px solid transparent; padding:8px 14px; font-size:13px; font-weight:600; color:#64748b; cursor:pointer; margin-bottom:-1px; }
+      #mrRoot .mr-tabs button.active { color:#0369a1; border-bottom-color:#0ea5e9; }
+      #mrRoot .mr-tabs .mr-tab-count { display:inline-block; margin-left:6px; font-size:10px; background:#fee2e2; color:#991b1b; border-radius:10px; padding:1px 7px; }
+      #mrRoot .mr-opp { display:none; }
+      #mrRoot .mr-opp.show { display:block; }
+      #mrRoot .mr-opp-filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0; }
+      #mrRoot .mr-opp-filters select, #mrRoot .mr-opp-filters input { border:1px solid #e2e8f0; border-radius:6px; padding:5px 8px; font-size:12px; background:#fff; }
+      #mrRoot .mr-opp-chip { border:1px solid #e2e8f0; background:#fff; border-radius:16px; padding:4px 12px; font-size:12px; color:#475569; cursor:pointer; }
+      #mrRoot .mr-opp-chip.active { background:#0ea5e9; border-color:#0ea5e9; color:#fff; }
+      #mrRoot .mr-opp-tbl tbody tr:hover { background:#f8fafc; }
+      #mrRoot .mr-opp-town { color:#0369a1; cursor:pointer; font-weight:600; }
+      #mrRoot .mr-opp-town:hover { text-decoration:underline; }
+      #mrRoot .mr-opp-logbtn { border:1px solid #cbd5e1; background:#fff; border-radius:6px; padding:3px 8px; font-size:11px; cursor:pointer; white-space:nowrap; }
+      #mrRoot .mr-opp-logbtn:hover { background:#f1f5f9; }
+      #mrRoot .mr-opp-logbtn.done { color:#15803d; border-color:#bbf7d0; background:#f0fdf4; cursor:default; }
 
       /* Narrative blocks */
       #mrRoot .mr-narrative {
@@ -1109,6 +1131,44 @@
       </div>
 
       <!-- List View -->
+      <div class="mr-tabs" id="mrTabs">
+        <button data-tab="markets" class="active" onclick="mrShowTab('markets')">📍 Markets</button>
+        <button data-tab="opps" onclick="mrShowTab('opps')">🎯 Loan Opportunities<span class="mr-tab-count" id="mrOppTabCount" style="display:none;"></span></button>
+      </div>
+
+      <div class="mr-opp" id="mrOppView">
+        <div class="mr-header">
+          <div>
+            <h2>Loan Opportunities</h2>
+            <p class="mr-subtitle">Properties in our shortlisted markets with loan distress, near-term maturities or refi pressure · CRED iQ <span id="mrOppAsOf" style="color:#94a3b8;"></span></p>
+          </div>
+          <div class="mr-actions" style="align-items:center;">
+            <button class="mr-btn" onclick="mrOppExport()" id="mrOppExportBtn">⬇ Export Excel</button>
+          </div>
+        </div>
+        <div class="mr-loan-chips" id="mrOppKpis" style="padding:0;border:0;"></div>
+        <div class="mr-opp-filters">
+          <span class="mr-opp-chip active" data-sig="flagged" onclick="mrOppSig('flagged')">All flagged</span>
+          <span class="mr-opp-chip" data-sig="distress" onclick="mrOppSig('distress')">🔴 Distress (SS / delinquent / past maturity)</span>
+          <span class="mr-opp-chip" data-sig="watch" onclick="mrOppSig('watch')">⚠ Watchlist</span>
+          <span class="mr-opp-chip" data-sig="mat24" onclick="mrOppSig('mat24')">⏳ Maturing ≤ 24 mo</span>
+          <span class="mr-opp-chip" data-sig="refi" onclick="mrOppSig('refi')">📉 Refi gap</span>
+          <span class="mr-opp-chip" data-sig="all" onclick="mrOppSig('all')">All live loans</span>
+          <span style="flex:1;"></span>
+          <input id="mrOppQ" placeholder="Search property / town / deal…" oninput="mrOppRender()" style="min-width:200px;">
+          <select id="mrOppType" onchange="mrOppRender()"><option value="">All property types</option></select>
+          <select id="mrOppState" onchange="mrOppRender()"><option value="">All states</option></select>
+          <select id="mrOppMin" onchange="mrOppRender()">
+            <option value="0">Any size</option><option value="5000000">≥ $5M</option><option value="10000000">≥ $10M</option><option value="25000000">≥ $25M</option><option value="50000000">≥ $50M</option><option value="100000000">≥ $100M</option>
+          </select>
+          <select id="mrOppSort" onchange="mrOppRender()">
+            <option value="signal">Sort: signal strength</option><option value="maturity">Sort: maturity (soonest)</option><option value="debt">Sort: debt (largest)</option><option value="market">Sort: market score</option>
+          </select>
+        </div>
+        <div class="mr-scorecard"><div class="mr-loan-tbl mr-opp-tbl" id="mrOppBody"><div style="padding:16px 18px;font-size:13px;color:#94a3b8;">Loading…</div></div></div>
+        <p style="font-size:11px;color:#94a3b8;margin-top:8px;">Balances sum every note of a loan (CMBS loans are often split pari-passu across several deals). "Log deal" adds the property to Deal Tracking with its loan facts. Trial coverage: WA, PA, NC.</p>
+      </div>
+
       <div class="mr-list" id="mrListView">
         <div class="mr-header">
           <div>
@@ -2144,6 +2204,7 @@
     }
     if (!_currentMarket) return;
     // Load this market's scores (per-market avoids 1000-row PostgREST cap)
+    if (_mrTab === 'opps') { _mrTab = 'markets'; _syncTabs(); document.getElementById('mrOppView').classList.remove('show'); }
     await Promise.all([_loadScoresForMarket(id), _loadLoansForMarket(id)]);
     document.getElementById('mrListView').classList.add('hidden');
     document.getElementById('mrDetailView').classList.add('show');
@@ -2339,6 +2400,223 @@
         <thead><tr><th>Property</th><th>Type</th><th class="num">Balance</th><th class="num">Rate</th><th>Maturity</th><th class="num">LTV / DY</th><th>Deal · Originator</th><th>Signals</th></tr></thead>
         <tbody>${tr}</tbody>
       </table></div>` : `<div style="padding:14px 18px;font-size:13px;color:#94a3b8;">No loans match this filter.</div>`);
+  }
+
+  // ── Loan Opportunities tab (cross-market view of market_loans) ──────────
+  function _syncTabs() {
+    document.querySelectorAll('#mrTabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === _mrTab));
+  }
+  function _setTabHash(tab) {
+    try {
+      let h = (location.hash || '#marketresearch').replace(/&tab=[^&]*/, '');
+      if (tab === 'opps') h += '&tab=opps';
+      history.replaceState(history.state, '', h);
+    } catch (_) {}
+  }
+  async function _showTab(tab) {
+    _mrTab = tab; _syncTabs(); _setTabHash(tab);
+    const list = document.getElementById('mrListView'), det = document.getElementById('mrDetailView'), opp = document.getElementById('mrOppView');
+    if (tab === 'opps') {
+      if (_currentMarket) { _currentMarket = null; det.classList.remove('show'); if (window.replaceSubNav) window.replaceSubNav('marketresearch'); _setTabHash('opps'); }
+      list.classList.add('hidden'); opp.classList.add('show');
+      if (!_opps) await _loadOpps();
+      _renderOpps();
+    } else {
+      opp.classList.remove('show');
+      if (!_currentMarket) { list.classList.remove('hidden'); if (_mapInstance) setTimeout(() => { try { _mapInstance.invalidateSize({ pan: false }); } catch (_) {} }, 50); }
+    }
+  }
+  async function _loadOpps() {
+    const rows = [];
+    for (let off = 0; off < 50000; off += 1000) {
+      const page = await window.supaFetch('market_loans', `?select=*,mkt:market_research_markets(id,name,state,score,tier,office_score,office_tier,rank_office,rank_residential)&current_balance=gt.0&market_id=not.is.null&order=id.asc&offset=${off}&limit=1000`);
+      rows.push(...(page || []));
+      if (!page || page.length < 1000) break;
+    }
+    // Deal Tracking rows already logged from CRED iQ (so the button shows "Logged")
+    try {
+      const dt = await window.supaFetch('deal_tracking', `?select=extracted&source=eq.crediq&limit=1000`);
+      _loggedDeals = new Set((dt || []).map(d => d.extracted && d.extracted.crediq_key).filter(Boolean));
+    } catch (_) {}
+    // Aggregate notes → one row per property
+    const by = new Map();
+    rows.filter(_loanIsLive).forEach(l => {
+      const key = (l.source_location_id || '') + '|' + (l.source_location_id ? '' : (l.property_name || l.loan_name || '').toLowerCase()) + '|' + l.market_id;
+      let a = by.get(key);
+      if (!a) {
+        a = { key, notes: [], market: l.mkt || {}, market_id: l.market_id, property_name: l.property_name || l.loan_name, loan_name: l.loan_name,
+              address: l.address, property_type: l.property_type, property_subtype: l.property_subtype, building_size: l.building_size, size_unit: l.size_unit,
+              source_url: l.source_url, current_balance: 0, original_balance: 0, maturity_date: null, mortgage_rate: null, ltv: null, debt_yield: null,
+              latest_dscr: null, watchlist: false, special_serviced: false, modified: false, payment_status: null, deals: [], originators: [],
+              ss_reason: null, watchlist_reason: null, workout_strategy: null, appraised_value: null, uw_noi: null, latest_noi: null, data_as_of: l.data_as_of };
+        by.set(key, a);
+      }
+      a.notes.push(l);
+      a.current_balance += Number(l.current_balance) || 0;
+      a.original_balance += Number(l.original_balance) || 0;
+      if (l.maturity_date && (!a.maturity_date || l.maturity_date < a.maturity_date)) a.maturity_date = l.maturity_date;
+      ['mortgage_rate', 'ltv', 'debt_yield', 'appraised_value', 'uw_noi', 'latest_noi'].forEach(k => { if (l[k] != null && a[k] == null) a[k] = Number(l[k]); });
+      if (l.latest_dscr != null && Number(l.latest_dscr) > 0) a.latest_dscr = a.latest_dscr == null ? Number(l.latest_dscr) : Math.min(a.latest_dscr, Number(l.latest_dscr));
+      if (l.watchlist) a.watchlist = true;
+      if (l.special_serviced) a.special_serviced = true;
+      if (l.modified) a.modified = true;
+      const rank = (ps) => { ps = (ps || '').toLowerCase(); if (!ps) return 0; if (ps === 'current') return 1; if (ps.startsWith('performing matured')) return 2; if (ps === 'grace') return 3; return 5; };
+      if (rank(l.payment_status) > rank(a.payment_status)) a.payment_status = l.payment_status;
+      ['property_type', 'property_subtype', 'address', 'building_size', 'size_unit', 'ss_reason', 'watchlist_reason', 'workout_strategy'].forEach(k => { if (!a[k] && l[k]) a[k] = l[k]; });
+      if (l.deal_name && !a.deals.includes(l.deal_name)) a.deals.push(l.deal_name);
+      if (l.originator && !a.originators.includes(l.originator)) a.originators.push(l.originator);
+      if (l.data_as_of && (!a.data_as_of || l.data_as_of > a.data_as_of)) a.data_as_of = l.data_as_of;
+    });
+    _opps = [...by.values()].map(a => {
+      a.flags = _loanFlags(a);
+      a.points = a.flags.reduce((s, f) => s + f.pts, 0);
+      const mo = _monthsTo(a.maturity_date), ps = (a.payment_status || '').toLowerCase();
+      a.isDistress = a.special_serviced || (ps && !['current', 'grace'].includes(ps) && !ps.startsWith('performing matured')) || (mo != null && mo < 0);
+      a.isWatch = a.watchlist;
+      a.isMat24 = mo != null && mo >= 0 && mo <= 24;
+      a.isRefi = a.flags.some(f => f.label.startsWith('Refi gap'));
+      a.mktScore = (_viewType === 'office' ? a.market.office_score : a.market.score);
+      return a;
+    });
+    // Populate filter selects
+    const types = [...new Set(_opps.map(a => a.property_type).filter(Boolean))].sort();
+    const states = [...new Set(_opps.map(a => a.market.state).filter(Boolean))].sort();
+    const tSel = document.getElementById('mrOppType'), sSel = document.getElementById('mrOppState');
+    if (tSel) tSel.innerHTML = '<option value="">All property types</option>' + types.map(t => `<option>${_esc(t)}</option>`).join('');
+    if (sSel) sSel.innerHTML = '<option value="">All states</option>' + states.map(t => `<option>${_esc(t)}</option>`).join('');
+    const n = _opps.filter(a => a.isDistress).length;
+    const badge = document.getElementById('mrOppTabCount');
+    if (badge) { badge.style.display = n ? '' : 'none'; badge.textContent = n; }
+  }
+  function _filteredOpps() {
+    if (!_opps) return [];
+    const q = (document.getElementById('mrOppQ')?.value || '').toLowerCase().trim();
+    const t = document.getElementById('mrOppType')?.value || '';
+    const st = document.getElementById('mrOppState')?.value || '';
+    const min = Number(document.getElementById('mrOppMin')?.value || 0);
+    const sort = document.getElementById('mrOppSort')?.value || 'signal';
+    let r = _opps.filter(a => {
+      if (_oppSig === 'flagged' && !a.flags.length) return false;
+      if (_oppSig === 'distress' && !a.isDistress) return false;
+      if (_oppSig === 'watch' && !a.isWatch) return false;
+      if (_oppSig === 'mat24' && !a.isMat24) return false;
+      if (_oppSig === 'refi' && !a.isRefi) return false;
+      if (t && a.property_type !== t) return false;
+      if (st && a.market.state !== st) return false;
+      if (a.current_balance < min) return false;
+      if (q && ![a.property_name, a.address, a.market.name, a.deals.join(' '), a.originators.join(' ')].join(' ').toLowerCase().includes(q)) return false;
+      return true;
+    });
+    const mat = a => a.maturity_date || '9999';
+    if (sort === 'maturity') r.sort((a, b) => mat(a) < mat(b) ? -1 : mat(a) > mat(b) ? 1 : 0);
+    else if (sort === 'debt') r.sort((a, b) => b.current_balance - a.current_balance);
+    else if (sort === 'market') r.sort((a, b) => (b.mktScore || 0) - (a.mktScore || 0) || b.points - a.points);
+    else r.sort((a, b) => b.points - a.points || (b.mktScore || 0) - (a.mktScore || 0) || b.current_balance - a.current_balance);
+    return r;
+  }
+  function _renderOpps() {
+    const body = document.getElementById('mrOppBody'); if (!body || !_opps) return;
+    document.querySelectorAll('#mrOppView .mr-opp-chip').forEach(c => c.classList.toggle('active', c.dataset.sig === _oppSig));
+    const all = _opps, flagged = all.filter(a => a.flags.length);
+    const sum = arr => arr.reduce((s, a) => s + a.current_balance, 0);
+    const dis = all.filter(a => a.isDistress), wat = all.filter(a => a.isWatch), m24 = all.filter(a => a.isMat24);
+    const asOf = all.map(a => a.data_as_of).filter(Boolean).sort().pop();
+    const asEl = document.getElementById('mrOppAsOf'); if (asEl) asEl.textContent = asOf ? `· data as of ${asOf}` : '';
+    document.getElementById('mrOppKpis').innerHTML = `
+      <div class="mr-loan-chip"><b>${all.length}</b>properties with live loans · ${new Set(all.map(a => a.market_id)).size} markets</div>
+      <div class="mr-loan-chip ${flagged.length ? 'warm' : ''}"><b>${flagged.length} · ${_fmtLoanMoney(sum(flagged))}</b>flagged opportunities</div>
+      <div class="mr-loan-chip ${dis.length ? 'hot' : ''}"><b>${dis.length} · ${_fmtLoanMoney(sum(dis))}</b>distress</div>
+      <div class="mr-loan-chip ${wat.length ? 'warm' : ''}"><b>${wat.length} · ${_fmtLoanMoney(sum(wat))}</b>watchlist</div>
+      <div class="mr-loan-chip ${m24.length ? 'warm' : ''}"><b>${m24.length} · ${_fmtLoanMoney(sum(m24))}</b>maturing ≤ 24 mo</div>`;
+    const rows = _filteredOpps();
+    if (!rows.length) { body.innerHTML = `<div style="padding:16px 18px;font-size:13px;color:#94a3b8;">No properties match these filters.</div>`; return; }
+    const tierPill = (t) => t != null ? `<span class="mr-tier ${_tierClass(t)}" style="font-size:10px;padding:1px 6px;">T${t}</span>` : '';
+    body.innerHTML = `<table>
+      <thead><tr><th>#</th><th>Property</th><th>Market</th><th>Type</th><th class="num">Debt</th><th class="num">Rate</th><th>Maturity</th><th class="num">LTV / DY / DSCR</th><th>Signals</th><th></th></tr></thead>
+      <tbody>${rows.map((a, i) => {
+        const mo = _monthsTo(a.maturity_date);
+        const moTxt = mo == null ? '' : (mo < 0 ? `${-mo}mo ago` : `${mo}mo`);
+        const name = _esc(a.property_name || '—');
+        const link = a.source_url ? `<a href="${_esc(a.source_url)}" target="_blank" rel="noopener">${name} ↗</a>` : name;
+        const why = [a.ss_reason, a.workout_strategy, a.watchlist_reason].filter(Boolean).map(_esc).join(' · ');
+        const ms = a.mktScore != null ? Number(a.mktScore).toFixed(1) : '—';
+        const mt = _viewType === 'office' ? a.market.office_tier : a.market.tier;
+        const logged = _loggedDeals.has(a.key);
+        return `<tr>
+          <td style="color:#94a3b8;">${i + 1}</td>
+          <td style="white-space:normal;min-width:200px;">${link}<div class="mr-cell-source">${_esc(a.address || '')}</div>${why ? `<div class="mr-cell-source" style="color:#b91c1c;">${why}</div>` : ''}</td>
+          <td><span class="mr-opp-town" onclick="mrOpenMarket('${a.market_id}')">${_esc(a.market.name || '—')}</span><div class="mr-cell-source">${_viewType === 'office' ? '🏢' : '🏠'} ${ms} ${tierPill(mt)}</div></td>
+          <td>${_esc(a.property_type || '—')}${a.building_size ? `<div class="mr-cell-source">${Number(a.building_size).toLocaleString()} ${_esc(a.size_unit || '')}</div>` : ''}</td>
+          <td class="num">${_fmtLoanMoney(a.current_balance)}<div class="mr-cell-source">${a.notes.length > 1 ? a.notes.length + ' notes' : _esc(a.deals[0] || '')}</div></td>
+          <td class="num">${a.mortgage_rate != null ? a.mortgage_rate.toFixed(2) + '%' : '—'}</td>
+          <td>${_fmtDate(a.maturity_date)}<div class="mr-cell-source">${moTxt}</div></td>
+          <td class="num">${a.ltv != null ? a.ltv.toFixed(0) + '%' : '—'} / ${a.debt_yield != null ? a.debt_yield.toFixed(1) + '%' : '—'} / ${a.latest_dscr != null ? a.latest_dscr.toFixed(2) + 'x' : '—'}</td>
+          <td style="white-space:normal;min-width:170px;">${a.flags.map(x => `<span class="mr-loan-flag ${x.cls}">${_esc(x.label)}</span>`).join('') || '<span class="mr-loan-flag blue">Current</span>'}</td>
+          <td>${logged ? `<span class="mr-opp-logbtn done">✓ Logged</span>` : `<button class="mr-opp-logbtn" onclick="mrOppLog('${_esc(a.key)}', this)">➕ Log deal</button>`}</td>
+        </tr>`; }).join('')}</tbody></table>`;
+  }
+  async function _logOpp(key, btn) {
+    const a = (_opps || []).find(x => x.key === key); if (!a) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Logging…'; }
+    try {
+      const view = /office|medical|mixed/i.test(a.property_type || '') ? 'office' : 'residential';
+      const mScore = view === 'office' ? a.market.office_score : a.market.score;
+      const mTier = view === 'office' ? a.market.office_tier : a.market.tier;
+      const mo = _monthsTo(a.maturity_date);
+      const summary = [
+        `Loan opportunity from CRED iQ: ${_fmtLoanMoney(a.current_balance)} across ${a.notes.length} note(s) (${a.deals.join(', ')})`,
+        a.mortgage_rate != null ? `rate ${a.mortgage_rate.toFixed(2)}%` : null,
+        a.maturity_date ? `maturity ${a.maturity_date}${mo != null ? ` (${mo < 0 ? -mo + ' mo past' : mo + ' mo'})` : ''}` : null,
+        a.payment_status ? `status ${a.payment_status}` : null,
+        a.special_serviced ? `SPECIAL SERVICING${a.ss_reason ? ' — ' + a.ss_reason : ''}` : null,
+        a.watchlist ? `WATCHLIST${a.watchlist_reason ? ' — ' + a.watchlist_reason : ''}` : null,
+        a.ltv != null ? `LTV ${a.ltv.toFixed(0)}%` : null,
+        a.debt_yield != null ? `DY ${a.debt_yield.toFixed(1)}%` : null,
+        a.latest_dscr != null ? `DSCR ${a.latest_dscr.toFixed(2)}x` : null,
+      ].filter(Boolean).join(' · ');
+      const who = (window.currentUser && (window.currentUser.email || window.currentUser.mail)) || null;
+      const row = {
+        source: 'crediq', submitted_by: who, submitted_by_name: who, deal_name: a.property_name, address: a.address,
+        state: a.market.state || null, asset_type: (a.property_type || '').toLowerCase() || null, deal_type: 'debt_opportunity',
+        sf: /sf/i.test(a.size_unit || '') ? a.building_size : null, units: /unit/i.test(a.size_unit || '') ? a.building_size : null,
+        noi: a.latest_noi || a.uw_noi || null, market_id: a.market_id, market_name: a.market.name, market_distance_mi: 0,
+        market_score_res: a.market.score, market_tier_res: a.market.tier, market_rank_res: a.market.rank_residential,
+        market_score_office: a.market.office_score, market_tier_office: a.market.office_tier, market_rank_office: a.market.rank_office,
+        scoring_view: view, opportunity_score: mScore, opportunity_tier: mTier, recommendation: 'Review', status: 'new',
+        raw_text: summary, notes: summary,
+        extracted: { crediq_key: a.key, source_url: a.source_url, loans: a.notes.map(n => ({ loan_id: n.source_loan_id, deal: n.deal_name, balance: n.current_balance, rate: n.mortgage_rate, maturity: n.maturity_date, status: n.payment_status })), signals: a.flags.map(f => f.label) },
+        assessment: { headline: `CRED iQ loan signal: ${a.flags.map(f => f.label).join(', ') || 'live loan'}`, summary },
+      };
+      await window.supaWrite('deal_tracking', 'POST', row);
+      _loggedDeals.add(key);
+      _toast('Logged to Deal Tracking');
+      _renderOpps();
+    } catch (e) {
+      _toast('Could not log deal: ' + e.message, true);
+      if (btn) { btn.disabled = false; btn.textContent = '➕ Log deal'; }
+    }
+  }
+  async function _exportOpps() {
+    const btn = document.getElementById('mrOppExportBtn');
+    try {
+      if (btn) { btn.disabled = true; btn.textContent = 'Exporting…'; }
+      await _loadSheetJS();
+      const rows = _filteredOpps().map((a, i) => ({
+        '#': i + 1, Property: a.property_name, Address: a.address, Market: a.market.name, State: a.market.state,
+        'Office Score': a.market.office_score, 'Office Tier': a.market.office_tier, 'Res Score': a.market.score, 'Res Tier': a.market.tier,
+        'Property Type': a.property_type, Size: a.building_size, Unit: a.size_unit, 'Current Debt': a.current_balance, Notes: a.notes.length,
+        'Rate %': a.mortgage_rate, Maturity: a.maturity_date, 'Months to Maturity': _monthsTo(a.maturity_date),
+        'Payment Status': a.payment_status, 'Special Servicing': a.special_serviced ? 'Yes' : '', 'SS Reason': a.ss_reason, Workout: a.workout_strategy,
+        Watchlist: a.watchlist ? 'Yes' : '', 'LTV %': a.ltv, 'Debt Yield %': a.debt_yield, DSCR: a.latest_dscr, 'Appraised Value': a.appraised_value,
+        'UW NOI': a.uw_noi, Deals: a.deals.join(', '), Originators: a.originators.join(', '), Signals: a.flags.map(f => f.label).join(', '),
+        'Signal Points': a.points, 'CRED iQ Link': a.source_url,
+      }));
+      const ws = XLSX.utils.json_to_sheet(rows);
+      ws['!autofilter'] = { ref: ws['!ref'] };
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Loan Opportunities');
+      XLSX.writeFile(wb, `First_Mile_Loan_Opportunities_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } catch (e) { _toast('Export failed: ' + e.message, true); }
+    finally { if (btn) { btn.disabled = false; btn.textContent = '⬇ Export Excel'; } }
   }
   function _renderNarrative(elId, value, field, placeholder) {
     const el = document.getElementById(elId);
@@ -4184,6 +4462,11 @@ Research this town now and produce the scoring JSON.`;
   window.mrSaveCriterionLabel = _saveCriterionLabel;
   window.mrSaveCriterionActive = _saveCriterionActive;
   window.mrSetCriteriaModalView = _setCriteriaModalView;
+  window.mrShowTab = (t) => _showTab(t);
+  window.mrOppSig = (sig) => { _oppSig = sig; _renderOpps(); };
+  window.mrOppRender = () => _renderOpps();
+  window.mrOppLog = (key, btn) => _logOpp(key, btn);
+  window.mrOppExport = () => _exportOpps();
   window.mrSetLoanFilter = (f) => { _loanFilter = f; _renderLoans(); };
   window.mrSetScorecardView = (v) => {
     if (!['residential', 'office'].includes(v)) return;
@@ -4905,6 +5188,7 @@ ${appendix}
     try { localStorage.setItem('mr_view_type', vt); } catch(_) {}
     _page = 0;
     _refreshPage();
+    if (_opps) { _opps.forEach(a => { a.mktScore = vt === 'office' ? a.market.office_score : a.market.score; }); _renderOpps(); }
   };
   window.mrClearMapBounds = () => {
     _mapBounds = null;
@@ -5020,6 +5304,8 @@ ${appendix}
       _renderGrid();
       const deepId = window.getHashParam && window.getHashParam('market');
       if (deepId) { await _openMarket(deepId, true); history.replaceState({ view: 'marketresearch', sub: deepId }, '', window.location.hash); }
+      else if (window.getHashParam && window.getHashParam('tab') === 'opps') { await _showTab('opps'); }
+      else { _loadOpps().catch(() => {}); } // pre-load for the tab badge
     } catch(e) {
       console.error('Market Research init failed:', e);
       const root = document.getElementById('mrRoot');
