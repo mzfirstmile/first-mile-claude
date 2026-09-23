@@ -1167,7 +1167,7 @@
             <option value="0">Any size</option><option value="5000000">≥ $5M</option><option value="10000000">≥ $10M</option><option value="25000000">≥ $25M</option><option value="50000000">≥ $50M</option><option value="100000000">≥ $100M</option>
           </select>
           <select id="mrOppSort" onchange="mrOppRender()">
-            <option value="signal">Sort: distress signal strength</option><option value="maturity">Sort: maturity (soonest)</option><option value="debt">Sort: debt (largest)</option><option value="market">Sort: market score</option>
+            <option value="signal">Sort: distress signal strength</option><option value="maturity">Sort: maturity (soonest)</option><option value="debt">Sort: debt (largest)</option><option value="noi">Sort: NOI (largest)</option><option value="noichg">Sort: NOI decline vs UW</option><option value="market">Sort: market score</option>
           </select>
         </div>
         <div class="mr-scorecard"><div class="mr-loan-tbl mr-opp-tbl" id="mrOppBody"><div style="padding:16px 18px;font-size:13px;color:#94a3b8;">Loading…</div></div></div>
@@ -2341,6 +2341,7 @@
     if (l.ltv != null && Number(l.ltv) >= 75) f.push({ label: `LTV ${Number(l.ltv).toFixed(0)}%`, cls: 'amber', pts: 1 });
     if (l.debt_yield != null && Number(l.debt_yield) > 0 && Number(l.debt_yield) < 8) f.push({ label: `DY ${Number(l.debt_yield).toFixed(1)}%`, cls: 'amber', pts: 1 });
     if (l.latest_dscr != null && Number(l.latest_dscr) > 0 && Number(l.latest_dscr) < 1.2) f.push({ label: `DSCR ${Number(l.latest_dscr).toFixed(2)}x`, cls: 'red', pts: 3 });
+    if (l.noiChg != null && l.noiChg <= -0.15 && !l.isPortfolio) f.push({ label: `NOI ${Math.round(l.noiChg * 100)}% vs UW`, cls: l.noiChg <= -0.3 ? 'red' : 'amber', pts: l.noiChg <= -0.3 ? 3 : 2 });
     if (l.modified) f.push({ label: 'Modified', cls: 'grey', pts: 1 });
     return f;
   }
@@ -2465,6 +2466,10 @@
       if (dj.alloc_bal != null) a.alloc_balance = (a.alloc_balance || 0) + Number(dj.alloc_bal);
       if (dj.num_props != null) a.num_props = Math.max(a.num_props || 0, Number(dj.num_props));
       if (l.loan_name && !(a.loan_names || (a.loan_names = [])).includes(l.loan_name)) a.loan_names.push(l.loan_name);
+      const pk = _pickNoi(l);
+      if (pk.fy && (!a.noiFy || pk.fy.date > a.noiFy.date)) a.noiFy = pk.fy;
+      if (pk.ytd && (!a.noiYtd || pk.ytd.date > a.noiYtd.date)) a.noiYtd = pk.ytd;
+      if (pk.uw != null && a.noiUw == null) a.noiUw = pk.uw;
       a.original_balance += Number(l.original_balance) || 0;
       if (l.maturity_date && (!a.maturity_date || l.maturity_date < a.maturity_date)) a.maturity_date = l.maturity_date;
       ['mortgage_rate', 'ltv', 'debt_yield', 'appraised_value', 'uw_noi', 'latest_noi'].forEach(k => { if (l[k] != null && a[k] == null) a[k] = Number(l[k]); });
@@ -2486,7 +2491,10 @@
       if (!a.isPortfolio && a.appraised_value && a.current_balance) a.ltv = a.current_balance / a.appraised_value * 100;
       else if (a.isPortfolio || a.notes.length > 1) a.ltv = null;
       if (a.isPortfolio || a.notes.length > 1) { a.debt_yield = a.noi && !a.isPortfolio ? null : null; a.latest_dscr = a.isPortfolio ? null : a.latest_dscr; }
-      a.noi = a.uw_noi || a.latest_noi || null;
+      const fyFresh = a.noiFy && a.noiFy.year >= new Date().getFullYear() - 3;
+      a.noi = (fyFresh ? a.noiFy.noi : null) || a.noiUw || (a.noiFy ? a.noiFy.noi : null) || null;
+      a.noiBasis = fyFresh ? `FY${String(a.noiFy.year).slice(2)}` : (a.noiUw != null ? 'UW' : (a.noiFy ? `FY${String(a.noiFy.year).slice(2)}` : null));
+      a.noiChg = (a.noiFy && a.noiUw && a.noiFy.noi && Math.abs(a.noiFy.year - new Date().getFullYear()) <= 3) ? (a.noiFy.noi / a.noiUw - 1) : null;
       a.flags = _loanFlags(a);
       a.points = a.flags.reduce((s, f) => s + f.pts, 0);
       const mo = _monthsTo(a.maturity_date), ps = (a.payment_status || '').toLowerCase();
@@ -2529,6 +2537,8 @@
     const mat = a => a.maturity_date || '9999';
     if (sort === 'maturity') r.sort((a, b) => mat(a) < mat(b) ? -1 : mat(a) > mat(b) ? 1 : 0);
     else if (sort === 'debt') r.sort((a, b) => (b.effBal || 0) - (a.effBal || 0));
+    else if (sort === 'noi') r.sort((a, b) => ((b.isPortfolio ? 0 : b.noi) || 0) - ((a.isPortfolio ? 0 : a.noi) || 0));
+    else if (sort === 'noichg') r.sort((a, b) => (a.noiChg == null ? 9 : a.noiChg) - (b.noiChg == null ? 9 : b.noiChg));
     else if (sort === 'market') r.sort((a, b) => (b.mktScore || 0) - (a.mktScore || 0) || b.points - a.points);
     else r.sort((a, b) => b.points - a.points || (b.mktScore || 0) - (a.mktScore || 0) || (b.effBal || 0) - (a.effBal || 0));
     return r;
@@ -2536,6 +2546,29 @@
 
   // Rule-based acquisition thesis for a distressed-opportunity row. Pure function of
   // the aggregated loan facts + our market scoring — no model call, so every row gets one.
+  // CRED iQ "Financial Summary" string: "Date ~ d1 ~ d2 ~ Revenue ~ r1 ~ r2 ~ Expenses ~ … ~ NOI ~ … ~ NCF ~ … ~ DSCR NCF ~ …"
+  function _parseFin(raw) {
+    if (!raw) return [];
+    const t = String(raw).split(' ~ ').map(x => x.trim());
+    const iRev = t.indexOf('Revenue'); if (t[0] !== 'Date' || iRev < 2) return [];
+    const dates = t.slice(1, iRev), n = dates.length;
+    const row = (lab) => { const i = t.indexOf(lab); return i < 0 ? [] : t.slice(i + 1, i + 1 + n); };
+    const num = (v) => { if (!v || v === '-' || v === '—') return null; const x = parseFloat(String(v).replace(/[$,%x]/g, '')); return isFinite(x) ? x : null; };
+    const rev = row('Revenue'), exp = row('Expenses'), noi = row('NOI'), ncf = row('NCF'), dscr = row('DSCR NCF');
+    return dates.map((d, i) => {
+      const m = d.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/); if (!m) return null;
+      return { date: `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`, month: +m[1], day: +m[2], year: +m[3],
+               rev: num(rev[i]), exp: num(exp[i]), noi: num(noi[i]), ncf: num(ncf[i]), dscr: num(dscr[i]) };
+    }).filter(p => p && p.noi != null);
+  }
+  // Pick the NOI to show: latest full fiscal year (period ending 12/31), else UW; also the latest YTD.
+  function _pickNoi(l) {
+    const ps = _parseFin(l.detail && l.detail.financials_raw).sort((a, b) => a.date < b.date ? -1 : 1);
+    const fy = ps.filter(p => p.month === 12 && p.day === 31).pop() || null;
+    const last = ps[ps.length - 1] || null;
+    const ytd = last && !(last.month === 12 && last.day === 31) && (!fy || last.date > fy.date) && last.month < 12 ? last : null;
+    return { fy, ytd, uw: l.uw_noi != null ? Number(l.uw_noi) : null };
+  }
   // A property whose loan also secures other assets: CRED iQ lists the whole loan under each collateral
   // property, so balance / NOI / appraisal are portfolio-level and not this asset's.
   function _isPortfolioLoan(a) {
@@ -2601,6 +2634,11 @@
       const ln = (a.loan_names || []).filter(n => n !== a.property_name)[0] || (a.loan_names || [])[0];
       out.push(`Collateral in a <b>multi-property loan</b>${ln ? ` (“${_esc(ln)}”)` : ''}${a.num_props > 1 ? ` covering ${a.num_props} properties` : ''} — the ${_fmtLoanMoney(a.current_balance)} is portfolio debt${a.alloc_balance != null ? `; this asset's allocated share is ~<b>${_fmtLoanMoney(a.alloc_balance)}</b>` : ', not this asset\'s'}. Distress at the portfolio level often shakes loose single-asset sales or partial releases.`);
     }
+    if (!a.isPortfolio && a.noiChg != null && Math.abs(a.noiChg) >= 0.1) {
+      out.push(a.noiChg < 0
+        ? `NOI has <b>fallen ${Math.round(-a.noiChg * 100)}%</b> since underwriting (${_fmtLoanMoney(a.noiUw)} UW → ${_fmtLoanMoney(a.noiFy.noi)} FY${a.noiFy.year}) — the business plan is behind and the loan was sized on income that is no longer there.`
+        : `NOI is <b>up ${Math.round(a.noiChg * 100)}%</b> vs underwriting (${_fmtLoanMoney(a.noiUw)} → ${_fmtLoanMoney(a.noiFy.noi)} FY${a.noiFy.year}) — the pressure is the capital structure, not the asset.`);
+    }
     // 3) Refinance math (the "why can't they refi" argument)
     const r = a.mortgage_rate;
     const mr = _MKT_RATE[type] || _MKT_RATE[Object.keys(_MKT_RATE).find(k => type.includes(k))] || _MKT_RATE.default;
@@ -2634,6 +2672,14 @@
 
     return { html: out.join(' '), play, text: out.join(' ').replace(/<[^>]+>/g, '') };
   }
+  function _noiCell(a) {
+    if (a.isPortfolio && a.noi) return `<span style="color:#94a3b8;">${_fmtLoanMoney(a.noi)}</span><div class="mr-cell-source">portfolio</div>`;
+    if (!a.noi) return `<span style="color:#cbd5e1;">—</span>${!a.mortgage_rate ? '<div class="mr-cell-source">loading</div>' : ''}`;
+    const chg = a.noiChg != null ? ` <span style="color:${a.noiChg < -0.15 ? '#b91c1c' : a.noiChg > 0.05 ? '#15803d' : '#64748b'};">${a.noiChg > 0 ? '+' : ''}${Math.round(a.noiChg * 100)}%</span>` : '';
+    const sub = [a.noiBasis, a.noiBasis !== 'UW' && a.noiUw ? `UW ${_fmtLoanMoney(a.noiUw)}${chg}` : null,
+                 a.noiYtd ? `YTD ${String(a.noiYtd.month).padStart(2, '0')}/${String(a.noiYtd.year).slice(2)} ${_fmtLoanMoney(a.noiYtd.noi)}` : null].filter(Boolean).join(' · ');
+    return `${_fmtLoanMoney(a.noi)}<div class="mr-cell-source">${sub}</div>`;
+  }
   function _renderOpps() {
     const body = document.getElementById('mrOppBody'); if (!body || !_opps) return;
     document.querySelectorAll('#mrOppView .mr-opp-chip').forEach(c => c.classList.toggle('active', c.dataset.sig === _oppSig));
@@ -2652,7 +2698,7 @@
     if (!rows.length) { body.innerHTML = `<div style="padding:16px 18px;font-size:13px;color:#94a3b8;">No properties match these filters.</div>`; return; }
     const tierPill = (t) => t != null ? `<span class="mr-tier ${_tierClass(t)}" style="font-size:10px;padding:1px 6px;">T${t}</span>` : '';
     body.innerHTML = `<table>
-      <thead><tr><th>#</th><th>Property</th><th>Market</th><th>Type</th><th class="num">Debt</th><th class="num">Rate</th><th>Maturity</th><th class="num">LTV / DY / DSCR</th><th>Signals</th><th></th></tr></thead>
+      <thead><tr><th>#</th><th>Property</th><th>Market</th><th>Type</th><th class="num">Debt</th><th class="num">NOI</th><th class="num">Rate</th><th>Maturity</th><th class="num">LTV / DY / DSCR</th><th>Signals</th><th></th></tr></thead>
       <tbody>${rows.map((a, i) => {
         const mo = _monthsTo(a.maturity_date);
         const moTxt = mo == null ? '' : (mo < 0 ? `${-mo}mo ago` : `${mo}mo`);
@@ -2669,13 +2715,14 @@
           <td><span class="mr-opp-town" onclick="mrOpenMarket('${a.market_id}')">${_esc(a.market.name || '—')}</span><div class="mr-cell-source">${_viewType === 'office' ? '🏢' : '🏠'} ${ms} ${tierPill(mt)}</div></td>
           <td>${_esc(a.property_type || '—')}${a.building_size ? `<div class="mr-cell-source">${Number(a.building_size).toLocaleString()} ${_esc(a.size_unit || '')}</div>` : ''}</td>
           <td class="num">${a.isPortfolio ? (a.alloc_balance != null ? `${_fmtLoanMoney(a.alloc_balance)}<div class="mr-cell-source">allocated · of ${_fmtLoanMoney(a.current_balance)}</div>` : `<span style="color:#94a3b8;">${_fmtLoanMoney(a.current_balance)}</span><div class="mr-cell-source">portfolio loan</div>`) : `${_fmtLoanMoney(a.current_balance)}<div class="mr-cell-source">${a.notes.length > 1 ? a.notes.length + ' notes' : _esc(a.deals[0] || '')}</div>`}</td>
+          <td class="num">${_noiCell(a)}</td>
           <td class="num">${a.mortgage_rate != null ? a.mortgage_rate.toFixed(2) + '%' : '—'}</td>
           <td>${_fmtDate(a.maturity_date)}<div class="mr-cell-source">${moTxt}</div></td>
           <td class="num">${a.ltv != null ? a.ltv.toFixed(0) + '%' : '—'} / ${a.debt_yield != null ? a.debt_yield.toFixed(1) + '%' : '—'} / ${a.latest_dscr != null ? a.latest_dscr.toFixed(2) + 'x' : '—'}</td>
           <td style="white-space:normal;min-width:170px;">${a.flags.map(x => `<span class="mr-loan-flag ${x.cls}">${_esc(x.label)}</span>`).join('') || '<span class="mr-loan-flag blue">Current</span>'}</td>
           <td>${logged ? `<span class="mr-opp-logbtn done">✓ Logged</span>` : `<button class="mr-opp-logbtn" onclick="mrOppLog('${_esc(a.key)}', this)">➕ Log deal</button>`}</td>
         </tr>
-        <tr class="mr-opp-thesis"><td></td><td colspan="9"><div class="t">💡 ${th.html}${th.play !== 'Monitor' ? `<span class="play">→ Play: ${_esc(th.play)}</span>` : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
+        <tr class="mr-opp-thesis"><td></td><td colspan="10"><div class="t">💡 ${th.html}${th.play !== 'Monitor' ? `<span class="play">→ Play: ${_esc(th.play)}</span>` : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
   }
   async function _logOpp(key, btn) {
     const a = (_opps || []).find(x => x.key === key); if (!a) return;
@@ -2730,7 +2777,7 @@
         'Rate %': a.mortgage_rate, Maturity: a.maturity_date, 'Months to Maturity': _monthsTo(a.maturity_date),
         'Payment Status': a.payment_status, 'Special Servicing': a.special_serviced ? 'Yes' : '', 'SS Reason': a.ss_reason, Workout: a.workout_strategy,
         Watchlist: a.watchlist ? 'Yes' : '', 'LTV %': a.ltv, 'Debt Yield %': a.debt_yield, DSCR: a.latest_dscr, 'Appraised Value': a.appraised_value,
-        'UW NOI': a.uw_noi, Deals: a.deals.join(', '), Originators: a.originators.join(', '), Signals: a.flags.map(f => f.label).join(', '),
+        'NOI (shown)': a.noi, 'NOI Basis': a.noiBasis, 'UW NOI': a.noiUw, 'FY NOI': a.noiFy ? a.noiFy.noi : null, 'FY NOI Year': a.noiFy ? a.noiFy.year : null, 'NOI Chg vs UW %': a.noiChg != null ? Math.round(a.noiChg * 1000) / 10 : null, 'YTD NOI': a.noiYtd ? a.noiYtd.noi : null, 'YTD Through': a.noiYtd ? a.noiYtd.date : null, Deals: a.deals.join(', '), Originators: a.originators.join(', '), Signals: a.flags.map(f => f.label).join(', '),
         'Signal Points': a.points, Thesis: _oppThesis(a).text, Play: _oppThesis(a).play, 'CRED iQ Link': a.source_url,
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
