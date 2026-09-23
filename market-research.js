@@ -2233,7 +2233,7 @@
     const e = _loanIndex[id]; if (!e) return '';
     const hot = e.distress > 0, warm = e.mat24 > 0;
     const bg = hot ? '#fee2e2;color:#991b1b' : (warm ? '#fef3c7;color:#92400e' : '#e0f2fe;color:#075985');
-    const tip = `${e.live} live loans · ${_fmtMoney(e.debt)} debt · ${e.mat24} maturing ≤24mo · ${e.distress} watchlist/SS/delinquent (CRED iQ)`;
+    const tip = `${e.live} live loans · ${_fmtLoanMoney(e.debt)} debt · ${e.mat24} maturing ≤24mo · ${e.distress} watchlist/SS/delinquent (CRED iQ)`;
     return ` <span title="${_esc(tip)}" style="display:inline-block;font-size:10px;font-weight:600;border-radius:10px;padding:1px 7px;margin-left:4px;background:${bg};white-space:nowrap;">🏦 ${e.live}${e.mat24 ? ` · ⏳${e.mat24}` : ''}${e.distress ? ` · ⚑${e.distress}` : ''}</span>`;
   }
 
@@ -2268,14 +2268,14 @@
     if (mo != null && mo < 0 && !ps.includes('matured')) f.push({ label: 'Past maturity', cls: 'red', pts: 4 });
     else if (mo != null && mo <= 12 && mo >= 0) f.push({ label: `Matures ${mo}mo`, cls: 'red', pts: 3 });
     else if (mo != null && mo <= 24 && mo > 12) f.push({ label: `Matures ${mo}mo`, cls: 'amber', pts: 2 });
-    if (l.mortgage_rate != null && Number(l.mortgage_rate) < 4.5 && mo != null && mo <= 36) f.push({ label: `Refi gap (${Number(l.mortgage_rate).toFixed(2)}%)`, cls: 'amber', pts: 2 });
+    if (l.mortgage_rate != null && Number(l.mortgage_rate) < 4.5 && mo != null && mo >= 0 && mo <= 36) f.push({ label: `Refi gap (${Number(l.mortgage_rate).toFixed(2)}%)`, cls: 'amber', pts: 2 });
     if (l.ltv != null && Number(l.ltv) >= 75) f.push({ label: `LTV ${Number(l.ltv).toFixed(0)}%`, cls: 'amber', pts: 1 });
     if (l.debt_yield != null && Number(l.debt_yield) > 0 && Number(l.debt_yield) < 8) f.push({ label: `DY ${Number(l.debt_yield).toFixed(1)}%`, cls: 'amber', pts: 1 });
     if (l.latest_dscr != null && Number(l.latest_dscr) > 0 && Number(l.latest_dscr) < 1.2) f.push({ label: `DSCR ${Number(l.latest_dscr).toFixed(2)}x`, cls: 'red', pts: 3 });
     if (l.modified) f.push({ label: 'Modified', cls: 'grey', pts: 1 });
     return f;
   }
-  function _fmtMoney(n) {
+  function _fmtLoanMoney(n) {
     if (n == null || n === '') return '—';
     const v = Number(n); if (!isFinite(v)) return '—';
     if (Math.abs(v) >= 1e9) return '$' + (v / 1e9).toFixed(2) + 'B';
@@ -2308,8 +2308,8 @@
     const chips = `
       <div class="mr-loan-chips">
         <div class="mr-loan-chip"><b>${live.length}</b>live loans · ${props} properties</div>
-        <div class="mr-loan-chip"><b>${_fmtMoney(liveDebt)}</b>outstanding debt</div>
-        <div class="mr-loan-chip ${mat24.length ? 'warm' : ''}"><b>${mat24.length} · ${_fmtMoney(mat24Debt)}</b>maturing ≤ 24 mo</div>
+        <div class="mr-loan-chip"><b>${_fmtLoanMoney(liveDebt)}</b>outstanding debt</div>
+        <div class="mr-loan-chip ${mat24.length ? 'warm' : ''}"><b>${mat24.length} · ${_fmtLoanMoney(mat24Debt)}</b>maturing ≤ 24 mo</div>
         <div class="mr-loan-chip ${distress.length ? 'hot' : ''}"><b>${distress.length}</b>watchlist / special servicing / delinquent</div>
         <div class="mr-loan-chip ${opps.length ? 'warm' : ''}"><b>${opps.length}</b>flagged opportunities</div>
         ${asOf ? `<div class="mr-loan-chip" style="margin-left:auto;"><b style="font-size:12px;">${_esc(asOf)}</b>data as of</div>` : ''}
@@ -2326,7 +2326,7 @@
       return `<tr>
         <td>${link}<div class="mr-cell-source">${_esc(l.address || '')}</div></td>
         <td>${_esc(l.property_type || '—')}${l.building_size ? `<div class="mr-cell-source">${Number(l.building_size).toLocaleString()} ${_esc(l.size_unit || '')}</div>` : ''}</td>
-        <td class="num">${_fmtMoney(l.current_balance)}<div class="mr-cell-source">orig ${_fmtMoney(l.original_balance)}</div></td>
+        <td class="num">${_fmtLoanMoney(l.current_balance)}<div class="mr-cell-source">orig ${_fmtLoanMoney(l.original_balance)}</div></td>
         <td class="num">${l.mortgage_rate != null ? Number(l.mortgage_rate).toFixed(2) + '%' : '—'}</td>
         <td>${_fmtDate(l.maturity_date)}<div class="mr-cell-source">${moTxt}</div></td>
         <td class="num">${l.ltv != null ? Number(l.ltv).toFixed(0) + '%' : '—'}<div class="mr-cell-source">${l.debt_yield != null ? 'DY ' + Number(l.debt_yield).toFixed(1) + '%' : ''}</div></td>
