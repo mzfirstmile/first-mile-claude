@@ -80,6 +80,19 @@ async function getGraphToken(): Promise<string> {
   return (await res.json()).access_token;
 }
 
+// ── Quarantine notice guard ──
+// Richard's Outlook rule forwards Check Point (Harmony Email) quarantine notices here so
+// the quarantine-digest function can roll them into a Monday digest. They must NOT get an
+// auto-reply or deal-intake pass. Keep in sync with quarantine-digest/index.ts.
+function isQuarantineNotice(subject: string | null, body: string | null): boolean {
+  const s = (subject || "").toLowerCase();
+  const b = (body || "").toLowerCase().slice(0, 4000);
+  const vendor = /check ?point|avanan|harmony email|smartphish|quarantine (report|digest|summary|notification)/i;
+  if (/quarantin/.test(s) && (vendor.test(s) || vendor.test(b) || /release|report as safe|restore/.test(b))) return true;
+  if (/quarantin/.test(b) && vendor.test(b)) return true;
+  return false;
+}
+
 // ── Task Reminder Reply Handler ──
 // Detects replies to task reminder emails and uses Claude to parse which tasks are done
 
@@ -503,6 +516,16 @@ serve(async (req: Request) => {
       console.log(`Email ${emailId} already claimed by another process, skipping`);
       return new Response(
         JSON.stringify({ skipped: true, reason: "claimed by another process" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Quarantine notices are queued for the weekly digest — claimed (replied_at set above) but never answered.
+    if (isQuarantineNotice(email.subject, email.body_text)) {
+      console.log(`Quarantine notice ${emailId} from ${email.from_address} — queued for weekly digest, no reply`);
+      await sb.from("emails").update({ ai_category: "quarantine_notice" }).eq("id", emailId);
+      return new Response(
+        JSON.stringify({ skipped: true, reason: "quarantine notice queued for weekly digest" }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
