@@ -93,6 +93,9 @@
   const fmtDate = (s) => (s ? new Date(s).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—');
   const tierPill = (t) => (t ? `<span class="tierpill" style="background:${TIER_COLOR[t] || '#94a3b8'}">T${t}</span>` : '<span class="tierpill" style="background:#cbd5e1">—</span>');
   const recPill = (r) => (r ? `<span class="pill" style="background:${REC_COLOR[r] || '#94a3b8'}">${esc(r)}</span>` : '<span class="pill" style="background:#cbd5e1">—</span>');
+  // Broker acknowledgement status (see deal-intake/broker-ack.ts): none | pending_request | pending | sent | skipped
+  const BRK = { pending_request: ['Broker reply: draft', '#94a3b8', 'Draft written, approval not yet requested'], pending: ['Broker reply: awaiting Ricky', '#f59e0b', 'Approval request emailed to Ricky — nothing sent to the broker yet'], sent: ['Broker reply: sent', '#059669', 'Approved by Ricky and sent to the broker'], skipped: ['Broker reply: no broker email', '#cbd5e1', 'No external sender found in the forwarded headers'] };
+  const brokerPill = (d, short) => { const b = BRK[d.broker_reply_status]; if (!b) return ''; return `<span class="pill" title="${esc(b[2])}${d.broker_email ? ' · ' + esc(d.broker_email) : ''}" style="background:${b[1]}">${short ? b[0].replace('Broker reply: ', '✉ ') : b[0]}</span>`; };
   const statusSel = (d) => `<select class="dt-status" onclick="event.stopPropagation()" onchange="dtSetStatus('${d.id}', this.value)" style="border-color:${STATUS_COLOR[d.status] || '#e2e8f0'}">${STATUSES.map((s) => `<option value="${s}" ${d.status === s ? 'selected' : ''}>${STATUS_LABEL[s]}</option>`).join('')}</select>`;
   function _toast(msg, isErr) {
     if (typeof window.showToast === 'function' && !isErr) { window.showToast(msg); return; }
@@ -104,7 +107,7 @@
 
   // ── Data ─────────────────────────────────────────────────
   async function _load() {
-    _deals = await window.supaFetch('deal_tracking', '?select=id,created_at,updated_at,source,submitted_by,submitted_by_name,email_subject,deal_name,address,city,state,asset_type,deal_type,sf,units,asking_price,price_psf,noi,cap_rate,occupancy_pct,market_id,market_name,market_distance_mi,market_score_res,market_tier_res,market_score_office,market_tier_office,market_rank_office,market_rank_res,scoring_view,opportunity_score,opportunity_tier,recommendation,status,notes,replied_at&order=created_at.desc&limit=1000');
+    _deals = await window.supaFetch('deal_tracking', '?select=id,created_at,updated_at,source,submitted_by,submitted_by_name,email_subject,deal_name,address,city,state,asset_type,deal_type,sf,units,asking_price,price_psf,noi,cap_rate,occupancy_pct,market_id,market_name,market_distance_mi,market_score_res,market_tier_res,market_score_office,market_tier_office,market_rank_office,market_rank_res,scoring_view,opportunity_score,opportunity_tier,recommendation,status,notes,replied_at,broker_email,broker_name,broker_reply_status,broker_reply_sent_at&order=created_at.desc&limit=1000');
   }
   async function _loadOne(id) {
     const rows = await window.supaFetch('deal_tracking', `?select=*&id=eq.${id}`);
@@ -178,7 +181,7 @@
             <td class="num">${d.cap_rate != null ? Number(d.cap_rate).toFixed(2) + '%' : '—'}</td>
             <td>${d.market_name ? `${esc(d.market_name)} <span class="dt-sub" style="display:inline">${d.market_distance_mi != null ? Number(d.market_distance_mi).toFixed(1) + ' mi' : ''}</span><div class="dt-sub">Office ${tierPill(d.market_tier_office)} ${d.market_score_office ?? '—'} &nbsp; Res ${tierPill(d.market_tier_res)} ${d.market_score_res ?? '—'}</div>` : '<span style="color:#94a3b8">no match</span>'}</td>
             <td class="num"><b style="font-size:15px">${d.opportunity_score != null ? Number(d.opportunity_score).toFixed(1) : '—'}</b> ${tierPill(d.opportunity_tier)}<div class="dt-sub">${d.scoring_view || ''} view</div></td>
-            <td>${recPill(d.recommendation)}</td>
+            <td>${recPill(d.recommendation)}${d.broker_reply_status === 'pending' || d.broker_reply_status === 'sent' ? '<div style="margin-top:3px">' + brokerPill(d, true) + '</div>' : ''}</td>
             <td>${fmtDate(d.created_at)}<div class="dt-sub">${esc(d.submitted_by_name || d.submitted_by || d.source || '')}</div></td>
             <td>${statusSel(d)}</td>
           </tr>`).join('')}</tbody>
@@ -211,6 +214,7 @@
             ${recPill(d.recommendation)}
             <span><b style="font-size:18px">${d.opportunity_score != null ? Number(d.opportunity_score).toFixed(1) : '—'}</b> <span style="color:#64748b">/ 100</span> ${tierPill(d.opportunity_tier)} <span class="dt-meta">${d.scoring_view || ''} view</span></span>
             ${d.market_id ? `<a href="#marketresearch&market=${d.market_id}" style="color:#0ea5e9;font-size:13.5px">📍 ${esc(d.market_name)} in Market Research ↗</a>` : ''}
+            ${brokerPill(d)}
           </div>
         </div>
         <div class="dt-actions" style="align-items:flex-start">
@@ -218,6 +222,7 @@
           <button class="dt-btn" id="dtRescoreBtn" onclick="dtRescore('${d.id}', false)" title="Re-run market match + assessment using the stored deal facts">↻ Re-score</button>
           <button class="dt-btn" onclick="dtRescore('${d.id}', true)" title="Re-extract facts from the original text, then re-score">↻ Re-extract</button>
           <button class="dt-btn" onclick="dtEmailReport('${d.id}')">✉ Email report</button>
+          ${d.broker_reply_status !== 'sent' ? `<button class="dt-btn" id="dtBrokerBtn" onclick="dtRequestApproval('${d.id}')" title="${d.broker_email ? 'Email the drafted broker reply to Ricky for approval (cc the submitter)' : 'Enter the broker\'s email, then send the draft to Ricky for approval'}">${d.broker_reply_status === 'pending' ? '↻ Re-send approval' : '✉ Broker reply → Ricky'}</button>` : ''}
           <button class="dt-btn" onclick="dtDelete('${d.id}')" style="color:#b91c1c">Delete</button>
         </div>
       </div>
@@ -225,6 +230,11 @@
       <details class="dt-raw"><summary style="cursor:pointer;font-weight:600">Notes</summary>
         <textarea class="dt-notes" placeholder="Internal notes (saved on blur)…" onblur="dtSaveNotes('${d.id}', this.value)">${esc(d.notes || '')}</textarea>
       </details>
+      ${d.broker_email || d.broker_reply_draft ? `<details class="dt-raw" ${d.broker_reply_status === 'pending' ? 'open' : ''}><summary style="cursor:pointer;font-weight:600">Broker reply ${brokerPill(d)}</summary>
+        <div style="font-size:13.5px;color:#475569;margin:8px 0">To: <b>${esc(d.broker_name || '')}</b> &lt;${esc(d.broker_email || '—')}&gt;${d.broker_subject ? ` · Subject: Re: ${esc(d.broker_subject)}` : ''}${d.broker_approval_sent_at ? ` · approval requested ${fmtDate(d.broker_approval_sent_at)}` : ''}${d.broker_reply_sent_at ? ` · <b style="color:#059669">sent ${fmtDate(d.broker_reply_sent_at)}</b> (approved by ${esc(d.broker_approved_by || '')})` : ''}</div>
+        <div style="border:1px solid #e2e8f0;border-left:4px solid #0ea5e9;border-radius:8px;padding:10px 14px;background:#f8fafc;font-size:14px">${d.broker_reply_draft || '<i>no draft</i>'}</div>
+        ${Array.isArray(d.broker_reply_log) && d.broker_reply_log.length ? `<div style="font-size:12.5px;color:#64748b;margin-top:8px">${d.broker_reply_log.map((l) => `${fmtDate(l.at)} · ${esc(l.event)}${l.by ? ' · ' + esc(l.by) : ''}${l.note ? ' — ' + esc(String(l.note).slice(0, 160)) : ''}`).join('<br>')}</div>` : ''}
+      </details>` : ''}
       <details class="dt-raw"><summary style="cursor:pointer;font-weight:600">Original submission</summary><pre>${esc(d.raw_text || '(none)')}</pre></details>
       <details class="dt-raw"><summary style="cursor:pointer;font-weight:600">Extracted facts (JSON)</summary><pre>${esc(JSON.stringify(d.extracted || {}, null, 2))}</pre></details>
     `;
@@ -308,6 +318,23 @@
       _toast('Report emailed to ' + to);
     } catch (e) { _toast('Send failed: ' + e.message, true); }
   }
+  async function _requestApproval(id) {
+    const d = _current && _current.id === id ? _current : await _loadOne(id);
+    if (!d) return;
+    let email = d.broker_email;
+    if (!email) {
+      email = prompt("Broker's email address (the person who originally sent the deal):", '');
+      if (!email || !/@/.test(email)) return;
+      const name = prompt("Broker's name (optional):", d.broker_name || '') || null;
+      try { await window.supaWrite('deal_tracking', 'PATCH', { broker_email: email.trim(), broker_name: name, broker_reply_status: 'pending_request', broker_reply_draft: null, updated_at: new Date().toISOString() }, `?id=eq.${id}`); } catch (e) { _toast('Failed to save broker: ' + e.message, true); return; }
+    } else if (d.broker_reply_status === 'pending' && !confirm('An approval request is already with Ricky. Send it again?')) return;
+    const btn = document.getElementById('dtBrokerBtn'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="dt-spin" style="border-color:rgba(0,0,0,.2);border-top-color:#0ea5e9"></span>Sending…'; }
+    try {
+      await _callIntake({ action: 'send_approval', dealId: id, force: true });
+      await _load(); _current = await _loadOne(id); _renderDetail();
+      _toast('Draft sent to Ricky for approval');
+    } catch (e) { _toast('Failed: ' + e.message, true); if (btn) { btn.disabled = false; btn.textContent = '✉ Broker reply → Ricky'; } }
+  }
   async function _delete(id) {
     if (!confirm('Delete this deal from Deal Tracking? This cannot be undone.')) return;
     try { await window.supaWrite('deal_tracking', 'DELETE', null, `?id=eq.${id}`); await _load(); _backToList(); _toast('Deal deleted'); } catch (e) { _toast('Delete failed: ' + e.message, true); }
@@ -324,6 +351,7 @@
   window.dtRescore = _rescore;
   window.dtEmailReport = _emailReport;
   window.dtDelete = _delete;
+  window.dtRequestApproval = _requestApproval;
   window.dtOpenLogModal = _openLogModal;
   window.dtCloseLogModal = _closeLogModal;
   window.dtSubmitLog = _submitLog;

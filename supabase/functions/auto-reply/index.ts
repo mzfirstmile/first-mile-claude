@@ -535,7 +535,35 @@ serve(async (req: Request) => {
     // Check if this is a reply to a task reminder email
     let replyHtml: string;
     let replyAttachments: { name: string; contentType: string; contentBytes: string }[] = [];
-    if (isTaskReminderReply(email.subject)) {
+    let brokerApprovalDealId: string | null = null; // set when deal-intake drafted a broker reply that needs Ricky's approval
+    let approvalHandled = false;
+    // Broker-reply approval thread? Subject carries "[Approve BRK-xxxxxxxx]" — deal-intake decides: approve → send to broker,
+    // edits → revise + re-ask (it sends that itself, so we send nothing more), non-approver → polite note.
+    if (/\[Approve BRK-[a-z0-9]{8}\]/i.test(email.subject || "")) {
+      try {
+        const ar = await fetch(`${supabaseUrl}/functions/v1/deal-intake`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "approval_reply", emailId }),
+        });
+        const a = ar.ok ? await ar.json() : null;
+        if (a?.handled) {
+          approvalHandled = true;
+          console.log(`broker approval reply for email ${emailId}: ${a.action || "handled"} (deal ${a.dealId || "?"})`);
+          if (!a.replyHtml) {
+            return new Response(JSON.stringify({ success: true, broker_approval: a.action || "handled", deal_id: a.dealId }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+          replyHtml = a.replyHtml;
+        } else if (!ar.ok) {
+          console.warn(`deal-intake approval_reply returned ${ar.status}: ${await ar.text()}`);
+        }
+      } catch (e) {
+        console.warn(`approval_reply failed, falling through to generic reply: ${e}`);
+      }
+    }
+    if (approvalHandled) {
+      // replyHtml already set
+    } else if (isTaskReminderReply(email.subject)) {
       console.log(`Detected task reminder reply from ${email.from_address}`);
       const taskResult = await handleTaskReminderReply(sb, email);
       if (taskResult.handled && taskResult.replyHtml) {
@@ -568,6 +596,10 @@ serve(async (req: Request) => {
             dealHtml = di.replyHtml; // already includes acknowledgement + score/rank/recommendation + portal links + report
             replyAttachments = Array.isArray(di.attachments) ? di.attachments : [];
             console.log(`deal-intake logged deal ${di.deal_id} for email ${emailId}`);
+            if (di.broker?.status === "pending_request" && di.broker?.email) {
+              brokerApprovalDealId = di.deal_id;
+              dealHtml += `<p style="margin-top:14px;font-size:13.5px;color:#334155;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px">✉️ I've drafted a short “thanks for sending this” reply to the broker (<b>${di.broker.name ? di.broker.name + ", " : ""}${di.broker.email}</b>) and sent it to Ricky for approval${email.from_address.toLowerCase() !== "rc@firstmilecap.com" ? " (you're cc'd)" : ""}. It goes to the broker only once he replies “approve”.</p>`;
+            }
           }
         } else {
           console.warn(`deal-intake returned ${diRes.status}: ${await diRes.text()}`);
@@ -588,6 +620,19 @@ serve(async (req: Request) => {
     // Send via Graph API
     const token = await getGraphToken();
     await sendReply(token, email, replyHtml, replyAttachments);
+
+    // Broker acknowledgement: ask Ricky to approve the drafted broker reply (separate email, cc the forwarder)
+    if (brokerApprovalDealId) {
+      try {
+        const ap = await fetch(`${supabaseUrl}/functions/v1/deal-intake`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${supabaseKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "send_approval", dealId: brokerApprovalDealId }),
+        });
+        if (!ap.ok) console.error(`send_approval failed for deal ${brokerApprovalDealId}: ${ap.status} ${await ap.text()}`);
+        else console.log(`broker approval request sent for deal ${brokerApprovalDealId}`);
+      } catch (e) { console.error(`send_approval error for deal ${brokerApprovalDealId}:`, e); }
+    }
 
     // replied_at already set by atomic lock above — no need to update again
 

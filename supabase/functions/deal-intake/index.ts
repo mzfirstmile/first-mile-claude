@@ -11,11 +11,14 @@
 //   { emailId }                                  — classify + intake an inbox email (used by auto-reply)
 //   { text, from, from_name, subject, force }    — manual/chat intake (force=true skips the "is this a deal?" gate)
 //   { dealId }                                   — re-score an existing deal (re-runs match + assessment on stored facts)
-// Response: { is_deal, deal_id, deal, replyHtml }
+//   { action: "send_approval", dealId }          — (re)send the broker-reply draft to Ricky for approval (broker-ack.ts)
+//   { action: "approval_reply", emailId }        — process Ricky's reply in an approval thread (approve → send to broker; else revise)
+// Response: { is_deal, deal_id, deal, replyHtml, broker: {email, status} }
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import * as XLSX from "https://esm.sh/xlsx@0.18.5";
+import { deriveBroker, buildBrokerDraft, sendApprovalRequest, handleApprovalReply, stripFwd } from "./broker-ack.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -77,7 +80,9 @@ const EXTRACT_TOOL = {
       cap_rate: { type: "number", description: "Percent, e.g. 6.5" },
       occupancy_pct: { type: "number" },
       year_built: { type: "integer" },
-      broker: { type: "string" },
+      broker: { type: "string", description: "Brokerage firm / broker company name" },
+      broker_name: { type: "string", description: "Full name of the individual broker who ORIGINALLY sent the deal (from the forwarded message's From: header or signature) — not the First Mile colleague forwarding it" },
+      broker_email: { type: "string", description: "Email address of that original broker, from the forwarded From: header or signature. Never a @firstmilecap.com or @cacq.com address." },
       seller: { type: "string" },
       key_tenants: { type: "string", description: "Comma-separated anchor tenants with SF/LXD if given" },
       debt: { type: "string", description: "Existing/assumable debt terms if mentioned" },
@@ -89,7 +94,7 @@ const EXTRACT_TOOL = {
   },
 };
 
-const EXTRACT_SYSTEM = `You are the deal-intake analyst for First Mile Capital, a New York commercial real estate investment firm (office, retail, mixed-use, notes, development). Colleagues forward prospective deals to the AI assistant mailbox. Extract the facts exactly as stated — never invent numbers. Derive price_psf only from stated price and SF. If cap rate is not stated but NOI and price are, leave cap_rate empty (it will be computed). Use null/omit for anything not in the text.`;
+const EXTRACT_SYSTEM = `You are the deal-intake analyst for First Mile Capital, a New York commercial real estate investment firm (office, retail, mixed-use, notes, development). Colleagues forward prospective deals to the AI assistant mailbox. Extract the facts exactly as stated — never invent numbers. Derive price_psf only from stated price and SF. If cap rate is not stated but NOI and price are, leave cap_rate empty (it will be computed). Use null/omit for anything not in the text. Deals usually arrive as a FORWARDED broker email: the forwarded block starts with a header like "From: Jane Doe <jane@cbre.com>" followed by Sent/To/Subject — take broker_name and broker_email from that original sender (or their signature), never from the First Mile colleague who forwarded it.`;
 
 // ── Step 2: geocode (Nominatim) ──────────────────────────────
 async function geocode(q: string): Promise<{ lat: number; lng: number; display: string } | null> {
@@ -437,11 +442,27 @@ async function intake(sb: any, opts: { text: string; from?: string; fromName?: s
   }
   const html = buildReport({ ...deal, market_distance_mi: deal.market_distance_mi != null ? Number(deal.market_distance_mi) : null }, primary, cats, nearby, a, view);
   await sb.from("deal_tracking").update({ report_html: html }).eq("id", deal.id);
+  // Broker acknowledgement (new deals only; re-score/re-extract never resets an approval in flight).
+  // Identify the broker who originally sent the deal and draft the "thanks for sending" note; auto-reply
+  // then asks Ricky to approve it via { action: "send_approval" }. See broker-ack.ts.
+  let broker: any = { email: deal.broker_email || null, status: deal.broker_reply_status || "none" };
+  if (!opts.existing && (!deal.broker_reply_status || deal.broker_reply_status === "none")) {
+    try {
+      const b = deriveBroker(ex, opts.text, opts.from);
+      const bpatch: any = { broker_email: b.email, broker_name: b.name, broker_subject: stripFwd(opts.subject) || null, broker_reply_status: b.email ? "pending_request" : "skipped" };
+      if (b.company && !deal.broker) bpatch.broker = b.company;
+      if (b.email) bpatch.broker_reply_draft = buildBrokerDraft({ ...deal, ...bpatch });
+      else bpatch.broker_reply_log = [{ at: new Date().toISOString(), event: "skipped_no_broker_email", by: null, note: "no external sender found in forwarded headers" }];
+      await sb.from("deal_tracking").update(bpatch).eq("id", deal.id);
+      Object.assign(deal, bpatch);
+      broker = { email: b.email, name: b.name, status: bpatch.broker_reply_status };
+    } catch (e) { console.warn(`broker derivation failed: ${e}`); }
+  }
   // Excel export of the whole table + acknowledgement intro for the email reply
   let attachment: any = null, xlsxCount = 0;
   try { attachment = await buildDealsXlsx(sb); xlsxCount = attachment.count; } catch (e) { console.warn(`xlsx export failed: ${e}`); }
   const replyHtml = buildReplyIntro(deal, primary, a, view, xlsxCount) + html;
-  return { is_deal: true, deal_id: deal.id, deal: { ...deal, report_html: html }, replyHtml, attachments: attachment ? [{ name: attachment.name, contentType: attachment.contentType, contentBytes: attachment.contentBytes }] : [] };
+  return { is_deal: true, deal_id: deal.id, deal: { ...deal, report_html: html }, replyHtml, broker, attachments: attachment ? [{ name: attachment.name, contentType: attachment.contentType, contentBytes: attachment.contentBytes }] : [] };
 }
 
 serve(async (req: Request) => {
@@ -451,6 +472,20 @@ serve(async (req: Request) => {
     const body = await req.json();
     const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SB_SERVICE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
+    if (body.action === "send_approval" && body.dealId) {
+      const { data: deal, error } = await sb.from("deal_tracking").select("*").eq("id", body.dealId).single();
+      if (error || !deal) return json({ error: "deal not found" }, 404);
+      if (!deal.broker_email) return json({ error: "no broker email on this deal — set broker_email first" }, 400);
+      if (deal.broker_reply_status === "sent" && !body.force) return json({ error: "already sent to broker" }, 409);
+      const updated = await sendApprovalRequest(sb, deal, { revised: !!body.revised });
+      return json({ ok: true, deal_id: deal.id, status: updated.broker_reply_status, token: updated.broker_approval_token });
+    }
+    if (body.action === "approval_reply" && body.emailId) {
+      const { data: email, error } = await sb.from("emails").select("*").eq("id", body.emailId).single();
+      if (error || !email) return json({ error: "email not found" }, 404);
+      const r = await handleApprovalReply(sb, email);
+      return json(r);
+    }
     if (body.dealId) {
       const { data: existing, error } = await sb.from("deal_tracking").select("*").eq("id", body.dealId).single();
       if (error || !existing) return json({ error: "deal not found" }, 404);
