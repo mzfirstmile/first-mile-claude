@@ -1,12 +1,15 @@
 // supabase/functions/send-email/index.ts
-// Sends email via Microsoft Graph API on behalf of aiassistant@firstmilecap.com
+// Sends email via Microsoft Graph API on behalf of aiassistant@firstmilecap.com (or an ALLOWED_SENDERS mailbox via `from`)
 // Deploy: supabase functions deploy send-email
 // Secrets needed: AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, SUPABASE_SERVICE_KEY
 
 import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const GRAPH_SEND_URL = "https://graph.microsoft.com/v1.0/users/aiassistant@firstmilecap.com/sendMail";
+const DEFAULT_SENDER = "aiassistant@firstmilecap.com";
+// Mailboxes callers may send from via `from` — the anon key can reach this function, so never open it to any address
+const ALLOWED_SENDERS = new Set([DEFAULT_SENDER, "apauluhn@firstmilecap.com"]);
+const graphUser = (mailbox: string) => `https://graph.microsoft.com/v1.0/users/${mailbox}`;
 const TOKEN_URL = (tenant: string) =>
   `https://login.microsoftonline.com/${tenant}/oauth2/v2.0/token`;
 
@@ -51,7 +54,15 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { to, cc, bcc, subject, body, bodyType, sentBy, attachments, replyToGraphId } = await req.json();
+    const { to, cc, bcc, subject, body, bodyType, sentBy, attachments, replyToGraphId, from, replyTo } = await req.json();
+
+    const sender = String(from || DEFAULT_SENDER).trim().toLowerCase();
+    if (!ALLOWED_SENDERS.has(sender)) {
+      return new Response(
+        JSON.stringify({ error: `Sender not allowed: ${sender}` }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Validate required fields
     if (!to || !subject || !body) {
@@ -107,7 +118,7 @@ serve(async (req: Request) => {
         }));
       }
 
-      const replyUrl = `https://graph.microsoft.com/v1.0/users/aiassistant@firstmilecap.com/messages/${replyToGraphId}/reply`;
+      const replyUrl = `${graphUser(sender)}/messages/${replyToGraphId}/reply`;
       const graphRes = await fetch(replyUrl, {
         method: "POST",
         headers: {
@@ -156,6 +167,14 @@ serve(async (req: Request) => {
       message.bccRecipients = bccRecipients;
     }
 
+    if (replyTo) {
+      message.replyTo = (Array.isArray(replyTo) ? replyTo : [replyTo]).map((r: any) =>
+        typeof r === "string"
+          ? { emailAddress: { address: r } }
+          : { emailAddress: { address: r.email, name: r.name } }
+      );
+    }
+
     // Add attachments if provided
     // Each attachment: { name: "file.pdf", contentType: "application/pdf", contentBytes: "<base64>" }
     if (attachments && Array.isArray(attachments) && attachments.length > 0) {
@@ -167,7 +186,7 @@ serve(async (req: Request) => {
       }));
     }
 
-    const graphRes = await fetch(GRAPH_SEND_URL, {
+    const graphRes = await fetch(`${graphUser(sender)}/sendMail`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
