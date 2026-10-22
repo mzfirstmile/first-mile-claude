@@ -20,6 +20,15 @@ const INTERNAL_DOMAINS = ["firstmilecap.com", "cacq.com"];
 export const APPROVAL_TAG = (token: string) => `[Approve BRK-${token}]`;
 const APPROVAL_RE = /\[Approve BRK-([a-z0-9]{8})\]/i;
 
+// Broker-facing mail goes out from the EA's mailbox, not the assistant's; Reply-To = EA + aiassistant@ so the
+// broker's answer reaches both her inbox and the platform (synced + forwarded to Morris, no auto-reply) (Morris 2026-10-22).
+export const BROKER_SENDER = { address: "apauluhn@firstmilecap.com", name: "Adara Pauluhn" };
+const BROKER_SIGNATURE_HTML = `
+<p>Thanks,<br>Adara Pauluhn</p>
+<p>362 Fifth Avenue, 9th Floor<br>New York, NY 10001<br>212.292.3521<br><a href="https://firstmilecap.com">FirstMileCap.com</a></p>
+<img src="https://admin.firstmilecap.com/assets/First_Mile_Capital_Logo_RGB.png" alt="First Mile Capital" style="width:200px;margin-top:8px;">
+`;
+
 const SIGNATURE_HTML = `
 <p>Thank you,<br>First Mile AI Assistant</p>
 <p>362 Fifth Avenue, 9th Floor<br>New York, NY 10001<br>(201) 549-9232 (text enabled)<br><a href="https://firstmilecap.com">FirstMileCap.com</a></p>
@@ -48,9 +57,10 @@ async function graphToken(): Promise<string> {
 }
 
 type Addr = { address: string; name?: string };
-async function graphSend(opts: { to: Addr[]; cc?: Addr[]; subject: string; html: string; replyToGraphId?: string }): Promise<void> {
+async function graphSend(opts: { to: Addr[]; cc?: Addr[]; subject: string; html: string; replyToGraphId?: string; from?: string; signature?: string; replyTo?: Addr[] }): Promise<void> {
   const token = await graphToken();
-  const body = `${opts.html}\n<br>\n${SIGNATURE_HTML}`;
+  const sender = opts.from || MAILBOX;
+  const body = `${opts.html}\n<br>\n${opts.signature ?? SIGNATURE_HTML}`;
   const rcpt = (a: Addr[]) => a.map((x) => ({ emailAddress: { address: x.address, name: x.name || undefined } }));
   // Reply in-thread when we have the inbound Graph message id (keeps Ricky's approval thread together)
   if (opts.replyToGraphId) {
@@ -64,7 +74,8 @@ async function graphSend(opts: { to: Addr[]; cc?: Addr[]; subject: string; html:
   }
   const message: any = { subject: opts.subject, body: { contentType: "HTML", content: body }, toRecipients: rcpt(opts.to) };
   if (opts.cc?.length) message.ccRecipients = rcpt(opts.cc);
-  const r = await fetch(`${GRAPH}/users/${MAILBOX}/sendMail`, {
+  if (opts.replyTo?.length) message.replyTo = rcpt(opts.replyTo);
+  const r = await fetch(`${GRAPH}/users/${sender}/sendMail`, {
     method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ message, saveToSentItems: true }),
   });
   if (!r.ok) throw new Error(`Graph sendMail ${r.status}: ${await r.text()}`);
@@ -152,7 +163,7 @@ function approvalHtml(deal: any, forwarderName: string | null, revised: boolean)
 <div style="border:1px solid #e2e8f0;border-left:4px solid #0ea5e9;border-radius:8px;padding:12px 16px;margin:12px 0;background:#f8fafc">
   <div style="font-size:12px;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Proposed email · To: ${esc(deal.broker_email)} · Subject: Re: ${esc(deal.broker_subject || deal.deal_name || "")}</div>
   ${deal.broker_reply_draft}
-  <p style="color:#94a3b8;font-size:12px;margin-top:8px">(standard First Mile AI Assistant signature follows)</p>
+  <p style="color:#94a3b8;font-size:12px;margin-top:8px">(sent from ${esc(BROKER_SENDER.name)} &lt;${esc(BROKER_SENDER.address)}&gt; with her signature)</p>
 </div>`;
 }
 
@@ -236,9 +247,9 @@ async function sendToBroker(sb: any, deal: any, approvedBy: string): Promise<any
   const cc: Addr[] = [APPROVER_TO];
   if (deal.submitted_by && !isApprover(deal.submitted_by) && lower(deal.submitted_by) !== MAILBOX) cc.push({ address: deal.submitted_by, name: deal.submitted_by_name || undefined });
   const subject = deal.broker_subject ? `Re: ${deal.broker_subject}` : `Re: ${deal.deal_name || "your opportunity"}`;
-  await graphSend({ to, cc, subject, html: deal.broker_reply_draft });
-  await logSent(sb, to, cc, subject, deal.broker_reply_draft, "deal-intake-broker-reply");
-  const log = await appendLog(sb, deal, "sent_to_broker", approvedBy, `to ${deal.broker_email}`);
+  await graphSend({ to, cc, subject, html: deal.broker_reply_draft, from: BROKER_SENDER.address, signature: BROKER_SIGNATURE_HTML, replyTo: [BROKER_SENDER, { address: MAILBOX, name: "First Mile AI Assistant" }] });
+  await logSent(sb, to, cc, subject, deal.broker_reply_draft, `deal-intake-broker-reply (from ${BROKER_SENDER.address})`);
+  const log = await appendLog(sb, deal, "sent_to_broker", approvedBy, `to ${deal.broker_email} from ${BROKER_SENDER.address}`);
   const patch = { broker_reply_status: "sent", broker_approved_by: approvedBy, broker_reply_sent_at: new Date().toISOString(), broker_reply_log: log, updated_at: new Date().toISOString() };
   await sb.from("deal_tracking").update(patch).eq("id", deal.id);
   return { ...deal, ...patch };
