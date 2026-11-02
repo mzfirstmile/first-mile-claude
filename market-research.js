@@ -2820,7 +2820,9 @@
     _scores.filter(s => s.market_id === m.id).forEach(s => { scoreByCriterion[s.criterion_id] = s; });
 
     // Group criteria by category, render section headers between groups
-    const active = _criteria.filter(c => c.is_active !== false);
+    // Only criteria that count toward this view's composite are shown
+    const activeCol = view === 'office' ? 'is_active_office' : 'is_active_residential';
+    const active = _criteria.filter(c => c.is_active !== false && c[activeCol] !== false);
     const byCat = {};
     active.forEach(c => {
       const cat = c.category || 'uncategorized';
@@ -2840,10 +2842,24 @@
           </tr>
         </thead>
         <tbody>`;
+    let hiddenEmpty = 0;
     orderedCats.forEach(cat => {
       const rows = byCat[cat].slice().sort((a,b) => (a.sort_order||0) - (b.sort_order||0) || a.name.localeCompare(b.name));
       const catObj = _categories.find(c => c.slug === cat) || {};
-      const catWeight = catObj.weight != null ? catObj.weight : 1;
+      const wRaw = view === 'office' ? catObj.weight_office : catObj.weight;
+      const catWeight = wRaw != null ? wRaw : 1;
+      // A zero-weight category doesn't move this view's score — leave it out
+      if (Number(catWeight) === 0) return;
+      // Hide criteria with no value and no score for this market (e.g. never-sourced criteria)
+      const shown = rows.filter(c => {
+        const s = scoreByCriterion[c.id] || {};
+        const sv = view === 'office' ? s.value_numeric_office : s.value_numeric;
+        const has = !!s.value_text || (sv != null && sv !== '') ||
+          !!(_PHASE2_VALUE_FROM_MARKET[c.name] && _PHASE2_VALUE_FROM_MARKET[c.name](m));
+        if (!has) hiddenEmpty++;
+        return has;
+      });
+      if (shown.length === 0) return;
       const phaseTag = _PHASE2_CATEGORIES.has(cat)
         ? '<span style="font-size:10px;font-weight:600;color:#166534;background:#f0fdf4;border:1px solid #bbf7d0;padding:1px 7px;border-radius:8px;">⚙️ Phase 2 scored</span>'
         : '<span style="font-size:10px;font-weight:600;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;padding:1px 7px;border-radius:8px;">🔬 Phase 3 (deep research)</span>';
@@ -2855,7 +2871,7 @@
             ${phaseTag}
           </span>
         </td></tr>`;
-      rows.forEach(c => {
+      shown.forEach(c => {
         const s = scoreByCriterion[c.id] || {};
         // Display value priority:
         //   1. value_text (Phase 3 stores actual data here, e.g. "Aaa/AAA Moody's")
@@ -2923,6 +2939,9 @@
       });
     });
     bodyHtml += `</tbody></table>`;
+    if (hiddenEmpty > 0) {
+      bodyHtml += `<div style="padding:10px 16px;font-size:11px;color:#94a3b8;">${hiddenEmpty} criteria not yet scored for this market are hidden.</div>`;
+    }
     bodyEl.innerHTML = bodyHtml;
   }
 
@@ -3346,7 +3365,9 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     }
 
     // Scorecard grouped by category
-    const active = _criteria.filter(c => c.is_active !== false);
+    // Only criteria that count toward this view's composite are shown
+    const activeCol = view === 'office' ? 'is_active_office' : 'is_active_residential';
+    const active = _criteria.filter(c => c.is_active !== false && c[activeCol] !== false);
     const byCat = {};
     active.forEach(c => {
       const cat = c.category || 'uncategorized';
@@ -3366,7 +3387,10 @@ ${JSON.stringify(marketSummaries, null, 2)}`;
     orderedCats.forEach(cat => {
       const rows = byCat[cat].slice().sort((a,b) => (a.sort_order||0) - (b.sort_order||0) || a.name.localeCompare(b.name));
       const catObj = _categories.find(c => c.slug === cat) || {};
-      const catWeight = catObj.weight != null ? catObj.weight : 1;
+      const wRaw = view === 'office' ? catObj.weight_office : catObj.weight;
+      const catWeight = wRaw != null ? wRaw : 1;
+      // A zero-weight category doesn't move this view's score — leave it out
+      if (Number(catWeight) === 0) return;
       const isPhase2 = _PHASE2_CATEGORIES.has(cat);
       const phaseLabel = isPhase2 ? 'Phase 2' : 'Phase 3';
       const phaseBg = isPhase2 ? '#f0fdf4' : '#fff7ed';
