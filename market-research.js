@@ -4133,7 +4133,7 @@ Research this town now and produce the scoring JSON.`;
 
     const copyButton = ''; // Removed: bulk overwrite was too easy to fire accidentally
 
-    _openModal(`Manage Categories &amp; Criteria — ${tabIcon} ${tabLabel}`, `
+    _openModal(`Manage Categories & Criteria — ${tabIcon} ${tabLabel}`, `
       <div class="mr-tab-row">
         <button class="mr-tab ${tab === 'office' ? 'active' : ''}" onclick="mrSetCriteriaModalView('office')">🏢 Office</button>
         <button class="mr-tab ${tab === 'residential' ? 'active' : ''}" onclick="mrSetCriteriaModalView('residential')">🏠 Residential</button>
