@@ -47,10 +47,11 @@ async function loadInputs(key: string) {
   const { data: loans, error } = await q.limit(50);
   if (error) throw new Error("market_loans: " + error.message);
   if (!loans?.length) throw new Error("no live loans for key " + key);
+  const { count: shortlistN } = await sb.from("market_research_markets").select("id", { count: "exact", head: true }).eq("phase", "shortlisted");
   const { data: mkt } = await sb.from("market_research_markets")
     .select("name,state,population,median_household_income,median_home_value,score,tier,office_score,office_tier,rank_residential,rank_office,thesis,summary")
     .eq("id", marketId).single();
-  return { loans, mkt };
+  return { loans, mkt, shortlistN };
 }
 
 function loanFacts(loans: any[]) {
@@ -92,19 +93,19 @@ Return ONLY an HTML fragment (no <html>/<body>, no markdown, no code fences), us
 Keep it under ~600 words.`;
 
 async function writeMemo(key: string) {
-  const { loans, mkt } = await loadInputs(key);
+  const { loans, mkt, shortlistN } = await loadInputs(key);
   const facts = loanFacts(loans);
   const p0 = facts[0] as any;
   const user = `Today: ${new Date().toISOString().slice(0, 10)}
 
 FIRST MILE MARKET SCORING — ${mkt?.name}
 ${JSON.stringify({
-    residential_score_0_100: mkt?.score, residential_tier: mkt?.tier, residential_rank_of_1971: mkt?.rank_residential,
-    office_score_0_100: mkt?.office_score, office_tier: mkt?.office_tier, office_rank_of_1971: mkt?.rank_office,
+    residential_score_0_100: mkt?.score, residential_tier: mkt?.tier, residential_rank: mkt?.rank_residential,
+    office_score_0_100: mkt?.office_score, office_tier: mkt?.office_tier, office_rank: mkt?.rank_office,
     population: mkt?.population, median_household_income: mkt?.median_household_income, median_home_value: mkt?.median_home_value,
     market_thesis: mkt?.thesis, market_summary: mkt?.summary,
   })}
-(Tier bands: T1 ≥ 85, T2 70–84.9, T3 40–69.9, T4 < 40.)
+(Ranks are out of ${shortlistN ?? "all"} shortlisted US towns. Tier bands: T1 ≥ 85, T2 70–84.9, T3 40–69.9, T4 < 40.)
 
 CRED iQ LOAN DATA — ${p0.property_name || p0.loan_name}${p0.address ? ", " + p0.address : ""} (${facts.length} note${facts.length > 1 ? "s" : ""})
 ${JSON.stringify(facts)}

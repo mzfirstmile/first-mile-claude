@@ -2684,7 +2684,7 @@
     // 1) Collateral location
     if (ms != null) {
       const strength = mt === 1 ? 'one of our top-ranked' : mt === 2 ? 'a strong' : mt === 3 ? 'a secondary' : 'a weak';
-      out.push(`<b>${_esc(town)}</b> is ${strength} ${view} market${rk ? ` (#${rk.toLocaleString()} of 1,971 shortlisted, ${Number(ms).toFixed(1)} T${mt})` : ''}${mt <= 2 ? ' — collateral we are comfortable lending against' : mt >= 3 ? ' — lend only with a conservative basis' : ''}.`);
+      out.push(`<b>${_esc(town)}</b> is ${strength} ${view} market${rk ? ` (#${rk.toLocaleString()}${_nameIndex.length ? ` of ${_nameIndex.length.toLocaleString()}` : ''} shortlisted,${Number(ms).toFixed(1)} T${mt})` : ''}${mt <= 2 ? ' — collateral we are comfortable lending against' : mt >= 3 ? ' — lend only with a conservative basis' : ''}.`);
     }
 
     // 2) The financing need
