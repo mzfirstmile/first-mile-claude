@@ -398,7 +398,7 @@
       #mrRoot .mr-loan-flag.grey { background:#f1f5f9; color:#64748b; }
       #mrRoot .mr-loan-flag.green { background:#dcfce7; color:#166534; }
       #mrRoot .mr-opp-memo td { padding-top:0 !important; white-space:normal !important; }
-      #mrRoot .mr-memo { font-size:12.5px; line-height:1.55; color:#1e293b; background:#fff; border:1px solid #e2e8f0; border-left:3px solid #8b5cf6; border-radius:6px; padding:10px 16px; margin-bottom:8px; }
+      #mrRoot .mr-memo { position:sticky; left:0; max-width:calc(100vw - 340px); box-sizing:border-box; font-size:12.5px; line-height:1.55; color:#1e293b; background:#fff; border:1px solid #e2e8f0; border-left:3px solid #8b5cf6; border-radius:6px; padding:10px 16px; margin-bottom:8px; }
       #mrRoot .mr-memo h4 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#6d28d9; margin:10px 0 4px; }
       #mrRoot .mr-memo ul { margin:4px 0 4px 18px; padding:0; }
       #mrRoot .mr-memo .lm-rec { font-size:13.5px; margin:2px 0 6px; }
