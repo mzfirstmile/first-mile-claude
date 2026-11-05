@@ -393,6 +393,7 @@
       #mrRoot .mr-loan-flag.amber { background:#fef3c7; color:#92400e; }
       #mrRoot .mr-loan-flag.blue { background:#e0f2fe; color:#075985; }
       #mrRoot .mr-loan-flag.grey { background:#f1f5f9; color:#64748b; }
+      #mrRoot .mr-loan-flag.green { background:#dcfce7; color:#166534; }
       #mrRoot .mr-loan-tbl { overflow-x:auto; }
       #mrRoot .mr-loan-tbl td, #mrRoot .mr-loan-tbl th { padding:8px 10px; font-size:12px; white-space:nowrap; }
       #mrRoot .mr-loan-tbl td.num, #mrRoot .mr-loan-tbl th.num { text-align:right; }
@@ -1138,14 +1139,14 @@
       <!-- List View -->
       <div class="mr-tabs" id="mrTabs">
         <button data-tab="markets" class="active" onclick="mrShowTab('markets')">📍 Markets</button>
-        <button data-tab="opps" onclick="mrShowTab('opps')">🎯 Distressed Opportunities<span class="mr-tab-count" id="mrOppTabCount" style="display:none;"></span></button>
+        <button data-tab="opps" onclick="mrShowTab('opps')">🏦 Loan Opportunities<span class="mr-tab-count" id="mrOppTabCount" style="display:none;"></span></button>
       </div>
 
       <div class="mr-opp" id="mrOppView">
         <div class="mr-header">
           <div>
-            <h2>Distressed Opportunities</h2>
-            <p class="mr-subtitle">Assets in our top-ranked markets whose owners are under debt pressure — potential acquisitions of the property (directly, via note purchase, or at a workout) · loan data: CRED iQ <span id="mrOppAsOf" style="color:#94a3b8;"></span></p>
+            <h2>Loan Opportunities</h2>
+            <p class="mr-subtitle">Properties in our top-ranked markets with a reason to need new debt — upcoming maturities, extensions, refinance gaps, cash-out — owners to reach out to as a lender · loan data: CRED iQ <span id="mrOppAsOf" style="color:#94a3b8;"></span></p>
           </div>
           <div class="mr-actions" style="align-items:center;">
             <button class="mr-btn" onclick="mrOppExport()" id="mrOppExportBtn">⬇ Export Excel</button>
@@ -1153,11 +1154,12 @@
         </div>
         <div class="mr-loan-chips" id="mrOppKpis" style="padding:0;border:0;"></div>
         <div class="mr-opp-filters">
-          <span class="mr-opp-chip active" data-sig="flagged" onclick="mrOppSig('flagged')">All flagged</span>
-          <span class="mr-opp-chip" data-sig="distress" onclick="mrOppSig('distress')">🔴 Distress (SS / delinquent / past maturity)</span>
-          <span class="mr-opp-chip" data-sig="watch" onclick="mrOppSig('watch')">⚠ Watchlist</span>
+          <span class="mr-opp-chip active" data-sig="flagged" onclick="mrOppSig('flagged')">🎯 Lending targets</span>
           <span class="mr-opp-chip" data-sig="mat24" onclick="mrOppSig('mat24')">⏳ Maturing ≤ 24 mo</span>
-          <span class="mr-opp-chip" data-sig="refi" onclick="mrOppSig('refi')">📉 Refi gap</span>
+          <span class="mr-opp-chip" data-sig="matured" onclick="mrOppSig('matured')">🔁 Matured / extended</span>
+          <span class="mr-opp-chip" data-sig="refi" onclick="mrOppSig('refi')">🧩 Gap financing</span>
+          <span class="mr-opp-chip" data-sig="credit" onclick="mrOppSig('credit')">💪 Strong credit</span>
+          <span class="mr-opp-chip" data-sig="distress" onclick="mrOppSig('distress')">🛟 Rescue (watchlist / SS)</span>
           <span class="mr-opp-chip" data-sig="all" onclick="mrOppSig('all')">All live loans</span>
           <span style="flex:1;"></span>
           <input id="mrOppQ" placeholder="Search property / town / deal…" oninput="mrOppRender()" style="min-width:200px;">
@@ -1167,11 +1169,11 @@
             <option value="0">Any size</option><option value="5000000">≥ $5M</option><option value="10000000">≥ $10M</option><option value="25000000">≥ $25M</option><option value="50000000">≥ $50M</option><option value="100000000">≥ $100M</option>
           </select>
           <select id="mrOppSort" onchange="mrOppRender()">
-            <option value="signal">Sort: distress signal strength</option><option value="maturity">Sort: maturity (soonest)</option><option value="debt">Sort: debt (largest)</option><option value="noi">Sort: NOI (largest)</option><option value="noichg">Sort: NOI decline vs UW</option><option value="market">Sort: market score</option>
+            <option value="signal">Sort: lending score</option><option value="maturity">Sort: maturity (soonest)</option><option value="debt">Sort: debt (largest)</option><option value="noi">Sort: NOI (largest)</option><option value="noichg">Sort: NOI decline vs UW</option><option value="market">Sort: market score</option>
           </select>
         </div>
         <div class="mr-scorecard"><div class="mr-loan-tbl mr-opp-tbl" id="mrOppBody"><div style="padding:16px 18px;font-size:13px;color:#94a3b8;">Loading…</div></div></div>
-        <p style="font-size:11px;color:#94a3b8;margin-top:8px;">Debt sums every note of a loan (CMBS loans are often split pari-passu across several deals). Theses are generated from the loan facts + our market scoring; refinance math assumes today's market rates of ~7.0% office / 6.0% multifamily / 7.5% hotel / 6.75% other. "Log deal" adds the asset to Deal Tracking with its thesis. Trial coverage: WA, PA, NC.</p>
+        <p style="font-size:11px;color:#94a3b8;margin-top:8px;">Debt sums every note of a loan (CMBS loans are often split pari-passu across several deals). Lending score = market quality + timing of the refinance need + credit quality of the asset; theses are generated from the loan facts + our market scoring. Sizing assumes a new senior loan at 1.25x DSCR and today's rates of ~7.0% office / 6.0% multifamily / 7.5% hotel / 6.75% other. Defeased and paid-off loans are excluded. "Log deal" adds the lead to Deal Tracking with its thesis.</p>
       </div>
 
       <div class="mr-list" id="mrListView">
@@ -2363,7 +2365,7 @@
     if (!el) return;
     document.querySelectorAll('#mrLoanToggle button').forEach(b => b.classList.toggle('active', b.dataset.f === _loanFilter));
     if (!_loans.length) {
-      el.innerHTML = `<div style="padding:16px 18px;font-size:13px;color:#94a3b8;">No CRED iQ loan data loaded for this market yet. (Trial coverage: WA, PA, NC — full coverage once the API is connected.)</div>`;
+      el.innerHTML = `<div style="padding:16px 18px;font-size:13px;color:#94a3b8;">No CRED iQ loan data loaded for this market yet.</div>`;
       return;
     }
     const live = _loans.filter(_loanIsLive);
@@ -2449,7 +2451,9 @@
     } catch (_) {}
     // Aggregate notes → one row per property
     const by = new Map();
-    rows.filter(_loanIsLive).forEach(l => {
+    // Defeased loans: collateral already released / debt replaced by treasuries — no refinance need to lend into.
+    const _defeased = (l) => /defeas/i.test(String((l.detail || {}).defeasance || '')) && !/^none$|^no$|not defeased/i.test(String((l.detail || {}).defeasance || '').trim());
+    rows.filter(l => _loanIsLive(l) && !_defeased(l)).forEach(l => {
       const key = (l.source_location_id || '') + '|' + (l.source_location_id ? '' : (l.property_name || l.loan_name || '').toLowerCase()) + '|' + l.market_id;
       let a = by.get(key);
       if (!a) {
@@ -2482,6 +2486,10 @@
       ['property_type', 'property_subtype', 'address', 'building_size', 'size_unit', 'ss_reason', 'watchlist_reason', 'workout_strategy'].forEach(k => { if (!a[k] && l[k]) a[k] = l[k]; });
       if (l.deal_name && !a.deals.includes(l.deal_name)) a.deals.push(l.deal_name);
       if (l.originator && !a.originators.includes(l.originator)) a.originators.push(l.originator);
+      const sp = l.sponsor || l.borrower;
+      if (sp && !(a.sponsors || (a.sponsors = [])).includes(sp)) a.sponsors.push(sp);
+      if (l.lockout_end_date && (!a.lockout_end_date || l.lockout_end_date > a.lockout_end_date)) a.lockout_end_date = l.lockout_end_date;
+      if (l.deal_type && !(a.dealTypes || (a.dealTypes = [])).includes(l.deal_type)) a.dealTypes.push(l.deal_type);
       if (l.data_as_of && (!a.data_as_of || l.data_as_of > a.data_as_of)) a.data_as_of = l.data_as_of;
     });
     _opps = [...by.values()].map(a => {
@@ -2495,13 +2503,17 @@
       a.noi = (fyFresh ? a.noiFy.noi : null) || a.noiUw || (a.noiFy ? a.noiFy.noi : null) || null;
       a.noiBasis = fyFresh ? `FY${String(a.noiFy.year).slice(2)}` : (a.noiUw != null ? 'UW' : (a.noiFy ? `FY${String(a.noiFy.year).slice(2)}` : null));
       a.noiChg = (a.noiFy && a.noiUw && a.noiFy.noi && Math.abs(a.noiFy.year - new Date().getFullYear()) <= 3) ? (a.noiFy.noi / a.noiUw - 1) : null;
-      a.flags = _loanFlags(a);
-      a.points = a.flags.reduce((s, f) => s + f.pts, 0);
       const mo = _monthsTo(a.maturity_date), ps = (a.payment_status || '').toLowerCase();
-      a.isDistress = a.special_serviced || (ps && !['current', 'grace'].includes(ps) && !ps.startsWith('performing matured')) || (mo != null && mo < 0);
+      a.isDistress = a.special_serviced || a.watchlist || (ps && !['current', 'grace'].includes(ps) && !ps.startsWith('performing matured'));
       a.isWatch = a.watchlist;
       a.isMat24 = mo != null && mo >= 0 && mo <= 24;
-      a.isRefi = a.flags.some(f => f.label.startsWith('Refi gap'));
+      a.isMatured = (mo != null && mo < 0) || ps.startsWith('performing matured');
+      a.sizing = _lendSizing(a);
+      a.flags = _lendFlags(a);
+      a.points = a.flags.reduce((s, f) => s + f.pts, 0) + _lendMarketPts(a);
+      a.isRefi = a.flags.some(f => f.key === 'gap');
+      a.isCredit = a.flags.some(f => f.key === 'credit');
+      a.isTarget = a.flags.some(f => f.trigger) && _lendMarketPts(a) > 0;
       a.mktScore = (_viewType === 'office' ? a.market.office_score : a.market.score);
       return a;
     });
@@ -2511,7 +2523,7 @@
     const tSel = document.getElementById('mrOppType'), sSel = document.getElementById('mrOppState');
     if (tSel) tSel.innerHTML = '<option value="">All property types</option>' + types.map(t => `<option>${_esc(t)}</option>`).join('');
     if (sSel) sSel.innerHTML = '<option value="">All states</option>' + states.map(t => `<option>${_esc(t)}</option>`).join('');
-    const n = _opps.filter(a => a.isDistress).length;
+    const n = _opps.filter(a => a.isTarget).length;
     const badge = document.getElementById('mrOppTabCount');
     if (badge) { badge.style.display = n ? '' : 'none'; badge.textContent = n; }
   }
@@ -2523,15 +2535,16 @@
     const min = Number(document.getElementById('mrOppMin')?.value || 0);
     const sort = document.getElementById('mrOppSort')?.value || 'signal';
     let r = _opps.filter(a => {
-      if (_oppSig === 'flagged' && !a.flags.length) return false;
+      if (_oppSig === 'flagged' && !a.isTarget) return false;
       if (_oppSig === 'distress' && !a.isDistress) return false;
-      if (_oppSig === 'watch' && !a.isWatch) return false;
       if (_oppSig === 'mat24' && !a.isMat24) return false;
+      if (_oppSig === 'matured' && !a.isMatured) return false;
       if (_oppSig === 'refi' && !a.isRefi) return false;
+      if (_oppSig === 'credit' && !a.isCredit) return false;
       if (t && a.property_type !== t) return false;
       if (st && a.market.state !== st) return false;
       if ((a.effBal != null ? a.effBal : a.current_balance) < min) return false;
-      if (q && ![a.property_name, a.address, a.market.name, a.deals.join(' '), a.originators.join(' ')].join(' ').toLowerCase().includes(q)) return false;
+      if (q && ![a.property_name, a.address, a.market.name, a.deals.join(' '), a.originators.join(' '), (a.sponsors || []).join(' ')].join(' ').toLowerCase().includes(q)) return false;
       return true;
     });
     const mat = a => a.maturity_date || '9999';
@@ -2588,87 +2601,127 @@
     return false;
   }
   const _MKT_RATE = { office: 7.0, multifamily: 6.0, hotel: 7.5, lodging: 7.5, retail: 6.75, industrial: 6.5, default: 6.75 };
+  // ── Lending lens (First Mile lending business) ─────────────────────────
+  // A row is a lending lead when the property sits in a market we like AND the owner has a reason to
+  // need new debt soon (maturity, extension, refinance gap, cash-out room, rescue). Score = market + timing + credit.
+  function _lendView(a) { return /office|medical|mixed/i.test(a.property_type || '') ? 'office' : (a.property_type ? 'residential' : _viewType); }
+  function _lendMarketPts(a) {
+    const m = a.market || {}, t = _lendView(a) === 'office' ? m.office_tier : m.tier;
+    return t === 1 ? 4 : t === 2 ? 2 : t === 3 ? 0 : t === 4 ? -3 : 0;
+  }
+  function _mktRate(a) {
+    const type = (a.property_type || '').toLowerCase();
+    return _MKT_RATE[type] || _MKT_RATE[Object.keys(_MKT_RATE).find(k => type.includes(k))] || _MKT_RATE.default;
+  }
+  // What a new senior loan would look like: sized at 1.25x interest coverage on NOI at today's rate,
+  // capped at 65% of the last appraisal when we have one. cover = new senior ÷ existing balance.
+  function _lendSizing(a) {
+    if (a.isPortfolio && a.alloc_balance == null) return null;
+    const bal = a.effBal != null ? a.effBal : a.current_balance;
+    const noi = a.isPortfolio ? null : a.noi;
+    if (!(bal > 0) || !(noi > 0)) return null;
+    const mr = _mktRate(a);
+    let senior = noi / 1.25 / (mr / 100), capBy = 'DSCR';
+    if (a.appraised_value && !a.isPortfolio && a.appraised_value * 0.65 < senior) { senior = a.appraised_value * 0.65; capBy = 'LTV'; }
+    if (noi / (bal * (a.mortgage_rate || mr) / 100) < 0.3) return null; // NOI implausible vs debt (partial-period / bad data)
+    return { bal, noi, mr, senior, capBy, cover: senior / bal, gap: bal - senior, dscrNew: noi / (bal * mr / 100) };
+  }
+  function _lendFlags(a) {
+    const f = [];
+    const mo = _monthsTo(a.maturity_date), ps = (a.payment_status || '').toLowerCase(), sz = a.sizing;
+    // Timing — the reason to call now
+    if (a.special_serviced) f.push({ key: 'rescue', label: 'Special servicing', cls: 'red', pts: 1, trigger: true });
+    else if (a.isMatured) f.push({ key: 'matured', label: mo != null && mo < 0 ? `Matured ${-mo}mo ago` : 'Matured – performing', cls: 'red', pts: 5, trigger: true });
+    else if (mo != null && mo >= 0 && mo <= 6) f.push({ key: 'mat', label: `Matures ${mo}mo`, cls: 'red', pts: 4, trigger: true });
+    else if (mo != null && mo > 6 && mo <= 24) f.push({ key: 'mat', label: `Matures ${mo}mo`, cls: 'amber', pts: 5, trigger: true });
+    else if (mo != null && mo > 24 && mo <= 36) f.push({ key: 'mat', label: `Matures ${mo}mo`, cls: 'grey', pts: 2, trigger: true });
+    if (!a.special_serviced && a.watchlist) f.push({ key: 'rescue', label: 'Watchlist', cls: 'amber', pts: 1, trigger: true });
+    if (!a.special_serviced && ps && !['current', 'grace'].includes(ps) && !ps.startsWith('performing matured')) f.push({ key: 'rescue', label: a.payment_status, cls: 'red', pts: 0, trigger: true });
+    if (a.lockout_end_date && _monthsTo(a.lockout_end_date) < 0 && mo != null && mo > 0 && mo <= 48) f.push({ key: 'prepay', label: 'Prepay open', cls: 'blue', pts: 1, trigger: mo > 36 });
+    // Sizing — what we'd be lending into
+    if (sz && (mo == null || mo <= 36 || a.isMatured)) {
+      if (sz.cover < 0.95) f.push({ key: 'gap', label: `Gap ~${_fmtLoanMoney(sz.gap)}`, cls: 'amber', pts: 2, trigger: true });
+      else if (sz.cover >= 1.2) f.push({ key: 'cashout', label: 'Cash-out room', cls: 'green', pts: 1, trigger: true });
+    }
+    if (a.mortgage_rate != null && mo != null && mo >= 0 && mo <= 36 && _mktRate(a) - a.mortgage_rate >= 1.0 && !f.some(x => x.key === 'gap')) f.push({ key: 'reset', label: `Rate reset ${a.mortgage_rate.toFixed(2)}%→~${_mktRate(a).toFixed(1)}%`, cls: 'grey', pts: 0 });
+    // Credit quality — is it a loan we'd want to make
+    if (sz && sz.cover >= 0.95) f.push({ key: 'credit', label: 'Full take-out at 1.25x', cls: 'green', pts: 2 });
+    if (a.noiChg != null && !a.isPortfolio && a.noiChg >= 0.10) f.push({ key: 'credit', label: `NOI +${Math.round(a.noiChg * 100)}% vs UW`, cls: 'green', pts: 2 });
+    if (a.ltv != null && a.ltv > 0 && a.ltv <= 60) f.push({ key: 'credit', label: `LTV ${a.ltv.toFixed(0)}%`, cls: 'green', pts: 1 });
+    if (a.noiChg != null && !a.isPortfolio && a.noiChg <= -0.15) f.push({ key: 'risk', label: `NOI ${Math.round(a.noiChg * 100)}% vs UW`, cls: 'amber', pts: -1 });
+    if (!a.isPortfolio && a.latest_dscr != null && a.latest_dscr > 0 && a.latest_dscr < 1.1) f.push({ key: 'risk', label: `DSCR ${a.latest_dscr.toFixed(2)}x`, cls: 'amber', pts: -1 });
+    if (a.ltv != null && a.ltv >= 80) f.push({ key: 'risk', label: `LTV ${a.ltv.toFixed(0)}%`, cls: 'amber', pts: -1 });
+    if (a.isPortfolio) f.push({ key: 'info', label: 'Portfolio loan', cls: 'grey', pts: -1 });
+    return f;
+  }
+  // Rule-based lending thesis for a row. Pure function of the aggregated loan facts + our market scoring.
   function _oppThesis(a) {
     const out = [];
     const m = a.market || {};
     const town = (m.name || '').replace(/,\s*[A-Z]{2}$/, '');
-    const view = /office|medical|mixed/i.test(a.property_type || '') ? 'office' : (a.property_type ? 'residential' : _viewType);
+    const view = _lendView(a);
     const ms = view === 'office' ? m.office_score : m.score, mt = view === 'office' ? m.office_tier : m.tier;
     const rk = view === 'office' ? m.rank_office : m.rank_residential;
-    const type = (a.property_type || 'property').toLowerCase();
     const mo = _monthsTo(a.maturity_date);
-    const ps = (a.payment_status || '').toLowerCase();
     const bal = a.effBal != null ? a.effBal : a.current_balance;
+    const sz = a.sizing;
     const sizeUnit = (a.size_unit || '').toLowerCase();
     const perUnit = (a.building_size && !(a.isPortfolio && a.alloc_balance == null)) ? bal / Number(a.building_size) : null;
     const basis = perUnit ? (sizeUnit.includes('unit') ? `$${Math.round(perUnit / 1000)}K/unit` : sizeUnit.includes('room') ? `$${Math.round(perUnit / 1000)}K/key` : `$${Math.round(perUnit)}/SF`) : null;
 
-    // 1) Why the location
+    // 1) Collateral location
     if (ms != null) {
-      const strength = mt === 1 ? 'one of our top-ranked' : mt === 2 ? 'a strong' : 'a secondary';
-      out.push(`<b>${_esc(town)}</b> is ${strength} ${view} market${rk ? ` (#${rk.toLocaleString()} of 1,971 shortlisted, ${Number(ms).toFixed(1)} T${mt})` : ''}${mt <= 2 ? ' — a location we would want to own long-term' : ''}.`);
+      const strength = mt === 1 ? 'one of our top-ranked' : mt === 2 ? 'a strong' : mt === 3 ? 'a secondary' : 'a weak';
+      out.push(`<b>${_esc(town)}</b> is ${strength} ${view} market${rk ? ` (#${rk.toLocaleString()} of 1,971 shortlisted, ${Number(ms).toFixed(1)} T${mt})` : ''}${mt <= 2 ? ' — collateral we are comfortable lending against' : mt >= 3 ? ' — lend only with a conservative basis' : ''}.`);
     }
 
-    // 2) Why the owner may have to sell / why the price may be right
+    // 2) The financing need
     let play = 'Monitor';
     if (a.special_serviced) {
-      out.push(`Loan is in <b>special servicing</b>${a.ss_reason ? ` (${_esc(a.ss_reason.replace(/\s*\(.*\)$/, ''))})` : ''}${a.workout_strategy ? `; servicer workout strategy: <b>${_esc(a.workout_strategy)}</b>` : ''} — the special servicer, not the sponsor, now drives the outcome.`);
-      play = /reo|foreclos/i.test(a.workout_strategy || '') ? 'Buy from the special servicer (REO) or bid the note' : 'Approach the special servicer — note purchase, DPO with the sponsor, or a pre-foreclosure sale';
-    } else if (mo != null && mo < 0) {
-      out.push(`Loan <b>matured ${-mo} months ago</b> and is still outstanding${ps.includes('non-performing') ? ' and <b>non-performing</b>' : ''} — the owner could not refinance or sell at par, so it is living on an extension.`);
-      play = 'Approach the owner/lender with a take-out: acquisition or recap at today\'s value';
-    } else if (ps && !['current', 'performing matured'].includes(ps)) {
-      out.push(`Payment status is <b>${_esc(a.payment_status)}</b> — early sign of cash-flow stress.`);
-      play = 'Track closely; approach the sponsor before it transfers to special servicing';
+      out.push(`Loan is in <b>special servicing</b>${a.ss_reason ? ` (${_esc(a.ss_reason.replace(/\s*\(.*\)$/, ''))})` : ''}${a.workout_strategy ? `; workout strategy: ${_esc(a.workout_strategy)}` : ''} — the sponsor needs rescue capital or a take-out to exit the workout.`);
+      play = 'Rescue capital: discounted payoff / take-out loan with the sponsor, or buy the note from the special servicer';
+    } else if (a.isMatured) {
+      out.push(`<b>${_fmtLoanMoney(bal)} has already matured</b>${mo != null && mo < 0 ? ` (${-mo} mo ago)` : ''} and is still outstanding — the owner is on an extension and needs a take-out lender now.`);
+      play = 'Bridge / take-out loan — call the sponsor now';
+    } else if (mo != null && mo >= 0 && mo <= 36) {
+      out.push(`<b>${_fmtLoanMoney(bal)} matures ${_fmtDate(a.maturity_date)}</b> (${mo} mo)${a.notes.length > 1 ? `, split across ${a.notes.length} CMBS notes` : ''} — the owner has to refinance${mo <= 24 ? ' and is likely shopping for a lender now' : ''}.`);
+      play = mo <= 6 ? 'Refinance — call the sponsor now' : mo <= 18 ? 'Refinance — reach out now with terms' : 'Refinance — start the relationship; quote ~12–18 mo before maturity';
+    } else if (a.lockout_end_date && _monthsTo(a.lockout_end_date) < 0 && mo != null && mo <= 48) {
+      out.push(`Prepayment lockout ended ${_fmtDate(a.lockout_end_date)}; loan matures ${_fmtDate(a.maturity_date)} (${mo} mo) — the owner can refinance early.`);
+      play = 'Early refinance / cash-out — pitch now';
     }
-    if (a.watchlist) {
-      out.push(`On the <b>servicer watchlist</b>${a.watchlist_reason ? ` (${_esc(a.watchlist_reason)})` : ''} — the servicer already sees risk to performance.`);
-      if (play === 'Monitor') play = 'Approach the sponsor early — pre-emptive purchase or recap before a default';
-    }
-    if (mo != null && mo >= 0 && mo <= 24) {
-      out.push(`<b>${_fmtLoanMoney(bal)} matures ${_fmtDate(a.maturity_date)}</b> (${mo} mo)${a.notes.length > 1 ? `, split across ${a.notes.length} CMBS notes` : ''} — the owner must refinance or sell into today's market.`);
-      if (play === 'Monitor') play = mo <= 12 ? 'Approach the owner now — offer a sale/recap ahead of the maturity' : 'Put on the watch list; approach the owner ~12 mo before maturity';
+    if (!a.special_serviced && a.watchlist) {
+      out.push(`On the <b>servicer watchlist</b>${a.watchlist_reason ? ` (${_esc(a.watchlist_reason)})` : ''} — the incumbent lender is uneasy; the sponsor may welcome a new capital partner.`);
+      if (play === 'Monitor') play = 'Rescue / recap loan — approach the sponsor before a transfer to special servicing';
     }
 
+    // 3) Sizing — can a new senior loan take them out?
     if (a.isPortfolio) {
-      const ln = (a.loan_names || []).filter(n => n !== a.property_name)[0] || (a.loan_names || [])[0];
-      out.push(`Collateral in a <b>multi-property loan</b>${ln ? ` (“${_esc(ln)}”)` : ''}${a.num_props > 1 ? ` covering ${a.num_props} properties` : ''} — the ${_fmtLoanMoney(a.current_balance)} is portfolio debt${a.alloc_balance != null ? `; this asset's allocated share is ~<b>${_fmtLoanMoney(a.alloc_balance)}</b>` : ', not this asset\'s'}. Distress at the portfolio level often shakes loose single-asset sales or partial releases.`);
+      out.push(`Collateral in a <b>multi-property loan</b>${a.num_props > 1 ? ` (${a.num_props} properties)` : ''}${a.alloc_balance != null ? `; this asset's allocated share is ~<b>${_fmtLoanMoney(a.alloc_balance)}</b>` : ''} — a single-asset loan would need a partial release from the portfolio lender.`);
     }
-    if (!a.isPortfolio && a.noiChg != null && Math.abs(a.noiChg) >= 0.1) {
-      out.push(a.noiChg < 0
-        ? `NOI has <b>fallen ${Math.round(-a.noiChg * 100)}%</b> since underwriting (${_fmtLoanMoney(a.noiUw)} UW → ${_fmtLoanMoney(a.noiFy.noi)} FY${a.noiFy.year}) — the business plan is behind and the loan was sized on income that is no longer there.`
-        : `NOI is <b>up ${Math.round(a.noiChg * 100)}%</b> vs underwriting (${_fmtLoanMoney(a.noiUw)} → ${_fmtLoanMoney(a.noiFy.noi)} FY${a.noiFy.year}) — the pressure is the capital structure, not the asset.`);
+    if (sz) {
+      const r = a.mortgage_rate;
+      let t = `On ${_fmtLoanMoney(sz.noi)} NOI a new senior loan at ~${sz.mr.toFixed(1)}% and 1.25x sizes to ~<b>${_fmtLoanMoney(sz.senior)}</b>${sz.capBy === 'LTV' ? ' (capped at 65% of appraisal)' : ''}`;
+      if (sz.cover >= 1.2) t += ` vs. ${_fmtLoanMoney(sz.bal)} outstanding — a full take-out with <b>~${_fmtLoanMoney(sz.senior - sz.bal)} of cash-out room</b>.`;
+      else if (sz.cover >= 0.95) t += ` vs. ${_fmtLoanMoney(sz.bal)} outstanding — <b>a full senior take-out works</b>.`;
+      else t += ` vs. ${_fmtLoanMoney(sz.bal)} outstanding — a <b>~${_fmtLoanMoney(sz.gap)} gap</b>: room for a higher-leverage bridge loan or a senior + mezz/pref package.`;
+      if (r != null && sz.mr - r >= 1.0) t += ` (Current coupon ${r.toFixed(2)}%, so their debt cost rises ~${Math.round((sz.mr / r - 1) * 100)}% at refinance.)`;
+      out.push(t);
+      if (play.startsWith('Refinance') && sz.cover < 0.95) play = play.replace('Refinance', 'Bridge or senior + mezz');
+      if (play === 'Monitor' && sz.cover >= 1.2 && mo != null && mo <= 48) play = 'Cash-out refinance — pitch now';
+    } else if (!a.isPortfolio && !a.mortgage_rate && !a.noi) {
+      out.push(`<i>Loan detail (rate, NOI, appraisal) not loaded yet — sizing will appear once it is.</i>`);
     }
-    // 3) Refinance math (the "why can't they refi" argument)
-    const r = a.mortgage_rate;
-    const mr = _MKT_RATE[type] || _MKT_RATE[Object.keys(_MKT_RATE).find(k => type.includes(k))] || _MKT_RATE.default;
-    const noi = a.isPortfolio ? null : a.noi;
-    if (r != null && bal > 0 && !(a.isPortfolio && a.alloc_balance == null)) {
-      const curInt = bal * r / 100, newInt = bal * mr / 100;
-      if (mr - r >= 1.0) {
-        let t = `The ${r.toFixed(2)}% coupon resets to ~${mr.toFixed(1)}% at refinance: interest rises from ${_fmtLoanMoney(curInt)} to ${_fmtLoanMoney(newInt)}/yr (+${Math.round((newInt / curInt - 1) * 100)}%)`;
-        if (noi && noi / curInt >= 0.3) {
-          const dscr = noi / newInt;
-          t += dscr >= 1.5 ? `; on ${_fmtLoanMoney(noi)} NOI coverage is still <b>${dscr.toFixed(2)}x</b> — refinanceable, so the pressure is on returns/proceeds rather than solvency (a motivated but not forced seller)` : `; on ${_fmtLoanMoney(noi)} NOI that is only <b>${dscr.toFixed(2)}x</b> interest coverage`;
-          if (dscr < 1.25) {
-            const sup = noi / 1.25 / (mr / 100);
-            t += ` — a 1.25x lender sizes a new loan at ~${_fmtLoanMoney(sup)}, a <b>${_fmtLoanMoney(bal - sup)} gap</b> the owner has to fill with fresh equity`;
-          }
-        }
-        out.push(t + '.');
-        if (play === 'Monitor' && mo != null && mo <= 36) play = 'Approach the owner ~12–18 mo before maturity with a recap or purchase';
-      } else if (noi && noi / curInt >= 0.3 && (noi / newInt) < 1.2) {
-        out.push(`Even at today's rates NOI of ${_fmtLoanMoney(noi)} covers interest only <b>${(noi / newInt).toFixed(2)}x</b>.`);
-      }
-    }
-    if (!a.isPortfolio && a.latest_dscr != null && a.latest_dscr < 1.2 && !(noi && r != null)) out.push(`Latest reported DSCR is <b>${a.latest_dscr.toFixed(2)}x</b> — thin coverage.`);
-    if (a.ltv != null && a.ltv >= 75) out.push(`Leverage is high (<b>${a.ltv.toFixed(0)}% of last appraisal</b>) — the owner's equity is thin or under water, which raises the odds of a discounted exit.`);
-    else if (a.ltv != null && a.ltv > 0 && a.ltv <= 40 && (a.special_serviced || (mo != null && mo < 0))) out.push(`Leverage is low (${a.ltv.toFixed(0)}% of last appraisal) — distress is a liquidity/refi problem, not a value wipe-out; expect a negotiated sale rather than a fire sale.`);
 
-    // 4) Basis
-    if (basis) out.push(`Debt basis is ~<b>${basis}</b>${a.appraised_value && !a.isPortfolio ? ` vs. an appraisal of ${_fmtLoanMoney(a.appraised_value)}` : ''} — a reference point for what the lender needs to be made whole.`);
-    else if (a.appraised_value && !a.isPortfolio) out.push(`Last appraisal ${_fmtLoanMoney(a.appraised_value)} vs. ${_fmtLoanMoney(bal)} of debt.`);
-    if (!a.mortgage_rate && !a.property_type) out.push(`<i>Loan detail still loading from CRED iQ — rate, status and NOI will sharpen this thesis.</i>`);
+    // 4) Credit
+    if (!a.isPortfolio && a.noiChg != null && Math.abs(a.noiChg) >= 0.1) {
+      out.push(a.noiChg > 0
+        ? `NOI is <b>up ${Math.round(a.noiChg * 100)}%</b> since the last loan was underwritten (${_fmtLoanMoney(a.noiUw)} → ${_fmtLoanMoney(a.noiFy.noi)} FY${a.noiFy.year}) — a healthier credit than when the current lender lent.`
+        : `NOI is <b>down ${Math.round(-a.noiChg * 100)}%</b> vs underwriting (${_fmtLoanMoney(a.noiUw)} → ${_fmtLoanMoney(a.noiFy.noi)} FY${a.noiFy.year}) — underwrite the lease-up carefully.`);
+    }
+    if (a.ltv != null && a.ltv > 0 && !a.isPortfolio) out.push(a.ltv <= 60 ? `Existing debt is only <b>${a.ltv.toFixed(0)}% of the last appraisal</b> — real equity cushion.` : a.ltv >= 80 ? `Existing debt is <b>${a.ltv.toFixed(0)}% of the last appraisal</b> — thin equity; size off today's value.` : `Existing debt is ${a.ltv.toFixed(0)}% of the last appraisal.`);
+    if (basis) out.push(`Debt basis ~${basis}.`);
+    if ((a.sponsors || []).length) out.push(`Sponsor / borrower: <b>${_esc(a.sponsors.slice(0, 2).join('; '))}</b>.`);
 
     return { html: out.join(' '), play, text: out.join(' ').replace(/<[^>]+>/g, '') };
   }
@@ -2683,17 +2736,18 @@
   function _renderOpps() {
     const body = document.getElementById('mrOppBody'); if (!body || !_opps) return;
     document.querySelectorAll('#mrOppView .mr-opp-chip').forEach(c => c.classList.toggle('active', c.dataset.sig === _oppSig));
-    const all = _opps, flagged = all.filter(a => a.flags.length);
+    const all = _opps, tg = all.filter(a => a.isTarget);
     const sum = arr => arr.reduce((s, a) => s + (a.effBal || 0), 0);
-    const dis = all.filter(a => a.isDistress), wat = all.filter(a => a.isWatch), m24 = all.filter(a => a.isMat24);
+    const m24 = tg.filter(a => a.isMat24), mat = tg.filter(a => a.isMatured), gap = tg.filter(a => a.isRefi), co = tg.filter(a => a.flags.some(f => f.key === 'cashout'));
     const asOf = all.map(a => a.data_as_of).filter(Boolean).sort().pop();
     const asEl = document.getElementById('mrOppAsOf'); if (asEl) asEl.textContent = asOf ? `· data as of ${asOf}` : '';
     document.getElementById('mrOppKpis').innerHTML = `
       <div class="mr-loan-chip"><b>${all.length}</b>properties with live loans · ${new Set(all.map(a => a.market_id)).size} markets</div>
-      <div class="mr-loan-chip ${flagged.length ? 'warm' : ''}" title="$ totals exclude portfolio loans without an allocated balance"><b>${flagged.length} · ${_fmtLoanMoney(sum(flagged))}</b>flagged opportunities</div>
-      <div class="mr-loan-chip ${dis.length ? 'hot' : ''}"><b>${dis.length} · ${_fmtLoanMoney(sum(dis))}</b>distress</div>
-      <div class="mr-loan-chip ${wat.length ? 'warm' : ''}"><b>${wat.length} · ${_fmtLoanMoney(sum(wat))}</b>watchlist</div>
-      <div class="mr-loan-chip ${m24.length ? 'warm' : ''}"><b>${m24.length} · ${_fmtLoanMoney(sum(m24))}</b>maturing ≤ 24 mo</div>`;
+      <div class="mr-loan-chip ${tg.length ? 'warm' : ''}" title="Tier 1–2 markets with a refinance trigger · $ totals exclude portfolio loans without an allocated balance"><b>${tg.length} · ${_fmtLoanMoney(sum(tg))}</b>lending targets</div>
+      <div class="mr-loan-chip ${m24.length ? 'warm' : ''}"><b>${m24.length} · ${_fmtLoanMoney(sum(m24))}</b>maturing ≤ 24 mo</div>
+      <div class="mr-loan-chip ${mat.length ? 'hot' : ''}"><b>${mat.length} · ${_fmtLoanMoney(sum(mat))}</b>matured / extended</div>
+      <div class="mr-loan-chip"><b>${gap.length} · ${_fmtLoanMoney(sum(gap))}</b>gap financing</div>
+      <div class="mr-loan-chip"><b>${co.length} · ${_fmtLoanMoney(sum(co))}</b>cash-out room</div>`;
     const rows = _filteredOpps();
     if (!rows.length) { body.innerHTML = `<div style="padding:16px 18px;font-size:13px;color:#94a3b8;">No properties match these filters.</div>`; return; }
     const tierPill = (t) => t != null ? `<span class="mr-tier ${_tierClass(t)}" style="font-size:10px;padding:1px 6px;">T${t}</span>` : '';
@@ -2711,7 +2765,7 @@
         const th = _oppThesis(a);
         return `<tr class="mr-opp-main">
           <td style="color:#94a3b8;">${i + 1}</td>
-          <td style="white-space:normal;min-width:200px;">${link}<div class="mr-cell-source">${_esc(a.address || '')}</div>${why ? `<div class="mr-cell-source" style="color:#b91c1c;">${why}</div>` : ''}</td>
+          <td style="white-space:normal;min-width:200px;">${link}<div class="mr-cell-source">${_esc(a.address || '')}</div>${(a.sponsors || []).length ? `<div class="mr-cell-source">👤 ${_esc(a.sponsors[0])}</div>` : ''}${why ? `<div class="mr-cell-source" style="color:#b91c1c;">${why}</div>` : ''}</td>
           <td><span class="mr-opp-town" onclick="mrOpenMarket('${a.market_id}')">${_esc(a.market.name || '—')}</span><div class="mr-cell-source">${_viewType === 'office' ? '🏢' : '🏠'} ${ms} ${tierPill(mt)}</div></td>
           <td>${_esc(a.property_type || '—')}${a.building_size ? `<div class="mr-cell-source">${Number(a.building_size).toLocaleString()} ${_esc(a.size_unit || '')}</div>` : ''}</td>
           <td class="num">${a.isPortfolio ? (a.alloc_balance != null ? `${_fmtLoanMoney(a.alloc_balance)}<div class="mr-cell-source">allocated · of ${_fmtLoanMoney(a.current_balance)}</div>` : `<span style="color:#94a3b8;">${_fmtLoanMoney(a.current_balance)}</span><div class="mr-cell-source">portfolio loan</div>`) : `${_fmtLoanMoney(a.current_balance)}<div class="mr-cell-source">${a.notes.length > 1 ? a.notes.length + ' notes' : _esc(a.deals[0] || '')}</div>`}</td>
@@ -2719,7 +2773,7 @@
           <td class="num">${a.mortgage_rate != null ? a.mortgage_rate.toFixed(2) + '%' : '—'}</td>
           <td>${_fmtDate(a.maturity_date)}<div class="mr-cell-source">${moTxt}</div></td>
           <td class="num">${a.ltv != null ? a.ltv.toFixed(0) + '%' : '—'} / ${a.debt_yield != null ? a.debt_yield.toFixed(1) + '%' : '—'} / ${a.latest_dscr != null ? a.latest_dscr.toFixed(2) + 'x' : '—'}</td>
-          <td style="white-space:normal;min-width:170px;">${a.flags.map(x => `<span class="mr-loan-flag ${x.cls}">${_esc(x.label)}</span>`).join('') || '<span class="mr-loan-flag blue">Current</span>'}</td>
+          <td style="white-space:normal;min-width:170px;"><div style="font-size:11px;font-weight:700;color:#0f172a;margin-bottom:2px;">Score ${a.points}</div>${a.flags.map(x => `<span class="mr-loan-flag ${x.cls}">${_esc(x.label)}</span>`).join('') || '<span class="mr-loan-flag blue">Current</span>'}</td>
           <td>${logged ? `<span class="mr-opp-logbtn done">✓ Logged</span>` : `<button class="mr-opp-logbtn" onclick="mrOppLog('${_esc(a.key)}', this)">➕ Log deal</button>`}</td>
         </tr>
         <tr class="mr-opp-thesis"><td></td><td colspan="10"><div class="t">💡 ${th.html}${th.play !== 'Monitor' ? `<span class="play">→ Play: ${_esc(th.play)}</span>` : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
@@ -2746,7 +2800,7 @@
       const who = (window.currentUser && (window.currentUser.email || window.currentUser.mail)) || null;
       const row = {
         source: 'crediq', submitted_by: who, submitted_by_name: who, deal_name: a.property_name, address: a.address,
-        state: a.market.state || null, asset_type: (a.property_type || '').toLowerCase() || null, deal_type: 'distressed_acquisition',
+        state: a.market.state || null, asset_type: (a.property_type || '').toLowerCase() || null, deal_type: 'loan_origination',
         sf: /sf/i.test(a.size_unit || '') ? a.building_size : null, units: /unit/i.test(a.size_unit || '') ? a.building_size : null,
         noi: a.latest_noi || a.uw_noi || null, market_id: a.market_id, market_name: a.market.name, market_distance_mi: 0,
         market_score_res: a.market.score, market_tier_res: a.market.tier, market_rank_res: a.market.rank_residential,
@@ -2754,7 +2808,7 @@
         scoring_view: view, opportunity_score: mScore, opportunity_tier: mTier, recommendation: 'Review', status: 'new',
         raw_text: summary, notes: (() => { const th = _oppThesis(a); return th.text + (th.play !== 'Monitor' ? ' Play: ' + th.play + '.' : '') + '\n\nLoan facts: ' + summary; })(),
         extracted: { crediq_key: a.key, source_url: a.source_url, loans: a.notes.map(n => ({ loan_id: n.source_loan_id, deal: n.deal_name, balance: n.current_balance, rate: n.mortgage_rate, maturity: n.maturity_date, status: n.payment_status })), signals: a.flags.map(f => f.label) },
-        assessment: (() => { const th = _oppThesis(a); return { headline: `Distressed opportunity: ${a.flags.map(f => f.label).join(', ') || 'debt pressure'}`, summary: th.text, play: th.play, loan_facts: summary }; })(),
+        assessment: (() => { const th = _oppThesis(a); return { headline: `Lending opportunity: ${a.flags.filter(f => f.pts > 0 || f.trigger).map(f => f.label).join(', ') || 'refinance need'}`, summary: th.text, play: th.play, loan_facts: summary }; })(),
       };
       await window.supaWrite('deal_tracking', 'POST', row);
       _loggedDeals.add(key);
@@ -2778,12 +2832,12 @@
         'Payment Status': a.payment_status, 'Special Servicing': a.special_serviced ? 'Yes' : '', 'SS Reason': a.ss_reason, Workout: a.workout_strategy,
         Watchlist: a.watchlist ? 'Yes' : '', 'LTV %': a.ltv, 'Debt Yield %': a.debt_yield, DSCR: a.latest_dscr, 'Appraised Value': a.appraised_value,
         'NOI (shown)': a.noi, 'NOI Basis': a.noiBasis, 'UW NOI': a.noiUw, 'FY NOI': a.noiFy ? a.noiFy.noi : null, 'FY NOI Year': a.noiFy ? a.noiFy.year : null, 'NOI Chg vs UW %': a.noiChg != null ? Math.round(a.noiChg * 1000) / 10 : null, 'YTD NOI': a.noiYtd ? a.noiYtd.noi : null, 'YTD Through': a.noiYtd ? a.noiYtd.date : null, Deals: a.deals.join(', '), Originators: a.originators.join(', '), Signals: a.flags.map(f => f.label).join(', '),
-        'Signal Points': a.points, Thesis: _oppThesis(a).text, Play: _oppThesis(a).play, 'CRED iQ Link': a.source_url,
+        'Lending Score': a.points, Sponsor: (a.sponsors || []).join('; '), 'New Senior (1.25x)': a.sizing ? Math.round(a.sizing.senior) : null, 'Gap / (Cash-out)': a.sizing ? Math.round(a.sizing.gap) : null, Thesis: _oppThesis(a).text, Play: _oppThesis(a).play, 'CRED iQ Link': a.source_url,
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       ws['!autofilter'] = { ref: ws['!ref'] };
-      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Distressed Opportunities');
-      XLSX.writeFile(wb, `First_Mile_Distressed_Opportunities_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Loan Opportunities');
+      XLSX.writeFile(wb, `First_Mile_Loan_Opportunities_${new Date().toISOString().slice(0, 10)}.xlsx`);
     } catch (e) { _toast('Export failed: ' + e.message, true); }
     finally { if (btn) { btn.disabled = false; btn.textContent = '⬇ Export Excel'; } }
   }
