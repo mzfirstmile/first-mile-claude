@@ -2512,7 +2512,7 @@
       a.flags = _lendFlags(a);
       a.points = a.flags.reduce((s, f) => s + f.pts, 0) + _lendMarketPts(a);
       a.isRefi = a.flags.some(f => f.key === 'gap');
-      a.isCredit = a.flags.some(f => f.key === 'credit');
+      a.isCredit = a.flags.some(f => f.key === 'credit' || f.key === 'cashout');
       a.isTarget = a.flags.some(f => f.trigger) && _lendMarketPts(a) > 0;
       a.mktScore = (_viewType === 'office' ? a.market.office_score : a.market.score);
       return a;
@@ -2641,11 +2641,11 @@
     // Sizing — what we'd be lending into
     if (sz && (mo == null || mo <= 36 || a.isMatured)) {
       if (sz.cover < 0.95) f.push({ key: 'gap', label: `Gap ~${_fmtLoanMoney(sz.gap)}`, cls: 'amber', pts: 2, trigger: true });
-      else if (sz.cover >= 1.2) f.push({ key: 'cashout', label: 'Cash-out room', cls: 'green', pts: 1, trigger: true });
+      else if (sz.cover >= 1.2) f.push({ key: 'cashout', label: `Cash-out ~${_fmtLoanMoney(sz.senior - sz.bal)}`, cls: 'green', pts: 3, trigger: true });
     }
     if (a.mortgage_rate != null && mo != null && mo >= 0 && mo <= 36 && _mktRate(a) - a.mortgage_rate >= 1.0 && !f.some(x => x.key === 'gap')) f.push({ key: 'reset', label: `Rate reset ${a.mortgage_rate.toFixed(2)}%→~${_mktRate(a).toFixed(1)}%`, cls: 'grey', pts: 0 });
     // Credit quality — is it a loan we'd want to make
-    if (sz && sz.cover >= 0.95) f.push({ key: 'credit', label: 'Full take-out at 1.25x', cls: 'green', pts: 2 });
+    if (sz && sz.cover >= 0.95 && sz.cover < 1.2) f.push({ key: 'credit', label: 'Full take-out at 1.25x', cls: 'green', pts: 2 });
     if (a.noiChg != null && !a.isPortfolio && a.noiChg >= 0.10) f.push({ key: 'credit', label: `NOI +${Math.round(a.noiChg * 100)}% vs UW`, cls: 'green', pts: 2 });
     if (a.ltv != null && a.ltv > 0 && a.ltv <= 60) f.push({ key: 'credit', label: `LTV ${a.ltv.toFixed(0)}%`, cls: 'green', pts: 1 });
     if (a.noiChg != null && !a.isPortfolio && a.noiChg <= -0.15) f.push({ key: 'risk', label: `NOI ${Math.round(a.noiChg * 100)}% vs UW`, cls: 'amber', pts: -1 });
