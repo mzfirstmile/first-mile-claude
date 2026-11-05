@@ -25,6 +25,9 @@
   let _opps = null;          // aggregated opportunity rows (per property)
   let _oppSig = 'flagged';
   let _loggedDeals = new Set();
+  let _memos = new Map();       // loan_memos rows by property key (AI lending memos)
+  let _memoQueuedOnce = false;  // auto-queue the top-50 lending targets once per page load
+  const _memoOpen = new Set();
   let _loanIndex = {};       // market_id -> {live, debt, mat24, distress} for list badges
   let _currentUser = null;
   let _activeFilter = 'all'; // 'all' | 'favorites'; tier multi-select drives the real filter
@@ -394,6 +397,13 @@
       #mrRoot .mr-loan-flag.blue { background:#e0f2fe; color:#075985; }
       #mrRoot .mr-loan-flag.grey { background:#f1f5f9; color:#64748b; }
       #mrRoot .mr-loan-flag.green { background:#dcfce7; color:#166534; }
+      #mrRoot .mr-opp-memo td { padding-top:0 !important; white-space:normal !important; }
+      #mrRoot .mr-memo { font-size:12.5px; line-height:1.55; color:#1e293b; background:#fff; border:1px solid #e2e8f0; border-left:3px solid #8b5cf6; border-radius:6px; padding:10px 16px; margin-bottom:8px; }
+      #mrRoot .mr-memo h4 { font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:#6d28d9; margin:10px 0 4px; }
+      #mrRoot .mr-memo ul { margin:4px 0 4px 18px; padding:0; }
+      #mrRoot .mr-memo .lm-rec { font-size:13.5px; margin:2px 0 6px; }
+      #mrRoot .mr-memo-src { font-size:11px; color:#64748b; margin-top:8px; border-top:1px dashed #e2e8f0; padding-top:6px; }
+      #mrRoot .mr-memo-foot { font-size:10.5px; color:#94a3b8; margin-top:4px; }
       #mrRoot .mr-loan-tbl { overflow-x:auto; }
       #mrRoot .mr-loan-tbl td, #mrRoot .mr-loan-tbl th { padding:8px 10px; font-size:12px; white-space:nowrap; }
       #mrRoot .mr-loan-tbl td.num, #mrRoot .mr-loan-tbl th.num { text-align:right; }
@@ -2517,6 +2527,8 @@
       a.mktScore = (_viewType === 'office' ? a.market.office_score : a.market.score);
       return a;
     });
+    await _loadMemos();
+    _autoQueueMemos();
     // Populate filter selects
     const types = [...new Set(_opps.map(a => a.property_type).filter(Boolean))].sort();
     const states = [...new Set(_opps.map(a => a.market.state).filter(Boolean))].sort();
@@ -2733,6 +2745,72 @@
                  a.noiYtd ? `YTD ${String(a.noiYtd.month).padStart(2, '0')}/${String(a.noiYtd.year).slice(2)} ${_fmtLoanMoney(a.noiYtd.noi)}` : null].filter(Boolean).join(' · ');
     return `${_fmtLoanMoney(a.noi)}<div class="mr-cell-source">${sub}</div>`;
   }
+  // ── AI lending memos (edge function loan-memo, table loan_memos) ──────
+  async function _loadMemos() {
+    try {
+      const rows = [];
+      for (let off = 0; off < 20000; off += 1000) {
+        const page = await window.supaFetch('loan_memos', `?select=key,status,recommendation,summary,memo_html,sources,generated_at,cost_usd,error&order=key.asc&offset=${off}&limit=1000`);
+        rows.push(...(page || [])); if (!page || page.length < 1000) break;
+      }
+      _memos = new Map(rows.map(r => [r.key, r]));
+    } catch (_) { _memos = new Map(); }
+  }
+  async function _memoFn(body) {
+    const r = await fetch(`${window.SUPABASE_URL}/functions/v1/loan-memo`, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + window.SUPABASE_KEY, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+    return j;
+  }
+  // The top 50 lending targets (default lending-score order) get a memo automatically; the edge
+  // function skips any with a fresh (<30 day) memo, so calling this on every page load is cheap.
+  function _autoQueueMemos() {
+    if (_memoQueuedOnce || !_opps) return; _memoQueuedOnce = true;
+    const top = _opps.filter(a => a.isTarget).sort((a, b) => b.points - a.points || (b.mktScore || 0) - (a.mktScore || 0) || (b.effBal || 0) - (a.effBal || 0)).slice(0, 50);
+    const fresh = (m) => m && (['queued', 'running'].includes(m.status) || (m.status === 'done' && m.generated_at && (Date.now() - Date.parse(m.generated_at)) < 30 * 864e5));
+    const items = top.map((a, i) => ({ key: a.key, market_id: a.market_id, property_name: a.property_name, priority: 10 + i, data_as_of: a.data_as_of }))
+      .filter(it => !fresh(_memos.get(it.key)));
+    if (!items.length) return;
+    const who = (window.currentUser && (window.currentUser.email || window.currentUser.mail)) || null;
+    _memoFn({ action: 'queue', items, requested_by: who }).then(() => _loadMemos()).then(() => _renderOpps()).catch(() => {});
+  }
+  window.mrMemoToggle = (key) => { _memoOpen.has(key) ? _memoOpen.delete(key) : _memoOpen.add(key); _renderOpps(); };
+  window.mrMemoGenerate = async (key, btn) => {
+    const a = (_opps || []).find(x => x.key === key); if (!a) return;
+    if (btn) { btn.disabled = true; btn.textContent = '🤖 Researching… (~1 min)'; }
+    _memos.set(key, { ...(_memos.get(key) || {}), key, status: 'running' });
+    try {
+      const who = (window.currentUser && (window.currentUser.email || window.currentUser.mail)) || null;
+      const j = await _memoFn({ action: 'generate', key, market_id: a.market_id, property_name: a.property_name, requested_by: who });
+      if (j.memo) _memos.set(key, j.memo);
+      _memoOpen.add(key);
+      if (j.memo && j.memo.status === 'error') _toast('Memo failed: ' + (j.memo.error || 'unknown'), true);
+    } catch (e) { _toast('Memo failed: ' + e.message, true); await _loadMemos(); }
+    _renderOpps();
+  };
+  function _memoCell(a) {
+    const m = _memos.get(a.key);
+    const recCls = (r) => r === 'Pursue' ? 'green' : r === 'Pass' ? 'red' : 'amber';
+    if (m && m.status === 'done') return `<button class="mr-opp-logbtn" style="margin-top:4px;" onclick="mrMemoToggle('${_esc(a.key)}')">🤖 ${_memoOpen.has(a.key) ? 'Hide memo' : 'AI memo'}</button>${m.recommendation ? `<div><span class="mr-loan-flag ${recCls(m.recommendation)}" style="margin-top:3px;">${_esc(m.recommendation)}</span></div>` : ''}`;
+    if (m && (m.status === 'queued' || m.status === 'running')) return `<div class="mr-cell-source" style="margin-top:4px;">🤖 ${m.status === 'running' ? 'researching…' : 'memo queued'}</div>`;
+    return `<button class="mr-opp-logbtn" style="margin-top:4px;" onclick="mrMemoGenerate('${_esc(a.key)}', this)" title="Research the property online and write a lending memo (~$0.30)">🤖 ${m && m.status === 'error' ? 'Retry memo' : 'AI memo'}</button>`;
+  }
+  function _memoRow(a) {
+    const m = _memos.get(a.key);
+    if (!m || m.status !== 'done' || !_memoOpen.has(a.key)) return '';
+    // Memo HTML comes from our own edge function; strip anything executable before inserting.
+    const safe = String(m.memo_html || '').replace(/<\s*(script|style|iframe|object|embed)[\s\S]*?<\/\s*\1\s*>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '').replace(/javascript:/gi, '');
+    const src = (m.sources || []).slice(0, 12).map(s => `<a href="${_esc(s.url)}" target="_blank" rel="noopener">${_esc((s.title || s.url).slice(0, 70))}</a>`).join(' · ');
+    return `<tr class="mr-opp-memo"><td></td><td colspan="10"><div class="mr-memo">${safe}${src ? `<div class="mr-memo-src"><b>Sources searched:</b> ${src}</div>` : ''}<div class="mr-memo-foot">AI memo · ${m.generated_at ? new Date(m.generated_at).toLocaleDateString() : ''}${m.cost_usd != null ? ` · $${Number(m.cost_usd).toFixed(2)}` : ''} · verify facts before relying on them</div></div></td></tr>`;
+  }
+  function _memoTeaser(a) {
+    const m = _memos.get(a.key);
+    if (!m || m.status !== 'done' || !m.summary || _memoOpen.has(a.key)) return '';
+    return `<div style="margin-top:4px;color:#0f172a;">🤖 <b>${_esc(m.recommendation || '')}</b> — ${_esc(m.summary)} <a href="#" onclick="mrMemoToggle('${_esc(a.key)}');return false;">read memo</a></div>`;
+  }
+
   function _renderOpps() {
     const body = document.getElementById('mrOppBody'); if (!body || !_opps) return;
     document.querySelectorAll('#mrOppView .mr-opp-chip').forEach(c => c.classList.toggle('active', c.dataset.sig === _oppSig));
@@ -2774,9 +2852,9 @@
           <td>${_fmtDate(a.maturity_date)}<div class="mr-cell-source">${moTxt}</div></td>
           <td class="num">${a.ltv != null ? a.ltv.toFixed(0) + '%' : '—'} / ${a.debt_yield != null ? a.debt_yield.toFixed(1) + '%' : '—'} / ${a.latest_dscr != null ? a.latest_dscr.toFixed(2) + 'x' : '—'}</td>
           <td style="white-space:normal;min-width:170px;"><div style="font-size:11px;font-weight:700;color:#0f172a;margin-bottom:2px;">Score ${a.points}</div>${a.flags.map(x => `<span class="mr-loan-flag ${x.cls}">${_esc(x.label)}</span>`).join('') || '<span class="mr-loan-flag blue">Current</span>'}</td>
-          <td>${logged ? `<span class="mr-opp-logbtn done">✓ Logged</span>` : `<button class="mr-opp-logbtn" onclick="mrOppLog('${_esc(a.key)}', this)">➕ Log deal</button>`}</td>
+          <td>${logged ? `<span class="mr-opp-logbtn done">✓ Logged</span>` : `<button class="mr-opp-logbtn" onclick="mrOppLog('${_esc(a.key)}', this)">➕ Log deal</button>`}${_memoCell(a)}</td>
         </tr>
-        <tr class="mr-opp-thesis"><td></td><td colspan="10"><div class="t">💡 ${th.html}${th.play !== 'Monitor' ? `<span class="play">→ Play: ${_esc(th.play)}</span>` : ''}</div></td></tr>`; }).join('')}</tbody></table>`;
+        <tr class="mr-opp-thesis"><td></td><td colspan="10"><div class="t">💡 ${th.html}${th.play !== 'Monitor' ? `<span class="play">→ Play: ${_esc(th.play)}</span>` : ''}${_memoTeaser(a)}</div></td></tr>${_memoRow(a)}`; }).join('')}</tbody></table>`;
   }
   async function _logOpp(key, btn) {
     const a = (_opps || []).find(x => x.key === key); if (!a) return;
@@ -2808,7 +2886,7 @@
         scoring_view: view, opportunity_score: mScore, opportunity_tier: mTier, recommendation: 'Review', status: 'new',
         raw_text: summary, notes: (() => { const th = _oppThesis(a); return th.text + (th.play !== 'Monitor' ? ' Play: ' + th.play + '.' : '') + '\n\nLoan facts: ' + summary; })(),
         extracted: { crediq_key: a.key, source_url: a.source_url, loans: a.notes.map(n => ({ loan_id: n.source_loan_id, deal: n.deal_name, balance: n.current_balance, rate: n.mortgage_rate, maturity: n.maturity_date, status: n.payment_status })), signals: a.flags.map(f => f.label) },
-        assessment: (() => { const th = _oppThesis(a); return { headline: `Lending opportunity: ${a.flags.filter(f => f.pts > 0 || f.trigger).map(f => f.label).join(', ') || 'refinance need'}`, summary: th.text, play: th.play, loan_facts: summary }; })(),
+        assessment: (() => { const th = _oppThesis(a); const mm = _memos.get(a.key); return { ai_memo_html: mm && mm.status === 'done' ? mm.memo_html : null, ai_recommendation: (mm && mm.recommendation) || null, headline: `Lending opportunity: ${a.flags.filter(f => f.pts > 0 || f.trigger).map(f => f.label).join(', ') || 'refinance need'}`, summary: th.text, play: th.play, loan_facts: summary }; })(),
       };
       await window.supaWrite('deal_tracking', 'POST', row);
       _loggedDeals.add(key);
