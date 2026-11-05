@@ -66,5 +66,5 @@ jobs:
             FLAGS=""
             case " $NO_VERIFY_JWT " in *" $fn "*) FLAGS="--no-verify-jwt";; esac
             echo "▶ supabase functions deploy $fn $FLAGS"
-            supabase functions deploy "$fn" --project-ref "$PROJECT_REF" $FLAGS
+            supabase functions deploy "$fn" --project-ref "$PROJECT_REF" $FLAGS --yes
           done
