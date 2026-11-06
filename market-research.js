@@ -2463,10 +2463,14 @@
   }
   async function _loadOpps() {
     const rows = [];
-    for (let off = 0; off < 50000; off += 1000) {
-      const page = await window.supaFetch('market_loans', `?select=*,mkt:market_research_markets(id,name,state,score,tier,office_score,office_tier,rank_office,rank_residential)&current_balance=gt.0&market_id=not.is.null&order=id.asc&offset=${off}&limit=1000`);
+    // Keyset pagination (id > last id) on the partial index idx_market_loans_live — offset paging
+    // got slower with every page and hit the statement timeout once the table grew.
+    let lastId = null;
+    for (let i = 0; i < 200; i++) {
+      const page = await window.supaFetch('market_loans', `?select=*,mkt:market_research_markets(id,name,state,score,tier,office_score,office_tier,rank_office,rank_residential)&current_balance=gt.0&market_id=not.is.null${lastId ? `&id=gt.${lastId}` : ''}&order=id.asc&limit=500`);
       rows.push(...(page || []));
-      if (!page || page.length < 1000) break;
+      if (!page || page.length < 500) break;
+      lastId = page[page.length - 1].id;
     }
     // Deal Tracking rows already logged from CRED iQ (so the button shows "Logged")
     try {
