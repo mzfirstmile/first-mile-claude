@@ -3003,38 +3003,34 @@
 </section>`;
     }).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>First Mile — Top ${rows.length} Loan Opportunities</title><style>
-@page { size: letter; margin: 0.42in 0.5in; }
+@page { size: letter; margin: 0; }
 * { box-sizing: border-box; }
-body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1e293b; margin: 0; font-size: 9.6pt; line-height: 1.38; background: #fff; }
+body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1e293b; margin: 0; font-size: 10.5pt; line-height: 1.45; background: #fff; }
 .bar { position: sticky; top: 0; background: #0f2a44; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; font-size: 13px; z-index: 5; }
 .bar button { background: #38bdf8; color: #0f172a; border: 0; border-radius: 6px; padding: 7px 14px; font-weight: 700; cursor: pointer; }
-.page { width: 7.5in; margin: 0 auto; padding: 18px 0; page-break-after: always; break-after: page; overflow: hidden; }
+.page { width: 8.5in; margin: 0 auto; padding: 0.5in 0.55in; page-break-after: always; break-after: page; }
 .page:last-child { page-break-after: auto; break-after: auto; }
-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2a44; padding-bottom: 5px; margin-bottom: 9px; }
-header img { height: 24px; } .hr { font-size: 8pt; color: #64748b; }
-.title { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.rank { font-size: 22pt; font-weight: 800; color: #0f2a44; min-width: 44px; }
-h1 { font-size: 15pt; margin: 0; color: #0f172a; } .sub { font-size: 8.6pt; color: #475569; margin-top: 2px; }
-.rec { margin-left: auto; font-weight: 800; font-size: 11pt; padding: 5px 14px; border-radius: 16px; white-space: nowrap; }
+header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2a44; padding-bottom: 7px; margin-bottom: 14px; }
+header img { height: 30px; } .hr { font-size: 9pt; color: #64748b; }
+.title { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.rank { font-size: 28pt; font-weight: 800; color: #0f2a44; min-width: 56px; }
+h1 { font-size: 19pt; margin: 0; color: #0f172a; line-height: 1.2; } .sub { font-size: 10pt; color: #475569; margin-top: 4px; }
+.rec { margin-left: auto; font-weight: 800; font-size: 13pt; padding: 7px 18px; border-radius: 18px; white-space: nowrap; }
 .rec.pursue { background: #dcfce7; color: #166534; } .rec.watch { background: #fef3c7; color: #92400e; } .rec.pass { background: #fee2e2; color: #991b1b; }
-.kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 7px; }
-.k { background: #f1f5f9; border-radius: 6px; padding: 5px 8px; } .kl { font-size: 7pt; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
-.kv { font-size: 11pt; font-weight: 700; color: #0f172a; } .ks { font-size: 7.4pt; color: #64748b; }
-.flags { font-size: 8pt; color: #475569; margin-bottom: 8px; } .fl { display: inline-block; background: #eef2ff; color: #3730a3; border-radius: 10px; padding: 1px 7px; margin: 0 3px 2px 0; }
-.memo .lm-rec { font-size: 10.4pt; margin: 0 0 5px; padding: 6px 10px; background: #f5f3ff; border-left: 3px solid #7c3aed; border-radius: 4px; }
-.memo h4 { font-size: 8.4pt; text-transform: uppercase; letter-spacing: .05em; color: #6d28d9; margin: 8px 0 2px; }
-.memo p { margin: 2px 0 4px; } .memo ul { margin: 2px 0 4px 16px; padding: 0; } .muted { color: #94a3b8; font-style: italic; }
+.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
+.k { background: #f1f5f9; border-radius: 8px; padding: 8px 12px; } .kl { font-size: 8pt; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+.kv { font-size: 15pt; font-weight: 700; color: #0f172a; } .ks { font-size: 8.6pt; color: #64748b; }
+.flags { font-size: 9pt; color: #475569; margin-bottom: 14px; } .fl { display: inline-block; background: #eef2ff; color: #3730a3; border-radius: 10px; padding: 2px 9px; margin: 0 4px 4px 0; }
+.memo .lm-rec { font-size: 11.5pt; margin: 0 0 10px; padding: 10px 14px; background: #f5f3ff; border-left: 4px solid #7c3aed; border-radius: 6px; }
+.memo h4 { font-size: 9.5pt; text-transform: uppercase; letter-spacing: .06em; color: #6d28d9; margin: 16px 0 5px; break-after: avoid; }
+.memo p { margin: 4px 0 8px; } .memo ul { margin: 4px 0 8px 20px; padding: 0; } .memo li { margin-bottom: 4px; } .muted { color: #94a3b8; font-style: italic; }
 a { color: #1d4ed8; text-decoration: none; }
-footer { margin-top: 8px; padding-top: 5px; border-top: 1px solid #e2e8f0; font-size: 7pt; color: #94a3b8; } footer a { color: #64748b; }
-@media print { .bar { display: none; } .page { padding: 0; margin: 0; } }
+footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; line-height: 1.5; } footer a { color: #64748b; }
+@media print { .bar { display: none; } .page { margin: 0; } }
 </style></head><body>
 <div class="bar"><b>Top ${rows.length} Loan Opportunities</b><span>${_esc(filt.join(' · ') || 'Current filters')}</span><span style="flex:1"></span><button onclick="window.print()">Save as PDF</button></div>
 ${pages}
-<script>
-// Shrink any deal that would spill past one letter page (10.05in usable height at 96px/in).
-const MAX = 10.05 * 96;
-document.querySelectorAll('.page').forEach(p => { const h = p.scrollHeight; if (h > MAX) p.style.zoom = (MAX / h).toFixed(3); });
-<\/script></body></html>`;
+</body></html>`;
     const win = window.open('', '_blank');
     if (!win) { _toast('Popup blocked — allow popups for this site', true); return; }
     win.document.open(); win.document.write(html); win.document.close();
