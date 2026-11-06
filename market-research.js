@@ -2991,7 +2991,7 @@
         : `<h4>Lending thesis</h4><p>${_esc(th.text)}</p>${th.play && th.play !== 'Monitor' ? `<p><b>Play:</b> ${_esc(th.play)}</p>` : ''}<p class="muted">No AI memo yet for this property — rule-based thesis shown.</p>`;
       const src = memo && memo.status === 'done' ? (memo.sources || []).slice(0, 8).map(x => `<a href="${_esc(x.url)}">${_esc((x.title || x.url).slice(0, 60))}</a>`).join(' · ') : '';
       const size = a.building_size ? `${Number(a.building_size).toLocaleString()} ${a.size_unit || ''}` : '';
-      return `<section class="page">
+      return `<section class="page"><div class="inner">
   <header><img src="https://admin.firstmilecap.com/assets/First_Mile_Capital_Logo_RGB.png" alt="First Mile Capital"><div class="hr">Loan Opportunities · Top ${rows.length} · ${today}</div></header>
   <div class="title"><div class="rank">#${i + 1}</div><div><h1>${_esc(a.property_name || '—')}</h1>
     <div class="sub">${[a.address, m.name, a.property_type, size, (a.sponsors || []).length ? 'Sponsor: ' + a.sponsors.join('; ') : ''].filter(Boolean).map(_esc).join(' · ')}</div></div>
@@ -3000,15 +3000,18 @@
   ${flags ? `<div class="flags">Lending score ${a.points} · ${flags}</div>` : ''}
   <div class="memo">${bodyHtml}</div>
   <footer>${src ? `<b>Sources:</b> ${src}<br>` : ''}${a.source_url ? `<a href="${_esc(a.source_url)}">CRED iQ loan page</a> · ` : ''}${memo && memo.status === 'done' ? `AI memo generated ${memo.generated_at ? new Date(memo.generated_at).toLocaleDateString() : ''} from CRED iQ loan data, First Mile market scoring and web research` : 'Rule-based thesis from CRED iQ loan data and First Mile market scoring'} — verify facts before relying on them. Confidential.</footer>
-</section>`;
+</div></section>`;
     }).join('');
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>First Mile — Top ${rows.length} Loan Opportunities</title><style>
 @page { size: letter; margin: 0; }
 * { box-sizing: border-box; }
-body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1e293b; margin: 0; font-size: 10.5pt; line-height: 1.45; background: #fff; }
+body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1e293b; margin: 0; font-size: 10.2pt; line-height: 1.42; background: #fff; }
+.page { background: #fff; }
 .bar { position: sticky; top: 0; background: #0f2a44; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; font-size: 13px; z-index: 5; }
 .bar button { background: #38bdf8; color: #0f172a; border: 0; border-radius: 6px; padding: 7px 14px; font-weight: 700; cursor: pointer; }
-.page { width: 8.5in; margin: 0 auto; padding: 0.5in 0.55in; page-break-after: always; break-after: page; }
+.page { width: 8.5in; height: 10.98in; margin: 0 auto; padding: 0.45in 0.55in; overflow: hidden; page-break-after: always; break-after: page; }
+.inner { transform-origin: top left; }
+@media screen { .page { box-shadow: 0 2px 12px rgba(0,0,0,.12); margin: 16px auto; } body { background: #e2e8f0; } }
 .page:last-child { page-break-after: auto; break-after: auto; }
 header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2a44; padding-bottom: 7px; margin-bottom: 14px; }
 header img { height: 30px; } .hr { font-size: 9pt; color: #64748b; }
@@ -3026,11 +3029,18 @@ h1 { font-size: 19pt; margin: 0; color: #0f172a; line-height: 1.2; } .sub { font
 .memo p { margin: 4px 0 8px; } .memo ul { margin: 4px 0 8px 20px; padding: 0; } .memo li { margin-bottom: 4px; } .muted { color: #94a3b8; font-style: italic; }
 a { color: #1d4ed8; text-decoration: none; }
 footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; line-height: 1.5; } footer a { color: #64748b; }
-@media print { .bar { display: none; } .page { margin: 0; } }
+@media print { .bar { display: none; } .page { margin: 0; box-shadow: none; } body { background: #fff; } }
 </style></head><body>
 <div class="bar"><b>Top ${rows.length} Loan Opportunities</b><span>${_esc(filt.join(' · ') || 'Current filters')}</span><span style="flex:1"></span><button onclick="window.print()">Save as PDF</button></div>
 ${pages}
-</body></html>`;
+<script>
+// One sheet per deal: if a deal's content is taller than the printable box, scale it to fit (never up).
+document.querySelectorAll('.page').forEach(pg => {
+  const inner = pg.querySelector('.inner'); const avail = pg.clientHeight - 0.9 * 96;
+  const h = inner.scrollHeight;
+  if (h > avail) { const z = avail / h; inner.style.transform = 'scale(' + z.toFixed(3) + ')'; inner.style.width = (100 / z).toFixed(2) + '%'; }
+});
+<\/script></body></html>`;
     const win = window.open('', '_blank');
     if (!win) { _toast('Popup blocked — allow popups for this site', true); return; }
     win.document.open(); win.document.write(html); win.document.close();
