@@ -1779,8 +1779,8 @@
         <div id="mrMapLegend" style="position:absolute;bottom:12px;right:12px;background:rgba(255,255,255,0.95);padding:10px 14px;border-radius:8px;font-size:11px;color:#475569;box-shadow:0 1px 3px rgba(0,0,0,0.1);z-index:1000;">
           <div style="font-weight:700;color:#0f172a;margin-bottom:4px;">Tier</div>
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#22c55e;"></span> Tier 1</div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;"></span> Tier 2</div>
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;"></span> Tier 3</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#3b82f6;"></span> Tier 2</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#f59e0b;"></span> Tier 3</div>
           <div id="mrLegendT4Row" style="display:${_showTier4 ? 'flex' : 'none'};align-items:center;gap:6px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#94a3b8;opacity:0.7;"></span> Tier 4</div>
         </div>
       </div>
@@ -1931,7 +1931,7 @@
       }
 
       // Tier 4 markers are hidden by default — toggled on via the "Show Tier 4 on map" checkbox
-      const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6', 4: '#94a3b8' };
+      const tierColor = { 1: '#22c55e', 2: '#3b82f6', 3: '#f59e0b', 4: '#94a3b8' };  // same as .mr-tier pills: T1 green, T2 blue, T3 amber
       for (const m of withCoords) {
         const mTier = _viewType === 'office' ? m.office_tier : m.tier;
         if (mTier == null) continue;
@@ -4978,7 +4978,7 @@ Research this town now and produce the scoring JSON.`;
     const avgHHI = markets.filter(m => m.median_household_income).reduce((a, m, _, arr) => a + Number(m.median_household_income) / arr.length, 0);
     const avgPop = markets.filter(m => m.population).reduce((a, m, _, arr) => a + Number(m.population) / arr.length, 0);
     const tierCount = { 1: 0, 2: 0, 3: 0, 4: 0 }; markets.forEach(m => { if (m[tCol]) tierCount[m[tCol]]++; });
-    const tierColor = { 1: '#22c55e', 2: '#f59e0b', 3: '#3b82f6', 4: '#94a3b8' };
+    const tierColor = { 1: '#22c55e', 2: '#3b82f6', 3: '#f59e0b', 4: '#94a3b8' };  // same as .mr-tier pills: T1 green, T2 blue, T3 amber
     const areaTier = areaComposite >= 85 ? 1 : areaComposite >= 70 ? 2 : areaComposite >= 40 ? 3 : 4;
 
     // ── SVG: triangulation plot (pin at center, rings every 15 mi) ──
