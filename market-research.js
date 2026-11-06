@@ -3010,7 +3010,7 @@ body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #
 .bar { position: sticky; top: 0; background: #0f2a44; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; font-size: 13px; z-index: 5; }
 .bar button { background: #38bdf8; color: #0f172a; border: 0; border-radius: 6px; padding: 7px 14px; font-weight: 700; cursor: pointer; }
 .page { width: 8.5in; height: 10.98in; margin: 0 auto; padding: 0.45in 0.55in; overflow: hidden; page-break-after: always; break-after: page; }
-.inner { transform-origin: top left; }
+.inner { }
 @media screen { .page { box-shadow: 0 2px 12px rgba(0,0,0,.12); margin: 16px auto; } body { background: #e2e8f0; } }
 .page:last-child { page-break-after: auto; break-after: auto; }
 header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2a44; padding-bottom: 7px; margin-bottom: 14px; }
@@ -3034,11 +3034,17 @@ footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e2e8f0; font
 <div class="bar"><b>Top ${rows.length} Loan Opportunities</b><span>${_esc(filt.join(' · ') || 'Current filters')}</span><span style="flex:1"></span><button onclick="window.print()">Save as PDF</button></div>
 ${pages}
 <script>
-// One sheet per deal: if a deal's content is taller than the printable box, scale it to fit (never up).
+// One sheet per deal, filled: pick the largest zoom (0.55x–1.6x) at which the deal still fits the page.
+// zoom reflows text (unlike transform), and the width is divided by the zoom so lines still span the page.
 document.querySelectorAll('.page').forEach(pg => {
-  const inner = pg.querySelector('.inner'); const avail = pg.clientHeight - 0.9 * 96;
-  const h = inner.scrollHeight;
-  if (h > avail) { const z = avail / h; inner.style.transform = 'scale(' + z.toFixed(3) + ')'; inner.style.width = (100 / z).toFixed(2) + '%'; }
+  const inner = pg.querySelector('.inner');
+  const cs = getComputedStyle(pg);
+  const avail = pg.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom) - 4;
+  const fits = z => { inner.style.zoom = z; inner.style.width = (100 / z) + '%'; return inner.getBoundingClientRect().height <= avail; };
+  let lo = 0.55, hi = 1.6;
+  if (fits(hi)) return;
+  for (let k = 0; k < 14; k++) { const mid = (lo + hi) / 2; if (fits(mid)) lo = mid; else hi = mid; }
+  fits(lo);
 });
 <\/script></body></html>`;
     const win = window.open('', '_blank');
