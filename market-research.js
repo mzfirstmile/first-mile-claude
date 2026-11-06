@@ -2989,7 +2989,7 @@
       const bodyHtml = memo && memo.status === 'done'
         ? clean(memo.memo_html)
         : `<h4>Lending thesis</h4><p>${_esc(th.text)}</p>${th.play && th.play !== 'Monitor' ? `<p><b>Play:</b> ${_esc(th.play)}</p>` : ''}<p class="muted">No AI memo yet for this property — rule-based thesis shown.</p>`;
-      const src = memo && memo.status === 'done' ? (memo.sources || []).slice(0, 8).map(x => `<a href="${_esc(x.url)}">${_esc((x.title || x.url).slice(0, 60))}</a>`).join(' · ') : '';
+      const src = memo && memo.status === 'done' ? (memo.sources || []).slice(0, 5).map(x => `<a href="${_esc(x.url)}">${_esc((x.title || x.url).slice(0, 60))}</a>`).join(' · ') : '';
       const size = a.building_size ? `${Number(a.building_size).toLocaleString()} ${a.size_unit || ''}` : '';
       return `<section class="page"><div class="inner">
   <header><img src="https://admin.firstmilecap.com/assets/First_Mile_Capital_Logo_RGB.png" alt="First Mile Capital"><div class="hr">Loan Opportunities · Top ${rows.length} · ${today}</div></header>
@@ -3005,30 +3005,30 @@
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>First Mile — Top ${rows.length} Loan Opportunities</title><style>
 @page { size: letter; margin: 0; }
 * { box-sizing: border-box; }
-body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1e293b; margin: 0; font-size: 10.2pt; line-height: 1.42; background: #fff; }
+body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1e293b; margin: 0; font-size: 10.2pt; line-height: 1.34; background: #fff; }
 .page { background: #fff; }
 .bar { position: sticky; top: 0; background: #0f2a44; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; font-size: 13px; z-index: 5; }
 .bar button { background: #38bdf8; color: #0f172a; border: 0; border-radius: 6px; padding: 7px 14px; font-weight: 700; cursor: pointer; }
-.page { width: 8.5in; height: 10.98in; margin: 0 auto; padding: 0.45in 0.55in; overflow: hidden; page-break-after: always; break-after: page; }
+.page { width: 8.5in; height: 10.98in; margin: 0 auto; padding: 0.32in 0.4in; overflow: hidden; page-break-after: always; break-after: page; }
 .inner { }
 @media screen { .page { box-shadow: 0 2px 12px rgba(0,0,0,.12); margin: 16px auto; } body { background: #e2e8f0; } }
 .page:last-child { page-break-after: auto; break-after: auto; }
-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2a44; padding-bottom: 7px; margin-bottom: 14px; }
-header img { height: 30px; } .hr { font-size: 9pt; color: #64748b; }
-.title { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2a44; padding-bottom: 5px; margin-bottom: 9px; }
+header img { height: 24px; } .hr { font-size: 9pt; color: #64748b; }
+.title { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .rank { font-size: 28pt; font-weight: 800; color: #0f2a44; min-width: 56px; }
 h1 { font-size: 19pt; margin: 0; color: #0f172a; line-height: 1.2; } .sub { font-size: 10pt; color: #475569; margin-top: 4px; }
 .rec { margin-left: auto; font-weight: 800; font-size: 13pt; padding: 7px 18px; border-radius: 18px; white-space: nowrap; }
 .rec.pursue { background: #dcfce7; color: #166534; } .rec.watch { background: #fef3c7; color: #92400e; } .rec.pass { background: #fee2e2; color: #991b1b; }
-.kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px; }
-.k { background: #f1f5f9; border-radius: 8px; padding: 8px 12px; } .kl { font-size: 8pt; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
-.kv { font-size: 15pt; font-weight: 700; color: #0f172a; } .ks { font-size: 8.6pt; color: #64748b; }
-.flags { font-size: 9pt; color: #475569; margin-bottom: 14px; } .fl { display: inline-block; background: #eef2ff; color: #3730a3; border-radius: 10px; padding: 2px 9px; margin: 0 4px 4px 0; }
-.memo .lm-rec { font-size: 11.5pt; margin: 0 0 10px; padding: 10px 14px; background: #f5f3ff; border-left: 4px solid #7c3aed; border-radius: 6px; }
-.memo h4 { font-size: 9.5pt; text-transform: uppercase; letter-spacing: .06em; color: #6d28d9; margin: 16px 0 5px; break-after: avoid; }
-.memo p { margin: 4px 0 8px; } .memo ul { margin: 4px 0 8px 20px; padding: 0; } .memo li { margin-bottom: 4px; } .muted { color: #94a3b8; font-style: italic; }
+.kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 8px; }
+.k { background: #f1f5f9; border-radius: 6px; padding: 5px 8px; } .kl { font-size: 8pt; text-transform: uppercase; letter-spacing: .05em; color: #64748b; }
+.kv { font-size: 12.5pt; font-weight: 700; color: #0f172a; } .ks { font-size: 8.6pt; color: #64748b; }
+.flags { font-size: 9pt; color: #475569; margin-bottom: 8px; } .fl { display: inline-block; background: #eef2ff; color: #3730a3; border-radius: 10px; padding: 2px 9px; margin: 0 4px 4px 0; }
+.memo .lm-rec { font-size: 11pt; margin: 0 0 6px; padding: 7px 12px; background: #f5f3ff; border-left: 4px solid #7c3aed; border-radius: 6px; }
+.memo h4 { font-size: 9.5pt; text-transform: uppercase; letter-spacing: .06em; color: #6d28d9; margin: 9px 0 3px; break-after: avoid; }
+.memo p { margin: 2px 0 5px; } .memo ul { margin: 2px 0 5px 18px; padding: 0; } .memo li { margin-bottom: 2px; } .muted { color: #94a3b8; font-style: italic; }
 a { color: #1d4ed8; text-decoration: none; }
-footer { margin-top: 16px; padding-top: 8px; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; line-height: 1.5; } footer a { color: #64748b; }
+footer { margin-top: 8px; padding-top: 5px; border-top: 1px solid #e2e8f0; font-size: 8pt; color: #94a3b8; line-height: 1.5; } footer a { color: #64748b; }
 @media print { .bar { display: none; } .page { margin: 0; box-shadow: none; } body { background: #fff; } }
 </style></head><body>
 <div class="bar"><b>Top ${rows.length} Loan Opportunities</b><span>${_esc(filt.join(' · ') || 'Current filters')}</span><span style="flex:1"></span><button onclick="window.print()">Save as PDF</button></div>
