@@ -1153,6 +1153,7 @@
             <p class="mr-subtitle">Properties in our top-ranked markets with a reason to need new debt — upcoming maturities, extensions, refinance gaps, cash-out — owners to reach out to as a lender · loan data: CRED iQ <span id="mrOppAsOf" style="color:#94a3b8;"></span></p>
           </div>
           <div class="mr-actions" style="align-items:center;">
+            <button class="mr-btn" onclick="mrOppPdf()" title="One page per deal: the top 10 rows under the current filters and sort, with AI memos">📄 Top 10 PDF</button>
             <button class="mr-btn" onclick="mrOppExport()" id="mrOppExportBtn">⬇ Export Excel</button>
           </div>
         </div>
@@ -2959,6 +2960,86 @@
     } catch (e) { _toast('Export failed: ' + e.message, true); }
     finally { if (btn) { btn.disabled = false; btn.textContent = '⬇ Export Excel'; } }
   }
+  // Top-10 PDF of the Loan Opportunities list as currently filtered/sorted — one page per deal,
+  // AI memo when one exists (else the rule-based thesis). Opens a print-ready tab ("Save as PDF").
+  function _pdfTopOpps() {
+    const rows = _filteredOpps().slice(0, 10);
+    if (!rows.length) { _toast('No deals match the current filters', true); return; }
+    const today = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const clean = h => String(h || '').replace(/<\s*(script|style|iframe|object|embed)[\s\S]*?<\/\s*\1\s*>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '').replace(/javascript:/gi, '');
+    const filt = [];
+    const sigLbl = document.querySelector(`#mrOppView .mr-opp-chip[data-sig="${_oppSig}"]`); if (sigLbl) filt.push(sigLbl.textContent.trim());
+    const tl = document.getElementById('mrOppTypeLbl'); if (tl && tl.textContent !== 'All property types') filt.push(tl.textContent);
+    ['mrOppState', 'mrOppMin', 'mrOppSort'].forEach(id => { const el = document.getElementById(id); if (el && el.value && el.value !== '0') filt.push(el.options[el.selectedIndex].text); });
+    const qv = (document.getElementById('mrOppQ') || {}).value; if (qv) filt.push(`“${qv}”`);
+    const pages = rows.map((a, i) => {
+      const m = a.market || {}, view = _lendView(a), office = view === 'office';
+      const sc = office ? m.office_score : m.score, tr = office ? m.office_tier : m.tier, rk = office ? m.rank_office : m.rank_residential;
+      const mo = _monthsTo(a.maturity_date), memo = _memos.get(a.key), th = _oppThesis(a);
+      const rec = memo && memo.status === 'done' ? (memo.recommendation || '') : '';
+      const kpis = [
+        ['Debt outstanding', _fmtLoanMoney(a.effBal != null ? a.effBal : a.current_balance), `${a.notes.length} note${a.notes.length === 1 ? '' : 's'}${a.isPortfolio ? ' · portfolio loan' : ''}`],
+        ['Coupon', a.mortgage_rate != null ? Number(a.mortgage_rate).toFixed(2) + '%' : '—', (a.deals || []).slice(0, 1).join('')],
+        ['Maturity', a.maturity_date || '—', mo == null ? '' : mo >= 0 ? `${mo} mo` : `${-mo} mo ago`],
+        ['NOI', a.noi != null ? _fmtLoanMoney(a.noi) : '—', a.noiBasis || ''],
+        ['Appraisal', a.appraised_value ? _fmtLoanMoney(a.appraised_value) : '—', a.ltv != null ? `LTV ${Math.round(a.ltv)}%` : ''],
+        ['Market', sc != null ? `${Number(sc).toFixed(1)} T${tr}` : '—', `${office ? 'Office' : 'Residential'}${rk ? ` · #${rk.toLocaleString()} of ${(_nameIndex.length || 0).toLocaleString()}` : ''}`],
+      ].map(([l, v, s2]) => `<div class="k"><div class="kl">${_esc(l)}</div><div class="kv">${_esc(String(v))}</div><div class="ks">${_esc(String(s2 || ''))}</div></div>`).join('');
+      const flags = a.flags.map(f => `<span class="fl">${_esc(f.label)}</span>`).join('');
+      const bodyHtml = memo && memo.status === 'done'
+        ? clean(memo.memo_html)
+        : `<h4>Lending thesis</h4><p>${_esc(th.text)}</p>${th.play && th.play !== 'Monitor' ? `<p><b>Play:</b> ${_esc(th.play)}</p>` : ''}<p class="muted">No AI memo yet for this property — rule-based thesis shown.</p>`;
+      const src = memo && memo.status === 'done' ? (memo.sources || []).slice(0, 8).map(x => `<a href="${_esc(x.url)}">${_esc((x.title || x.url).slice(0, 60))}</a>`).join(' · ') : '';
+      const size = a.building_size ? `${Number(a.building_size).toLocaleString()} ${a.size_unit || ''}` : '';
+      return `<section class="page">
+  <header><img src="https://admin.firstmilecap.com/assets/First_Mile_Capital_Logo_RGB.png" alt="First Mile Capital"><div class="hr">Loan Opportunities · Top ${rows.length} · ${today}</div></header>
+  <div class="title"><div class="rank">#${i + 1}</div><div><h1>${_esc(a.property_name || '—')}</h1>
+    <div class="sub">${[a.address, m.name, a.property_type, size, (a.sponsors || []).length ? 'Sponsor: ' + a.sponsors.join('; ') : ''].filter(Boolean).map(_esc).join(' · ')}</div></div>
+    ${rec ? `<div class="rec ${/pursue/i.test(rec) ? 'pursue' : /pass/i.test(rec) ? 'pass' : 'watch'}">${_esc(rec)}</div>` : ''}</div>
+  <div class="kpis">${kpis}</div>
+  ${flags ? `<div class="flags">Lending score ${a.points} · ${flags}</div>` : ''}
+  <div class="memo">${bodyHtml}</div>
+  <footer>${src ? `<b>Sources:</b> ${src}<br>` : ''}${a.source_url ? `<a href="${_esc(a.source_url)}">CRED iQ loan page</a> · ` : ''}${memo && memo.status === 'done' ? `AI memo generated ${memo.generated_at ? new Date(memo.generated_at).toLocaleDateString() : ''} from CRED iQ loan data, First Mile market scoring and web research` : 'Rule-based thesis from CRED iQ loan data and First Mile market scoring'} — verify facts before relying on them. Confidential.</footer>
+</section>`;
+    }).join('');
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>First Mile — Top ${rows.length} Loan Opportunities</title><style>
+@page { size: letter; margin: 0.42in 0.5in; }
+* { box-sizing: border-box; }
+body { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; color: #1e293b; margin: 0; font-size: 9.6pt; line-height: 1.38; background: #fff; }
+.bar { position: sticky; top: 0; background: #0f2a44; color: #fff; padding: 10px 16px; display: flex; gap: 12px; align-items: center; font-size: 13px; z-index: 5; }
+.bar button { background: #38bdf8; color: #0f172a; border: 0; border-radius: 6px; padding: 7px 14px; font-weight: 700; cursor: pointer; }
+.page { width: 7.5in; margin: 0 auto; padding: 18px 0; page-break-after: always; break-after: page; overflow: hidden; }
+.page:last-child { page-break-after: auto; break-after: auto; }
+header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #0f2a44; padding-bottom: 5px; margin-bottom: 9px; }
+header img { height: 24px; } .hr { font-size: 8pt; color: #64748b; }
+.title { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.rank { font-size: 22pt; font-weight: 800; color: #0f2a44; min-width: 44px; }
+h1 { font-size: 15pt; margin: 0; color: #0f172a; } .sub { font-size: 8.6pt; color: #475569; margin-top: 2px; }
+.rec { margin-left: auto; font-weight: 800; font-size: 11pt; padding: 5px 14px; border-radius: 16px; white-space: nowrap; }
+.rec.pursue { background: #dcfce7; color: #166534; } .rec.watch { background: #fef3c7; color: #92400e; } .rec.pass { background: #fee2e2; color: #991b1b; }
+.kpis { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 7px; }
+.k { background: #f1f5f9; border-radius: 6px; padding: 5px 8px; } .kl { font-size: 7pt; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+.kv { font-size: 11pt; font-weight: 700; color: #0f172a; } .ks { font-size: 7.4pt; color: #64748b; }
+.flags { font-size: 8pt; color: #475569; margin-bottom: 8px; } .fl { display: inline-block; background: #eef2ff; color: #3730a3; border-radius: 10px; padding: 1px 7px; margin: 0 3px 2px 0; }
+.memo .lm-rec { font-size: 10.4pt; margin: 0 0 5px; padding: 6px 10px; background: #f5f3ff; border-left: 3px solid #7c3aed; border-radius: 4px; }
+.memo h4 { font-size: 8.4pt; text-transform: uppercase; letter-spacing: .05em; color: #6d28d9; margin: 8px 0 2px; }
+.memo p { margin: 2px 0 4px; } .memo ul { margin: 2px 0 4px 16px; padding: 0; } .muted { color: #94a3b8; font-style: italic; }
+a { color: #1d4ed8; text-decoration: none; }
+footer { margin-top: 8px; padding-top: 5px; border-top: 1px solid #e2e8f0; font-size: 7pt; color: #94a3b8; } footer a { color: #64748b; }
+@media print { .bar { display: none; } .page { padding: 0; margin: 0; } }
+</style></head><body>
+<div class="bar"><b>Top ${rows.length} Loan Opportunities</b><span>${_esc(filt.join(' · ') || 'Current filters')}</span><span style="flex:1"></span><button onclick="window.print()">Save as PDF</button></div>
+${pages}
+<script>
+// Shrink any deal that would spill past one letter page (10.05in usable height at 96px/in).
+const MAX = 10.05 * 96;
+document.querySelectorAll('.page').forEach(p => { const h = p.scrollHeight; if (h > MAX) p.style.zoom = (MAX / h).toFixed(3); });
+<\/script></body></html>`;
+    const win = window.open('', '_blank');
+    if (!win) { _toast('Popup blocked — allow popups for this site', true); return; }
+    win.document.open(); win.document.write(html); win.document.close();
+  }
+  window.mrOppPdf = () => _pdfTopOpps();
   function _renderNarrative(elId, value, field, placeholder) {
     const el = document.getElementById(elId);
     if (!el) return;
