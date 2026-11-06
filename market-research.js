@@ -1139,26 +1139,6 @@
     const root = document.getElementById('mrRoot');
     if (!root) return;
     root.innerHTML = `
-      <!-- Chatbot at the top — ask questions about rankings -->
-      <div class="mr-chat">
-        <div class="mr-chat-header">
-          <span class="mr-chat-dot"></span>
-          Ask about the rankings
-        </div>
-        <div class="mr-chat-row">
-          <input class="mr-chat-input" id="mrChatInput" type="text"
-                 placeholder="e.g. Which towns score highest on schools and commute? Why is Greenwich ranked above Westport?"
-                 onkeydown="if(event.key==='Enter'){mrChatSubmit();}">
-          <button class="mr-chat-send" id="mrChatSend" onclick="mrChatSubmit()">Ask</button>
-        </div>
-        <div class="mr-chat-suggestions">
-          <span class="mr-chat-chip" onclick="mrChatSuggest('Which 5 towns rank highest overall and why?')">Top 5 towns</span>
-          <span class="mr-chat-chip" onclick="mrChatSuggest('Compare Greenwich, Scarsdale and Short Hills across all criteria.')">Compare 3 towns</span>
-          <span class="mr-chat-chip" onclick="mrChatSuggest('Which towns best satisfy the Economic Activity criteria?')">Economic Activity leaders</span>
-          <span class="mr-chat-chip" onclick="mrChatSuggest('Which criteria do most towns fail on?')">Common gaps</span>
-        </div>
-        <div class="mr-chat-output" id="mrChatOutput"></div>
-      </div>
 
       <!-- List View -->
       <div class="mr-tabs" id="mrTabs">
@@ -1203,7 +1183,7 @@
       <div class="mr-list" id="mrListView">
         <div class="mr-header">
           <div>
-            <h2>Market Research</h2>
+            <h2>Market Research &amp; Investment Opportunities</h2>
             <p class="mr-subtitle">
               Target US markets &amp; cities for real estate acquisition ·
               <span class="mr-asset-toggle" id="mrAssetToggle">
@@ -1585,7 +1565,6 @@
     _markets = paged.rows;
     _totalForCurrentFilter = paged.total;
     _loadFilterCounts();
-    _loadShortlistForChatbot();
     _loadNameIndex();
     _loadGeoFilterOptions();
     _loadLoanIndex();
