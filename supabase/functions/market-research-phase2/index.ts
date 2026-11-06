@@ -154,12 +154,14 @@ serve(async (req) => {
     .select(
       "id,name,state,population,median_household_income,median_home_value,nearest_top50_city,census_place_geoid",
     )
-    .eq("phase", "shortlisted")
     .limit(batchSize);
+  // Explicit market_ids are scored whatever their phase (used for the universe
+  // run); otherwise only shortlisted markets are picked up.
   if (explicitIds && explicitIds.length > 0) {
     q = q.in("id", explicitIds);
-  } else if (onlyUnscored) {
-    q = q.is("score", null);
+  } else {
+    q = q.eq("phase", "shortlisted");
+    if (onlyUnscored) q = q.is("score", null);
   }
   const { data: markets, error: mErr } = await q;
   if (mErr) {

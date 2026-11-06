@@ -82,10 +82,10 @@ serve(async (req: Request) => {
   // Pull markets to process
   let q = supa.from("market_research_markets")
     .select("id,name,state,population,census_place_geoid")
-    .in("tier", [1, 2, 3])
     .not("census_place_geoid", "is", null)
     .limit(batchSize);
   if (explicitIds && explicitIds.length > 0) q = q.in("id", explicitIds);
+  else q = q.in("tier", [1, 2, 3]);  // explicit ids are scored whatever their tier
   const { data: markets, error: mErr } = await q;
   if (mErr) {
     return new Response(JSON.stringify({ error: mErr.message }), {

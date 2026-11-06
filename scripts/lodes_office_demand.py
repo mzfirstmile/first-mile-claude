@@ -220,6 +220,8 @@ def main():
     ap.add_argument("--states", required=True, help="comma list or 'all'")
     ap.add_argument("--year", type=int, default=2022)
     ap.add_argument("--base-year", type=int, default=2017)
+    ap.add_argument("--phase", default="shortlisted", choices=["shortlisted", "universe", "all"],
+                    help="which markets to score (universe = the non-shortlisted Census places)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--recompute", action="store_true", help="run composite recompute + re-rank at the end")
     a = ap.parse_args()
@@ -236,7 +238,8 @@ def main():
     mk = []
     off = 0
     while True:
-        page = rest(f"market_research_markets?select=id,name,state,census_place_geoid&phase=eq.shortlisted&census_place_geoid=not.is.null&order=id&offset={off}&limit=1000")
+        pf = "" if a.phase == "all" else f"&phase=eq.{a.phase}"
+        page = rest(f"market_research_markets?select=id,name,state,census_place_geoid{pf}&census_place_geoid=not.is.null&order=id&offset={off}&limit=1000")
         mk += page
         if len(page) < 1000:
             break
@@ -245,7 +248,7 @@ def main():
     for m in mk:
         by_state[m["state"]].append(m)
     states = sorted(by_state) if a.states.lower() == "all" else [s.strip().upper() for s in a.states.split(",")]
-    print(f"{len(mk)} shortlisted markets; running {len(states)} states: {' '.join(states)}", flush=True)
+    print(f"{len(mk)} {a.phase} markets; running {len(states)} states: {' '.join(states)}", flush=True)
 
     print("Loading Gazetteer land areas (fallback source)…", flush=True)
     gaz_area = load_gazetteer()

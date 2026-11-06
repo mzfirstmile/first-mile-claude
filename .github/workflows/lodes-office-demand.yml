@@ -18,6 +18,10 @@ on:
         description: 'Base year for 5-yr growth'
         required: false
         default: '2017'
+      phase:
+        description: "Markets to score: shortlisted, universe (non-shortlisted places) or all"
+        required: false
+        default: 'shortlisted'
       dry_run:
         description: 'true = print sample rows, write nothing'
         required: false
@@ -42,7 +46,7 @@ jobs:
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           CENSUS_API_KEY: ${{ secrets.CENSUS_API_KEY }}
         run: |
-          ARGS="--states '${{ github.event.inputs.states }}' --year ${{ github.event.inputs.year }} --base-year ${{ github.event.inputs.base_year }}"
+          ARGS="--states '${{ github.event.inputs.states }}' --year ${{ github.event.inputs.year }} --base-year ${{ github.event.inputs.base_year }} --phase ${{ github.event.inputs.phase || 'shortlisted' }}"
           [ "${{ github.event.inputs.dry_run }}" = "true" ] && ARGS="$ARGS --dry-run"
           [ "${{ github.event.inputs.recompute }}" = "true" ] && ARGS="$ARGS --recompute"
           set -o pipefail
