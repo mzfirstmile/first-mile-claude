@@ -417,6 +417,20 @@
       #mrRoot .mr-opp { display:none; }
       #mrRoot .mr-opp.show { display:block; }
       #mrRoot .mr-opp-filters { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:12px 0; }
+      #mrRoot .mr-ms { position:relative; }
+      #mrRoot .mr-ms-btn { border:1px solid #e2e8f0; border-radius:6px; padding:5px 8px; font-size:12px; background:#fff; color:#0f172a; cursor:pointer; display:flex; align-items:center; gap:6px; }
+      #mrRoot .mr-ms-btn.filtered { border-color:#6366f1; color:#4338ca; background:#eef2ff; font-weight:600; }
+      #mrRoot .mr-ms-caret { color:#94a3b8; font-size:10px; }
+      #mrRoot .mr-ms-pop { position:absolute; right:0; top:calc(100% + 4px); z-index:60; background:#fff; border:1px solid #e2e8f0; border-radius:8px; box-shadow:0 10px 30px rgba(15,23,42,.14); min-width:250px; max-height:360px; overflow:auto; padding:4px 0; }
+      #mrRoot .mr-ms-head { display:flex; gap:12px; padding:6px 12px 8px; border-bottom:1px solid #f1f5f9; margin-bottom:4px; font-size:12px; }
+      #mrRoot .mr-ms-head a { color:#2563eb; cursor:pointer; font-weight:600; }
+      #mrRoot .mr-ms-row { display:flex; align-items:center; gap:8px; padding:5px 12px; font-size:12.5px; cursor:pointer; user-select:none; }
+      #mrRoot .mr-ms-row:hover { background:#f1f5f9; }
+      #mrRoot .mr-ms-row input { margin:0; cursor:pointer; }
+      #mrRoot .mr-ms-n { color:#94a3b8; font-size:11px; }
+      #mrRoot .mr-ms-only { margin-left:auto; color:#2563eb; font-weight:600; font-size:11.5px; visibility:hidden; padding:1px 6px; border-radius:4px; }
+      #mrRoot .mr-ms-row:hover .mr-ms-only { visibility:visible; }
+      #mrRoot .mr-ms-only:hover { background:#dbeafe; }
       #mrRoot .mr-opp-filters select, #mrRoot .mr-opp-filters input { border:1px solid #e2e8f0; border-radius:6px; padding:5px 8px; font-size:12px; background:#fff; }
       #mrRoot .mr-opp-chip { border:1px solid #e2e8f0; background:#fff; border-radius:16px; padding:4px 12px; font-size:12px; color:#475569; cursor:pointer; }
       #mrRoot .mr-opp-chip.active { background:#0ea5e9; border-color:#0ea5e9; color:#fff; }
@@ -1173,7 +1187,7 @@
           <span class="mr-opp-chip" data-sig="all" onclick="mrOppSig('all')">All live loans</span>
           <span style="flex:1;"></span>
           <input id="mrOppQ" placeholder="Search property / town / deal…" oninput="mrOppRender()" style="min-width:200px;">
-          <select id="mrOppType" onchange="mrOppRender()"><option value="">All property types</option></select>
+          <div class="mr-ms" id="mrOppTypeMs"><button type="button" class="mr-ms-btn" onclick="mrOppTypeToggle(event)"><span id="mrOppTypeLbl">All property types</span><span class="mr-ms-caret">▾</span></button><div class="mr-ms-pop" id="mrOppTypePop" hidden></div></div>
           <select id="mrOppState" onchange="mrOppRender()"><option value="">All states</option></select>
           <select id="mrOppMin" onchange="mrOppRender()">
             <option value="0">Any size</option><option value="5000000">≥ $5M</option><option value="10000000">≥ $10M</option><option value="25000000">≥ $25M</option><option value="50000000">≥ $50M</option><option value="100000000">≥ $100M</option>
@@ -2532,17 +2546,60 @@
     // Populate filter selects
     const types = [...new Set(_opps.map(a => a.property_type).filter(Boolean))].sort();
     const states = [...new Set(_opps.map(a => a.market.state).filter(Boolean))].sort();
-    const tSel = document.getElementById('mrOppType'), sSel = document.getElementById('mrOppState');
-    if (tSel) tSel.innerHTML = '<option value="">All property types</option>' + types.map(t => `<option>${_esc(t)}</option>`).join('');
+    const sSel = document.getElementById('mrOppState');
+    _oppTypeCounts = new Map();
+    _opps.forEach(a => { const t = a.property_type || _NO_TYPE; _oppTypeCounts.set(t, (_oppTypeCounts.get(t) || 0) + 1); });
+    _oppTypeList = [...types, ...(_oppTypeCounts.has(_NO_TYPE) ? [_NO_TYPE] : [])];
+    _renderTypePicker();
     if (sSel) sSel.innerHTML = '<option value="">All states</option>' + states.map(t => `<option>${_esc(t)}</option>`).join('');
     const n = _opps.filter(a => a.isTarget).length;
     const badge = document.getElementById('mrOppTabCount');
     if (badge) { badge.style.display = n ? '' : 'none'; badge.textContent = n; }
   }
+  // Property-type picker: every type checked by default; unchecked ones are remembered per browser
+  // (stored as the EXCLUDED set so types that appear later are included automatically).
+  const _NO_TYPE = '(No type)';
+  let _oppTypeList = [], _oppTypeCounts = new Map();
+  let _oppTypesOff = new Set();
+  try { _oppTypesOff = new Set(JSON.parse(localStorage.getItem('mr_opp_types_off') || '[]')); } catch (e) {}
+  function _saveTypesOff() { try { localStorage.setItem('mr_opp_types_off', JSON.stringify([..._oppTypesOff])); } catch (e) {} }
+  function _renderTypePicker() {
+    const pop = document.getElementById('mrOppTypePop'), lbl = document.getElementById('mrOppTypeLbl');
+    if (!pop || !lbl) return;
+    const on = _oppTypeList.filter(t => !_oppTypesOff.has(t));
+    lbl.textContent = on.length === _oppTypeList.length ? 'All property types'
+      : on.length === 0 ? 'No property types' : on.length === 1 ? on[0] : `${on.length} of ${_oppTypeList.length} types`;
+    lbl.parentElement.classList.toggle('filtered', on.length !== _oppTypeList.length);
+    pop.innerHTML = `<div class="mr-ms-head"><a data-all="1">Select all</a><a data-all="0">Clear</a></div>` +
+      _oppTypeList.map((t, i) => `<label class="mr-ms-row" data-i="${i}"><input type="checkbox" ${_oppTypesOff.has(t) ? '' : 'checked'}><span>${_esc(t)}</span><span class="mr-ms-n">${(_oppTypeCounts.get(t) || 0).toLocaleString()}</span><span class="mr-ms-only" data-only="${i}">Only</span></label>`).join('');
+  }
+  function _typePickerClick(e) {
+    const all = e.target.closest('[data-all]');
+    if (all) { _oppTypesOff = all.dataset.all === '1' ? new Set() : new Set(_oppTypeList); }
+    else {
+      const only = e.target.closest('[data-only]');
+      if (only) { e.preventDefault(); const t = _oppTypeList[+only.dataset.only]; _oppTypesOff = new Set(_oppTypeList.filter(x => x !== t)); }
+      else if (e.target.matches('input[type=checkbox]')) {
+        const t = _oppTypeList[+e.target.closest('[data-i]').dataset.i];
+        if (e.target.checked) _oppTypesOff.delete(t); else _oppTypesOff.add(t);
+      } else return;
+    }
+    _saveTypesOff(); _renderTypePicker(); window.mrOppRender && window.mrOppRender();
+  }
+  window.mrOppTypeToggle = function (e) {
+    e.stopPropagation();
+    const pop = document.getElementById('mrOppTypePop'); if (!pop) return;
+    if (!pop._wired) {
+      pop._wired = true;
+      pop.addEventListener('click', _typePickerClick);
+      document.addEventListener('mousedown', ev => { if (!pop.hidden && !ev.target.closest('#mrOppTypeMs')) pop.hidden = true; });
+      document.addEventListener('keydown', ev => { if (ev.key === 'Escape') pop.hidden = true; });
+    }
+    pop.hidden = !pop.hidden;
+  };
   function _filteredOpps() {
     if (!_opps) return [];
     const q = (document.getElementById('mrOppQ')?.value || '').toLowerCase().trim();
-    const t = document.getElementById('mrOppType')?.value || '';
     const st = document.getElementById('mrOppState')?.value || '';
     const min = Number(document.getElementById('mrOppMin')?.value || 0);
     const sort = document.getElementById('mrOppSort')?.value || 'signal';
@@ -2553,7 +2610,7 @@
       if (_oppSig === 'matured' && !a.isMatured) return false;
       if (_oppSig === 'refi' && !a.isRefi) return false;
       if (_oppSig === 'credit' && !a.isCredit) return false;
-      if (t && a.property_type !== t) return false;
+      if (_oppTypesOff.size && _oppTypesOff.has(a.property_type || _NO_TYPE)) return false;
       if (st && a.market.state !== st) return false;
       if ((a.effBal != null ? a.effBal : a.current_balance) < min) return false;
       if (q && ![a.property_name, a.address, a.market.name, a.deals.join(' '), a.originators.join(' '), (a.sponsors || []).join(' ')].join(' ').toLowerCase().includes(q)) return false;
