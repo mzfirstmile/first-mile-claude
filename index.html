@@ -1184,6 +1184,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/><path d="M9 9h.01M15 9h.01M9 13h.01M15 13h.01"/></svg>
       <span>Deal Tracking</span>
     </a>
+    <a class="sidebar-item" data-view="rasheq">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <span>Rasheq</span>
+    </a>
     <a class="sidebar-item" data-view="marketresearch" id="sidebarMarketResearch" style="display:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5 8 12 8 12s8-7 8-12a8 8 0 0 0-8-8z"/></svg>
       <span>Market Research &amp; Investment Opportunities</span>
@@ -1307,6 +1311,19 @@
         </div>
         <h3>Deal Tracking</h3>
         <p>Prospective deals emailed to the AI assistant, auto-logged, matched to Market Research towns, scored and reported.</p>
+        <div class="module-card-status live"><span class="dot"></span> Live</div>
+      </div>
+
+      <!-- Rasheq -->
+      <div class="module-card" data-module="rasheq" onclick="switchView('rasheq')" style="cursor:pointer">
+        <div class="module-card-icon" style="background:linear-gradient(135deg,#8b5cf6 0%,#6d28d9 100%);">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <div class="module-card-arrow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </div>
+        <h3>Rasheq</h3>
+        <p>Personal workspace module.</p>
         <div class="module-card-status live"><span class="dot"></span> Live</div>
       </div>
 
@@ -1573,6 +1590,11 @@
   <!-- Deal Tracking View -->
   <div class="manage-view" id="view-dealtracking" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
     <div id="dtRoot"></div>
+  </div>
+
+  <!-- Rasheq View -->
+  <div class="manage-view" id="view-rasheq" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
+    <div id="rzRoot"></div>
   </div>
 
   <!-- Market Research View -->
@@ -1903,6 +1925,7 @@
     else if (currentView === 'initiatives' && typeof initiativesInit === 'function') initiativesInit();
     else if (currentView === 'marketresearch' && typeof marketResearchInit === 'function') marketResearchInit();
     else if (currentView === 'dealtracking' && typeof dealTrackingInit === 'function') dealTrackingInit();
+    else if (currentView === 'rasheq' && typeof rasheqInit === 'function') rasheqInit();
     else if (currentView === 'properties') loadProperties();
     else if (currentView === 'users') loadUsers();
     else if (currentView === 'jobs') loadCronJobs();
@@ -2047,6 +2070,7 @@
     exec: 'Exec <span>Financials (Old)</span>',
     initiatives: 'Active <span>Initiatives</span>',
     dealtracking: 'Deal <span>Tracking</span>',
+    rasheq: '<span>Rasheq</span>',
     exec2: 'Executive <span>Financials</span>',
     jobs: 'Scheduled <span>Jobs</span>',
     sql: 'SQL <span>Console</span>',
@@ -2104,6 +2128,7 @@
     if (view === 'financials') fbInit();
     if (view === 'initiatives' && typeof initiativesInit === 'function') initiativesInit();
     if (view === 'dealtracking' && typeof dealTrackingInit === 'function') dealTrackingInit();
+    if (view === 'rasheq' && typeof rasheqInit === 'function') rasheqInit();
     if (view === 'marketresearch' && typeof marketResearchInit === 'function') marketResearchInit();
     if (view === 'exec2' && typeof exec2Init === 'function') exec2Init();
     if (view === 'exec') {
@@ -10408,6 +10433,7 @@ SMS: +1 (866) 568-4445 — send_sms, search_sms. Confirm number + body before se
 <script src="exec-v2.js?v=__BUILD__"></script>
 <script src="initiatives.js?v=__BUILD__"></script>
 <script src="deal-tracking.js?v=__BUILD__"></script>
+<script src="rasheq.js?v=__BUILD__"></script>
 <script src="market-research.js?v=__BUILD__"></script>
 
 </body>
