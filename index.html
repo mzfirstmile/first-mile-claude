@@ -2173,7 +2173,7 @@
     // Research" link, or a URL pasted into the address bar) arrives with e.state === null, so
     // fall back to the id in the hash itself (&market=…, &deal=…, &project=…, &prop=…).
     const handler = _subNavHandlers[view];
-    const SUB_PARAM = { marketresearch: 'market', dealtracking: 'deal', initiatives: 'project', financials: 'prop' };
+    const SUB_PARAM = { marketresearch: 'market', dealtracking: 'deal', initiatives: 'project', financials: 'prop', rasheq: 'tab' };
     const sub = st.sub || (e.state == null && SUB_PARAM[view] ? getHashParam(SUB_PARAM[view]) : null);
     if (handler) { try { handler(sub || null); } catch (err) { console.error('subnav', view, err); } }
   });
