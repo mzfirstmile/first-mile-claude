@@ -1,5 +1,5 @@
 /* ============================================================
-   Rasheq Module — rasheq.js
+   General First Mile Module — rasheq.js (formerly "Rasheq"; view key stays 'rasheq')
    External IIFE module (same pattern as deal-tracking.js)
    Loaded via <script src="rasheq.js"> in index.html
    Called via window.rasheqInit() from switchView()
@@ -65,10 +65,10 @@
     if (!root) return;
     root.innerHTML = `
       <div class="rz-head">
-        <h2>Rasheq</h2>
-        <p>Personal workspace — HR, time off, travel, expenses and benefits.</p>
+        <h2>General First Mile</h2>
+        <p>Company workspace — HR, time off, travel, expenses and benefits.</p>
       </div>
-      <div class="rz-tabs" role="tablist" aria-label="Rasheq sections">
+      <div class="rz-tabs" role="tablist" aria-label="General First Mile sections">
         ${TABS.map(t => `
           <button class="rz-tab" role="tab" id="rz-tab-${t.key}" data-tab="${t.key}"
             aria-controls="rz-panel" onclick="rasheqShowTab('${t.key}')">${_esc(t.label)}</button>`).join('')}

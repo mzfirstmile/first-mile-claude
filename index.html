@@ -1190,7 +1190,7 @@
     </a>
     <a class="sidebar-item" data-view="rasheq">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      <span>Rasheq</span>
+      <span>General First Mile</span>
     </a>
     <a class="sidebar-item" data-view="marketresearch" id="sidebarMarketResearch" style="display:none;">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="10" r="3"/><path d="M12 2a8 8 0 0 0-8 8c0 5 8 12 8 12s8-7 8-12a8 8 0 0 0-8-8z"/></svg>
@@ -1331,7 +1331,7 @@
         <div class="module-card-status live"><span class="dot"></span> Live</div>
       </div>
 
-      <!-- Rasheq -->
+      <!-- General First Mile (view key 'rasheq') -->
       <div class="module-card" data-module="rasheq" onclick="switchView('rasheq')" style="cursor:pointer">
         <div class="module-card-icon" style="background:linear-gradient(135deg,#8b5cf6 0%,#6d28d9 100%);">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -1339,8 +1339,8 @@
         <div class="module-card-arrow">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
         </div>
-        <h3>Rasheq</h3>
-        <p>Personal workspace module.</p>
+        <h3>General First Mile</h3>
+        <p>Company workspace — HR, PTO, travel, expenses and benefits.</p>
         <div class="module-card-status live"><span class="dot"></span> Live</div>
       </div>
 
@@ -2135,7 +2135,7 @@
     initiatives: 'Active <span>Initiatives</span>',
     dealtracking: 'Deal <span>Tracking</span>',
     violationtracker: 'Violation <span>Tracker</span>',
-    rasheq: '<span>Rasheq</span>',
+    rasheq: 'General <span>First Mile</span>',
     exec2: 'Executive <span>Financials</span>',
     jobs: 'Scheduled <span>Jobs</span>',
     sql: 'SQL <span>Console</span>',
@@ -2720,7 +2720,7 @@ $$;</pre></div>`;
     { key: 'initiatives', label: 'Initiatives' },
     { key: 'deal_tracking', label: 'Deal Tracking' },
     { key: 'violation_tracker', label: 'Violations' },
-    { key: 'rasheq', label: 'Rasheq' },
+    { key: 'rasheq', label: 'General FM' },
     { key: 'users', label: 'Users' },
   ];
 
@@ -2893,7 +2893,7 @@ $$;</pre></div>`;
       const userTeams = u.team ? u.team.split(',').map(t=>t.trim()).filter(Boolean) : [];
       let teamCell = '';
       if (isAdmin) {
-        const teamChecks = ['Accounting','Operations','Executive','Administrative'].map(t => {
+        const teamChecks = TEAM_LIST.map(t => {
           const checked = userTeams.includes(t) ? 'checked' : '';
           const tc = TEAM_COLORS[t] || '#888';
           return `<label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;font-size:10px;font-weight:600;color:${tc};white-space:nowrap;"><input type="checkbox" ${checked} onchange="toggleUserTeam(${u.id},'${t}',this.checked)" style="width:13px;height:13px;accent-color:${tc};cursor:pointer;">${TEAM_ICONS[t]||''} ${t.substring(0,4)}</label>`;
@@ -3010,8 +3010,9 @@ $$;</pre></div>`;
   // ══════════════════════════════════════
   const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const CAL_PALETTE = ['#00b0d4','#50dcb4','#ff8c5a','#dc78ff','#ffd250','#50c8ff','#ff6482','#a78bfa','#f472b6','#38bdf8','#4ade80','#fb923c'];
-  const TEAM_COLORS = { Accounting: '#50dcb4', Operations: '#ff8c5a', Executive: '#a78bfa', Administrative: '#38bdf8' };
-  const TEAM_ICONS = { Accounting: '📊', Operations: '🔧', Executive: '👔', Administrative: '📋' };
+  const TEAM_LIST = ['Accounting', 'Operations', 'Executive', 'Administrative', 'Construction'];
+  const TEAM_COLORS = { Accounting: '#50dcb4', Operations: '#ff8c5a', Executive: '#a78bfa', Administrative: '#38bdf8', Construction: '#f59e0b' };
+  const TEAM_ICONS = { Accounting: '📊', Operations: '🔧', Executive: '👔', Administrative: '📋', Construction: '🏗️' };
   const TEAM_ROSTER = {
     Accounting: [{ name: 'Anthony Alapatt', email: 'aalapatt@firstmilecap.com' }],
     Executive: [
@@ -3021,6 +3022,7 @@ $$;</pre></div>`;
     ],
     Operations: [],
     Administrative: [],
+    Construction: [],
   };
 
   let calEvents = [], calColors = {}, calColorIdx = 0, calMonth = new Date().getMonth(), calYear = new Date().getFullYear();
@@ -3403,7 +3405,7 @@ $$;</pre></div>`;
   function calCrudBuildTeamPicker(selectedTeams) {
     crudSelectedTeams = selectedTeams || [];
     const el = document.getElementById('crudTeamPicker');
-    const teams = ['Accounting', 'Operations', 'Executive', 'Administrative'];
+    const teams = TEAM_LIST;
     el.innerHTML = teams.map(t => {
       const on = crudSelectedTeams.includes(t);
       const tc = TEAM_COLORS[t];
