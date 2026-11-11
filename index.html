@@ -1412,7 +1412,7 @@
     </div>
     <div class="manage-header">
       <h2>Users</h2>
-      <span style="font-size:12px;color:var(--text-dim)">Microsoft SSO · @firstmilecap.com + guests added here</span>
+      <span style="font-size:12px;color:var(--text-dim)">Microsoft SSO · @firstmilecap.com, @crtl.com, @cacq.com (+ guests added here)</span>
     </div>
     <div class="data-table" style="overflow-x:auto">
       <div class="loading-spinner" id="users-loading">
@@ -1746,6 +1746,10 @@
   const MSAL_CLIENT_ID = window.MSAL_CLIENT_ID || '__MSAL_CLIENT_ID__';
   const MSAL_TENANT_ID = window.MSAL_TENANT_ID || '__MSAL_TENANT_ID__';
   const ALLOWED_DOMAIN = 'firstmilecap.com';
+  // First Mile + sister companies. All three domains live in the same Microsoft 365 directory
+  // ("Crown" tenant = MSAL_TENANT_ID), so their staff sign in with no guest invite; like
+  // @firstmilecap.com, a first sign-in creates a user pending approval in Manage Users.
+  const ALLOWED_DOMAINS = ['firstmilecap.com', 'crtl.com', 'cacq.com'];
 
   let msalInstance = null;
   let currentUser = null; // { email, name, initials }
@@ -1885,14 +1889,21 @@
     const domain = email.split('@')[1];
     const error = document.getElementById('loginError');
 
-    // Domain check — outside @firstmilecap.com only accounts an admin pre-added in Manage Users
-    // (an app_users row, not blocked) get in; they also need a guest invite in Microsoft Entra.
+    // Domain check — First Mile / Crown domains (ALLOWED_DOMAINS) sign in like before (new users
+    // land as pending approval). Any other domain only gets in if an admin pre-added the address in
+    // Manage Users (app_users row, not blocked) — and it must also exist in the Crown Microsoft
+    // directory (e.g. as an Entra B2B guest), since the sign-in authority is that tenant.
+    // The token must come from the Crown tenant (tid claim) — defence in depth.
+    const tid = (account.idTokenClaims && account.idTokenClaims.tid) || account.tenantId || '';
+    const cfgTid = String(MSAL_TENANT_ID || '').trim().toLowerCase();
+    const tenantOk = !tid || !/^[0-9a-f-]{36}$/.test(cfgTid) || String(tid).toLowerCase() === cfgTid;
+    const knownDomain = ALLOWED_DOMAINS.includes(domain);
     let externalApproved = false;
-    if (domain !== ALLOWED_DOMAIN) {
+    if (tenantOk && !knownDomain) {
       try { const rows = await supaFetch('app_users', `?email=eq.${encodeURIComponent(email)}&select=email,is_blocked`); externalApproved = rows.length > 0 && !rows[0].is_blocked; } catch (e) { externalApproved = false; }
     }
-    if (domain !== ALLOWED_DOMAIN && !externalApproved) {
-      error.textContent = `Access denied. Only @${ALLOWED_DOMAIN} accounts and guests added by an administrator can sign in.`;
+    if (!tenantOk || (!knownDomain && !externalApproved)) {
+      error.textContent = `Access denied. Sign in with a First Mile, Crown (crtl.com) or cacq.com account, or ask an administrator to add you.`;
       error.style.display = 'block';
       document.getElementById('loginBtn').style.display = '';
       document.getElementById('loginLoading').style.display = 'none';
@@ -2906,9 +2917,9 @@ $$;</pre></div>`;
 
   async function deleteUser(userId) {
     const u = usersData.find(x => x.id === userId); if (!u) return;
-    const internal = (u.email || '').endsWith('@' + ALLOWED_DOMAIN);
+    const internal = ALLOWED_DOMAINS.includes((u.email || '').split('@')[1]);
     if (!confirm(`Delete ${u.name} (${u.email}) from the admin portal? This removes the user record, teams and module access and cannot be undone.` +
-      (internal ? `\n\nNote: an @${ALLOWED_DOMAIN} account that signs in again is re-created as a new user pending approval. To keep someone out for good, use Block instead.` : ''))) return;
+      (internal ? `\n\nNote: a First Mile / Crown account that signs in again is re-created as a new user pending approval. To keep someone out for good, use Block instead.` : ''))) return;
     try {
       const r = await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
         method: 'DELETE',
