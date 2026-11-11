@@ -90,3 +90,12 @@ DO $$ BEGIN
     CREATE POLICY violation_check_runs_all ON violation_check_runs FOR ALL USING (true) WITH CHECK (true); END IF;
 END $$;
 GRANT ALL ON violation_properties, violations, violation_check_runs TO anon, authenticated, service_role;
+
+-- Respondent attribution: OATH/FDNY tickets at an address are often issued to tenants,
+-- vendors or idling trucks. Only tickets whose respondent matches one of the owner
+-- entity names (auto-filled from PLUTO, editable in the UI) count toward health / $ due.
+ALTER TABLE violation_properties ADD COLUMN IF NOT EXISTS owner_names TEXT[] DEFAULT '{}';
+ALTER TABLE violation_properties ADD COLUMN IF NOT EXISTS third_party_open INT DEFAULT 0;
+ALTER TABLE violation_properties ADD COLUMN IF NOT EXISTS third_party_balance NUMERIC DEFAULT 0;
+ALTER TABLE violations ADD COLUMN IF NOT EXISTS respondent TEXT;
+ALTER TABLE violations ADD COLUMN IF NOT EXISTS third_party BOOLEAN DEFAULT false;

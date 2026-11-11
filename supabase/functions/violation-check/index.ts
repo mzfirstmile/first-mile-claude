@@ -77,6 +77,8 @@ const DOBNOW = () => `https://a810-dobnow.nyc.gov/publish/Index.html#!/`;
 const OATH_TICKET = (t: string) => `https://a820-ecbticketfinder.nyc.gov/getViolationbyID.action?searchViolationObject.violationNo=${encodeURIComponent(t)}&searchViolationObject.searchType=violationNumber&submit=Search`;
 
 // ── mappers ────────────────────────────────────────────────
+// Unsafe facade (FISP), emergency orders, cease-use and DOB "HAZ" violation types.
+const HAZ_TEXT = /UNSAFE|IMMEDIATELY HAZARDOUS|EMERGENCY|CEASE USE|VACATE|(^|[-\s])HAZ([-\s]|$)|FISPHAZ/i;
 function mapBis(r: Row) {
   const cat = String(r.violation_category || "");
   const deleted = /^DELETED/i.test(String(r.disposition_comments || ""));
@@ -85,7 +87,7 @@ function mapBis(r: Row) {
     source: "dob_bis", source_id: String(r.isn_dob_bis_viol || r.number),
     status: open ? "open" : "closed", source_status: clean(cat) + (deleted ? " (deleted)" : ""),
     issue_date: ymd(r.issue_date), violation_type: clean(r.violation_type), description: clean(r.description) || clean(r.violation_type),
-    class_severity: clean(r.violation_type_code), is_hazardous: false, penalty: null, balance_due: null,
+    class_severity: clean(r.violation_type_code), is_hazardous: open && HAZ_TEXT.test(`${r.violation_type || ""} ${r.description || ""}`), penalty: null, balance_due: null,
     hearing_date: null, hearing_status: null, issuing_agency: "DOB", bin: r.bin, bbl: r.boro && r.block && r.lot ? `${r.boro}${String(r.block).padStart(5, "0")}${String(r.lot).slice(-4).padStart(4, "0")}` : null,
     agency_url: BIS_LOC(r.bin), raw: r,
   };
@@ -111,7 +113,7 @@ function mapDobNow(r: Row) {
     source: "dob_now", source_id: String(r.violation_number),
     status: open ? "open" : "closed", source_status: clean(r.violation_status),
     issue_date: ymd(r.violation_issue_date), violation_type: t, description: clean(r.violation_remarks) || t,
-    class_severity: clean(r.device_type), is_hazardous: open && /(^|-)HAZ(-|$)|UNSAFE/i.test(t),
+    class_severity: clean(r.device_type), is_hazardous: open && HAZ_TEXT.test(`${t} ${r.violation_remarks || ""} ${r.violation_number || ""}`),
     penalty: null, balance_due: null, hearing_date: null, hearing_status: null, issuing_agency: "DOB NOW", bin: r.bin, bbl: r.bbl || null,
     agency_url: DOBNOW(), raw: r,
   };
@@ -132,11 +134,22 @@ function mapOath(r: Row) {
     status: open ? "open" : "closed", source_status: clean(hs) + (r.compliance_status ? ` · ${clean(r.compliance_status)}` : ""),
     issue_date: ymd(r.violation_date), violation_type: clean(r.charge_1_code_section) ? `${agency} §${clean(r.charge_1_code_section)}` : agency,
     description: (charges.join("; ") || clean(r.violation_description) || agency) + (r.respondent_last_name ? ` — respondent: ${clean(r.respondent_last_name)}` : ""),
-    class_severity: clean(r.hearing_result), is_hazardous: false,
+    class_severity: clean(r.hearing_result), is_hazardous: false, respondent: clean(r.respondent_last_name),
     penalty: num(r.penalty_imposed) ?? num(r.total_violation_amount), balance_due: bal,
     hearing_date: hd, hearing_status: clean(hs), issuing_agency: agency, bin: null,
     bbl: null, agency_url: OATH_TICKET(r.ticket_number), raw: r,
   };
+}
+
+// ── respondent → owner attribution ─────────────────────────
+const STOP = new Set(["LLC", "INC", "CORP", "CORPORATION", "CO", "COMPANY", "LP", "LTD", "THE", "OF", "AND", "L", "P", "C"]);
+const toks = (s: string) => String(s || "").toUpperCase().replace(/'S\b/g, "S").split(/[^A-Z0-9]+/).map((t) => t.replace(/S$/, "")).filter((t) => t && !STOP.has(t));
+// A respondent belongs to the owner when every significant token of one owner name appears in it.
+// Unknown respondent → treated as owner (conservative).
+function isOwner(resp: string | null, owners: string[]) {
+  if (!resp) return true;
+  const rt = new Set(toks(resp));
+  return owners.some((o) => { const ot = toks(o); return ot.length > 0 && ot.every((t) => rt.has(t)); });
 }
 
 // ── one property ───────────────────────────────────────────
@@ -145,6 +158,14 @@ async function checkProperty(p: Row) {
   const bins = [p.bin, ...(p.alt_bins || [])].map((b) => String(b || "").trim()).filter((b) => /^\d{7}$/.test(b));
   const lotKeys = new Map<string, { boro: string; block: string; lot: string }>();
   for (const b of [p.bbl, ...(p.alt_bbls || [])]) { const s = splitBbl(b); if (s) lotKeys.set(`${s.boro}${s.block}${s.lot}`, s); }
+
+  let owners: string[] = (p.owner_names || []).filter(Boolean);
+  if (!owners.length && p.bbl) {
+    try {
+      const pl = await soda("64uk-42ks", `bbl=${Number(String(p.bbl).replace(/\D/g, ""))}`, 1);
+      if (pl[0]?.ownername) { owners = [pl[0].ownername]; await sb.from("violation_properties").update({ owner_names: owners }).eq("id", p.id); }
+    } catch (e) { errors.push(`pluto owner: ${e}`); }
+  }
 
   const okSources = new Set<string>();
   let records: Row[] = [];
@@ -181,10 +202,11 @@ async function checkProperty(p: Row) {
   let newOpen = 0, newlyClosed = 0;
   const payload = records.map((r) => {
     const prev = ex.get(`${r.source}|${r.source_id}`);
-    if (!prev && r.status === "open") newOpen++;
+    if (!prev && r.status === "open") newOpen++;  // (third-party tickets included in run counts)
     if (prev && prev.status === "open" && r.status === "closed") newlyClosed++;
     const closed_at = r.status === "closed" ? (prev?.closed_at || (prev?.status === "open" ? nowIso : null)) : null;
-    return { ...r, violation_property_id: p.id, last_seen: nowIso, updated_at: nowIso, closed_at };
+    const third_party = (r.source === "oath" || r.source === "fdny") && owners.length > 0 && !isOwner(r.respondent ?? null, owners);
+    return { respondent: null, ...r, third_party, violation_property_id: p.id, last_seen: nowIso, updated_at: nowIso, closed_at };
   });
   for (let i = 0; i < payload.length; i += 200) {
     const { error } = await sb.from("violations").upsert(payload.slice(i, i + 200), { onConflict: "source,source_id" });
@@ -200,7 +222,9 @@ async function checkProperty(p: Row) {
   }
 
   // summary
-  const { data: openRows } = await sb.from("violations").select("source,balance_due,hearing_date,is_hazardous").eq("violation_property_id", p.id).eq("status", "open");
+  const { data: openAll } = await sb.from("violations").select("source,balance_due,hearing_date,is_hazardous,third_party").eq("violation_property_id", p.id).eq("status", "open");
+  const openRows = (openAll || []).filter((r: Row) => !r.third_party);
+  const tp = (openAll || []).filter((r: Row) => r.third_party);
   const today = new Date().toISOString().slice(0, 10);
   const bySrc: Record<string, number> = {};
   let bal = 0, haz = 0, next: string | null = null;
@@ -214,6 +238,7 @@ async function checkProperty(p: Row) {
   const health = haz > 0 || bal > 0 || next ? "red" : openCount > 0 ? "amber" : "green";
   await sb.from("violation_properties").update({
     health, open_count: openCount, open_by_source: bySrc, balance_due: bal, next_hearing: next, hazardous_open: haz,
+    third_party_open: tp.length, third_party_balance: tp.reduce((a: number, r: Row) => a + Number(r.balance_due || 0), 0),
     last_checked_at: nowIso, last_check_error: errors.length ? errors.join(" | ").slice(0, 1000) : null,
   }).eq("id", p.id);
 
