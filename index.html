@@ -1402,12 +1402,19 @@
   </div>
 
   <!-- Users View -->
-  <div class="manage-view" id="view-users" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px);">
+  <div class="manage-view" id="view-users" style="padding:24px 32px; overflow-y:auto; max-height:calc(100vh - 65px); max-width:none;">
+    <div class="manage-header" style="gap:24px;align-items:flex-end">
+      <h2 style="flex-shrink:0">Teams</h2>
+      <span style="font-size:12px;color:var(--text-dim);text-align:right;max-width:640px">Permission set per team · ticking a module grants it to every member (admins excluded); unticking removes it unless another of the member's teams grants it</span>
+    </div>
+    <div class="data-table" style="overflow-x:auto;margin-bottom:28px">
+      <table id="teams-table" class="bgt-table" style="display:none"><thead><tr></tr></thead><tbody id="teams-tbody"></tbody></table>
+    </div>
     <div class="manage-header">
       <h2>Users</h2>
-      <span style="font-size:12px;color:var(--text-dim)">Microsoft SSO · @firstmilecap.com</span>
+      <span style="font-size:12px;color:var(--text-dim)">Microsoft SSO · @firstmilecap.com + guests added here</span>
     </div>
-    <div class="data-table">
+    <div class="data-table" style="overflow-x:auto">
       <div class="loading-spinner" id="users-loading">
         <div class="spinner"></div>
         Loading users…
@@ -1864,14 +1871,28 @@
     }
   }
 
+  // Guest (B2B) accounts can come back as 'name_domain.com#EXT#@tenant.onmicrosoft.com' — use the
+  // email claim when present, else rebuild the original address from the #EXT# UPN.
+  function accountEmail(account) {
+    const claims = account.idTokenClaims || {};
+    let e = (claims.email || account.username || claims.preferred_username || '').toLowerCase();
+    if (e.includes('#ext#')) { const local = e.split('#ext#')[0]; const i = local.lastIndexOf('_'); if (i > 0) e = local.slice(0, i) + '@' + local.slice(i + 1); }
+    return e;
+  }
+
   async function handleAuthResult(account) {
-    const email = (account.username || '').toLowerCase();
+    const email = accountEmail(account);
     const domain = email.split('@')[1];
     const error = document.getElementById('loginError');
 
-    // Domain check
+    // Domain check — outside @firstmilecap.com only accounts an admin pre-added in Manage Users
+    // (an app_users row, not blocked) get in; they also need a guest invite in Microsoft Entra.
+    let externalApproved = false;
     if (domain !== ALLOWED_DOMAIN) {
-      error.textContent = `Access denied. Only @${ALLOWED_DOMAIN} accounts can sign in.`;
+      try { const rows = await supaFetch('app_users', `?email=eq.${encodeURIComponent(email)}&select=email,is_blocked`); externalApproved = rows.length > 0 && !rows[0].is_blocked; } catch (e) { externalApproved = false; }
+    }
+    if (domain !== ALLOWED_DOMAIN && !externalApproved) {
+      error.textContent = `Access denied. Only @${ALLOWED_DOMAIN} accounts and guests added by an administrator can sign in.`;
       error.style.display = 'block';
       document.getElementById('loginBtn').style.display = '';
       document.getElementById('loginLoading').style.display = 'none';
@@ -2692,9 +2713,80 @@ $$;</pre></div>`;
     { key: 'users', label: 'Users' },
   ];
 
+  // ── Teams: per-team module permission sets (app_team_permissions) ──
+  // Team settings are pushed onto members' own app_users.access_* columns (what the app enforces):
+  // a member gets a module if ANY of their teams grants it. Admins are never touched; 'users'
+  // (Manage Users) is per-user only. Per-user boxes stay editable as one-off exceptions until the
+  // next change to that user's teams or to a team they're in.
+  let teamsData = [];
+  const TEAM_MODULES = () => MODULE_DEFS.filter(m => m.key !== 'users');
+  const userTeams = (u) => (u.team ? u.team.split(',').map(t => t.trim()).filter(Boolean) : []);
+  async function loadTeams() {
+    try { teamsData = await supaFetch('app_team_permissions', '?order=sort.asc,team.asc'); } catch (e) { teamsData = []; console.warn('Teams load failed:', e); }
+  }
+  function renderTeams() {
+    const table = document.getElementById('teams-table'); if (!table) return;
+    const isAdmin = currentUser && currentUser.isAdmin;
+    const mods = TEAM_MODULES();
+    table.style.display = teamsData.length ? 'table' : 'none';
+    table.querySelector('thead tr').innerHTML = `<th style="text-align:left">Team</th><th style="text-align:center">Members</th>` +
+      mods.map(m => `<th style="text-align:center;font-size:10px;min-width:60px">${m.label}</th>`).join('');
+    document.getElementById('teams-tbody').innerHTML = teamsData.map(t => {
+      const members = usersData.filter(u => userTeams(u).includes(t.team));
+      const tc = TEAM_COLORS[t.team] || '#888';
+      const cells = mods.map(m => {
+        const f = `access_${m.key}`;
+        return isAdmin
+          ? `<td style="text-align:center"><input type="checkbox" ${t[f] ? 'checked' : ''} onchange="toggleTeamModule('${t.team}','${f}',this.checked,this)" style="cursor:pointer;width:16px;height:16px;accent-color:${tc}"></td>`
+          : `<td style="text-align:center">${t[f] ? '<span style="color:var(--green);font-weight:700">&#10003;</span>' : '<span style="color:var(--text-dim)">—</span>'}</td>`;
+      }).join('');
+      return `<tr><td style="text-align:left;font-weight:700;color:${tc};white-space:nowrap">${TEAM_ICONS[t.team] || ''} ${t.team}</td>
+        <td style="text-align:center;font-size:11px;color:var(--text-dim)" title="${members.map(u => u.name).join(', ')}">${members.length}</td>${cells}</tr>`;
+    }).join('');
+  }
+  // access a user should have for one module, from the union of their teams (null = no team → leave alone)
+  function teamGrant(u, field) {
+    const ts = userTeams(u).map(n => teamsData.find(t => t.team === n)).filter(Boolean);
+    return ts.length ? ts.some(t => t[field] === true) : null;
+  }
+  async function patchUser(userId, body) {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
+      method: 'PATCH', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
+  }
+  // Recompute every team-managed module for one user from their teams (used after a team change)
+  async function applyTeamsToUser(u) {
+    if (u.isAdmin || !userTeams(u).length) return;
+    const body = {};
+    for (const m of TEAM_MODULES()) { const f = `access_${m.key}`; const g = teamGrant(u, f); if (g !== null && u[f] !== g) body[f] = g; }
+    if (Object.keys(body).length) { await patchUser(u.id, body); Object.assign(u, body); }
+  }
+  async function toggleTeamModule(team, field, value, el) {
+    const t = teamsData.find(x => x.team === team); if (!t) return;
+    const prev = t[field];
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/app_team_permissions?team=eq.${encodeURIComponent(team)}`, {
+        method: 'PATCH', headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ [field]: value, updated_by: currentUser?.email || null, updated_at: new Date().toISOString() }),
+      });
+      if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
+      t[field] = value;
+      const members = usersData.filter(u => !u.isAdmin && userTeams(u).includes(team));
+      for (const u of members) { const g = teamGrant(u, field); if (g !== null && u[field] !== g) { await patchUser(u.id, { [field]: g }); u[field] = g; } }
+      renderTeams(); renderUsers();
+    } catch (e) {
+      t[field] = prev; if (el) el.checked = prev;
+      console.error('Team permission error:', e);
+      alert('Failed to update team: ' + e.message);
+    }
+  }
+
   async function loadUsers() {
     usersLoaded = false;
     try {
+      await loadTeams();
       const users = await supaFetch('app_users', '?order=display_name');
       usersData = users.map(u => ({
         id: u.id,
@@ -2718,6 +2810,7 @@ $$;</pre></div>`;
         access_users: u.access_users === true,
       }));
       renderUsers();
+      renderTeams();
     } catch (e) {
       console.error('Users load error:', e);
       document.getElementById('users-loading').innerHTML = `<span style="color:#e5534b">Failed to load: ${e.message}</span>`;
@@ -2777,6 +2870,7 @@ $$;</pre></div>`;
         } else {
           statusCell = `<button onclick="toggleUserBlock(${u.id}, true)" style="background:#e5534b;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:600;cursor:pointer">Block</button>`;
         }
+        statusCell = `<div style="display:flex;gap:6px;justify-content:center;align-items:center">${statusCell}<button onclick="deleteUser(${u.id})" title="Delete this user record" style="background:none;color:#e5534b;border:1px solid #e5534b;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">Delete</button></div>`;
       } else if (isSelf) {
         statusCell = `<span style="color:var(--accent);font-size:11px;font-weight:600">You</span>`;
       } else {
@@ -2808,6 +2902,28 @@ $$;</pre></div>`;
         <td style="text-align:center">${statusCell}</td>
       </tr>`;
     }).join('');
+  }
+
+  async function deleteUser(userId) {
+    const u = usersData.find(x => x.id === userId); if (!u) return;
+    const internal = (u.email || '').endsWith('@' + ALLOWED_DOMAIN);
+    if (!confirm(`Delete ${u.name} (${u.email}) from the admin portal? This removes the user record, teams and module access and cannot be undone.` +
+      (internal ? `\n\nNote: an @${ALLOWED_DOMAIN} account that signs in again is re-created as a new user pending approval. To keep someone out for good, use Block instead.` : ''))) return;
+    try {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
+        method: 'DELETE',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Prefer': 'return=representation' },
+      });
+      if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
+      const gone = await r.json().catch(() => []);
+      if (!gone.length) throw new Error('No row deleted (permission?)');
+      usersData = usersData.filter(x => x.id !== userId);
+      renderUsers();
+    } catch (e) {
+      console.error('Delete user error:', e);
+      alert('Failed to delete: ' + e.message);
+      loadUsers();
+    }
   }
 
   async function toggleModuleAccess(userId, field, value) {
@@ -2850,6 +2966,8 @@ $$;</pre></div>`;
         body: JSON.stringify({ team: newTeam })
       });
       user.team = newTeam || '';
+      await applyTeamsToUser(user);   // access follows the user's teams
+      renderUsers(); renderTeams();
     } catch (e) {
       console.error('Toggle user team error:', e);
       alert('Failed to update team: ' + e.message);
