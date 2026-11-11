@@ -1926,12 +1926,21 @@
         jobs: userRecord ? userRecord.is_admin === true : false,
         sql: userRecord ? userRecord.is_admin === true : false,
         marketresearch: userRecord ? userRecord.access_market_research === true : false,
+        // newer modules default to visible (column default true; null/missing = allowed)
+        initiatives: userRecord ? userRecord.access_initiatives !== false : true,
+        dealtracking: userRecord ? userRecord.access_deal_tracking !== false : true,
+        violationtracker: userRecord ? userRecord.access_violation_tracker !== false : true,
+        rasheq: userRecord ? userRecord.access_rasheq !== false : true,
       },
     };
 
     // Update UI with user info and module visibility
     updateUserUI();
     applyModuleAccess();
+    // A deep link (#violationtracker, #rasheq…) is routed before auth finishes, so the access
+    // check in switchView() never ran for it — bounce to Home if this user can't open that module.
+    { const vk = currentView === 'exec2' ? 'exec' : currentView;
+      if (currentView !== 'home' && currentUser.access[vk] === false) switchView('home'); }
 
     // Hide login overlay
     document.getElementById('loginOverlay').classList.add('hidden');
@@ -2676,6 +2685,10 @@ $$;</pre></div>`;
     { key: 'forecasting', label: 'Forecasting' },
     { key: 'properties', label: 'Properties' },
     { key: 'market_research', label: 'Market Rsrch' },
+    { key: 'initiatives', label: 'Initiatives' },
+    { key: 'deal_tracking', label: 'Deal Tracking' },
+    { key: 'violation_tracker', label: 'Violations' },
+    { key: 'rasheq', label: 'Rasheq' },
     { key: 'users', label: 'Users' },
   ];
 
@@ -2698,6 +2711,10 @@ $$;</pre></div>`;
         access_exec: u.access_exec === true,
         access_properties: u.access_properties !== false,
         access_market_research: u.access_market_research === true,
+        access_initiatives: u.access_initiatives !== false,
+        access_deal_tracking: u.access_deal_tracking !== false,
+        access_violation_tracker: u.access_violation_tracker !== false,
+        access_rasheq: u.access_rasheq !== false,
         access_users: u.access_users === true,
       }));
       renderUsers();
@@ -2795,7 +2812,7 @@ $$;</pre></div>`;
 
   async function toggleModuleAccess(userId, field, value) {
     try {
-      await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/app_users?id=eq.${userId}`, {
         method: 'PATCH',
         headers: {
           'apikey': SUPABASE_KEY,
@@ -2805,6 +2822,8 @@ $$;</pre></div>`;
         },
         body: JSON.stringify({ [field]: value })
       });
+      if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
+      const u = usersData.find(x => x.id === userId); if (u) u[field] = value;
     } catch (e) {
       console.error('Toggle module access error:', e);
       alert('Failed to update: ' + e.message);
