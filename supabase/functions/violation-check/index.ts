@@ -8,6 +8,8 @@
 //   oath     OATH Hearings Division cases    jz4z-kudi   by boro/block/lot (all agencies except FDNY;
 //                                                        DOB tickets already in ECB are skipped)
 //   fdny     FDNY summonses heard at OATH    jz4z-kudi   issuing_agency = FIRE DEPARTMENT OF NYC
+// Plus, via regional.ts: EPA ECHO for every property with lat/lng, NJDEP + NJ DCA open construction
+// permits for NJ properties, CT DEEP for CT properties (see that file).
 // Not reachable without credentials: CityPay (payment portal only — balances come from the
 // ECB / OATH balance_due fields) and FDNY violation orders (FDNY's open-data copy, bi53-yph3,
 // stopped updating in 2019; current orders are only in the FDNY Business account portal).
@@ -19,9 +21,11 @@
 // POST {property_ids:[uuid…], trigger}      → check some
 // POST {action:'lookup', address}           → NYC GeoSearch → [{label,bbl,bin,borough,block,lot}]
 // POST {action:'lookup_bbl', bbl}           → PLUTO + GeoSearch → same shape
+// POST {action:'lookup_us', address}        → Census geocoder (+ NJ parcel block/lot/muni code) for NJ / CT
 // Secrets: SB_SERVICE_KEY (or SUPABASE_SERVICE_ROLE_KEY); optional NYC_OPEN_DATA_APP_TOKEN.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { addrMatch, fetchCtDeep, fetchEcho, fetchNjdep, fetchNjPermits, lookupUs } from "./regional.ts";
 
 const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SB_SERVICE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const SODA = "https://data.cityofnewyork.us/resource";
@@ -160,7 +164,7 @@ async function checkProperty(p: Row) {
   for (const b of [p.bbl, ...(p.alt_bbls || [])]) { const s = splitBbl(b); if (s) lotKeys.set(`${s.boro}${s.block}${s.lot}`, s); }
 
   let owners: string[] = (p.owner_names || []).filter(Boolean);
-  if (!owners.length && p.bbl) {
+  if (!owners.length && p.bbl && p.nyc_covered) {
     try {
       const pl = await soda("64uk-42ks", `bbl=${Number(String(p.bbl).replace(/\D/g, ""))}`, 1);
       if (pl[0]?.ownername) { owners = [pl[0].ownername]; await sb.from("violation_properties").update({ owner_names: owners }).eq("id", p.id); }
@@ -169,17 +173,17 @@ async function checkProperty(p: Row) {
 
   const okSources = new Set<string>();
   let records: Row[] = [];
-  if (bins.length) {
+  if (p.nyc_covered && bins.length) {
     const inBins = `bin in(${bins.map(q).join(",")})`;
     const [bis, ecb, now] = await Promise.allSettled([soda("3h2n-5cm9", inBins), soda("6bgk-3dad", inBins), soda("855j-jady", inBins)]);
     if (bis.status === "fulfilled") { okSources.add("dob_bis"); records.push(...bis.value.map(mapBis)); for (const r of bis.value) { if (r.boro && r.block && r.lot) { const s = { boro: String(r.boro), block: String(r.block).padStart(5, "0"), lot: String(r.lot).slice(-4).padStart(4, "0") }; lotKeys.set(`${s.boro}${s.block}${s.lot}`, s); } } } else errors.push(`dob_bis: ${bis.reason}`);
     if (ecb.status === "fulfilled") { okSources.add("dob_ecb"); records.push(...ecb.value.map(mapEcb)); for (const r of ecb.value) { if (r.boro && r.block && r.lot) { const s = { boro: String(r.boro), block: String(r.block).padStart(5, "0"), lot: String(r.lot).slice(-4).padStart(4, "0") }; lotKeys.set(`${s.boro}${s.block}${s.lot}`, s); } } } else errors.push(`dob_ecb: ${ecb.reason}`);
     if (now.status === "fulfilled") { okSources.add("dob_now"); records.push(...now.value.map(mapDobNow)); } else errors.push(`dob_now: ${now.reason}`);
-  } else errors.push("no BIN — DOB sources skipped");
+  } else if (p.nyc_covered) errors.push("no BIN — DOB sources skipped");
 
   // OATH (+FDNY) by every boro/block/lot we know for the site (condo base + billing lots included).
   // OATH stores lots both as 4- and 5-digit strings ('0035' and '00035').
-  if (lotKeys.size) {
+  if (p.nyc_covered && lotKeys.size) {
     const clauses = [...lotKeys.values()].map((s) => `(violation_location_borough=${q(BORO_NAME[s.boro])} AND violation_location_block_no=${q(s.block)} AND violation_location_lot_no in(${q(s.lot)},${q("0" + s.lot)}))`);
     try {
       const rows = await soda("jz4z-kudi", clauses.join(" OR "));
@@ -187,7 +191,19 @@ async function checkProperty(p: Row) {
       records.push(...rows.filter((r) => r.ticket_number && !ecbNums.has(normTicket(r.ticket_number))).map(mapOath));
       okSources.add("oath"); okSources.add("fdny");
     } catch (e) { errors.push(`oath: ${e}`); }
-  } else errors.push("no BBL — OATH/FDNY skipped");
+  } else if (p.nyc_covered) errors.push("no BBL — OATH/FDNY skipped");
+
+  // Federal + NJ / CT sources (regional.ts). Each source is independent: a failure is logged and
+  // that source's open rows are left untouched (never closed) this run.
+  const regional: [string, () => Promise<Row[]>][] = [];
+  if (p.latitude != null && p.longitude != null) regional.push(["epa_echo", () => fetchEcho(p)]);
+  if (p.state === "NJ") { regional.push(["njdep", () => fetchNjdep(p)]); regional.push(["nj_permit", () => fetchNjPermits(p)]); }
+  if (p.state === "CT") regional.push(["ct_deep", () => fetchCtDeep(p)]);
+  const regRes = await Promise.allSettled(regional.map(([, fn]) => fn()));
+  regRes.forEach((r, i) => {
+    const key = regional[i][0];
+    if (r.status === "fulfilled") { okSources.add(key); records.push(...r.value); } else errors.push(`${key}: ${r.reason}`);
+  });
 
   // de-dupe within the batch (same record can come back for two BINs / lots)
   const byKey = new Map<string, Row>();
@@ -205,8 +221,11 @@ async function checkProperty(p: Row) {
     if (!prev && r.status === "open") newOpen++;  // (third-party tickets included in run counts)
     if (prev && prev.status === "open" && r.status === "closed") newlyClosed++;
     const closed_at = r.status === "closed" ? (prev?.closed_at || (prev?.status === "open" ? nowIso : null)) : null;
-    const third_party = (r.source === "oath" || r.source === "fdny") && owners.length > 0 && !isOwner(r.respondent ?? null, owners);
-    return { respondent: null, ...r, third_party, violation_property_id: p.id, last_seen: nowIso, updated_at: nowIso, closed_at };
+    // tickets / facilities in someone else's name at the address (tenants, vendors, prior owners'
+    // facility registrations) — site-based environmental records (njdep, ct_deep) always count
+    const third_party = ["oath", "fdny", "epa_echo"].includes(r.source) && owners.length > 0 &&
+      !isOwner(r.respondent ?? null, owners) && !(r.respondent && addrMatch(r.respondent, p.match_addresses || []));
+    return { respondent: null, info_only: false, ...r, third_party, violation_property_id: p.id, last_seen: nowIso, updated_at: nowIso, closed_at };
   });
   for (let i = 0; i < payload.length; i += 200) {
     const { error } = await sb.from("violations").upsert(payload.slice(i, i + 200), { onConflict: "source,source_id" });
@@ -222,8 +241,9 @@ async function checkProperty(p: Row) {
   }
 
   // summary
-  const { data: openAll } = await sb.from("violations").select("source,balance_due,hearing_date,is_hazardous,third_party").eq("violation_property_id", p.id).eq("status", "open");
-  const openRows = (openAll || []).filter((r: Row) => !r.third_party);
+  const { data: openAll } = await sb.from("violations").select("source,balance_due,hearing_date,is_hazardous,third_party,info_only").eq("violation_property_id", p.id).eq("status", "open");
+  const info = (openAll || []).filter((r: Row) => r.info_only && !r.third_party);
+  const openRows = (openAll || []).filter((r: Row) => !r.third_party && !r.info_only);
   const tp = (openAll || []).filter((r: Row) => r.third_party);
   const today = new Date().toISOString().slice(0, 10);
   const bySrc: Record<string, number> = {};
@@ -235,9 +255,10 @@ async function checkProperty(p: Row) {
     if (r.hearing_date && r.hearing_date >= today && (!next || r.hearing_date < next)) next = r.hearing_date;
   }
   const openCount = (openRows || []).length;
-  const health = haz > 0 || bal > 0 || next ? "red" : openCount > 0 ? "amber" : "green";
+  const health = !okSources.size ? "na" : haz > 0 || bal > 0 || next ? "red" : openCount > 0 ? "amber" : "green";
   await sb.from("violation_properties").update({
     health, open_count: openCount, open_by_source: bySrc, balance_due: bal, next_hearing: next, hazardous_open: haz,
+    info_open: info.length, sources_checked: [...okSources],
     third_party_open: tp.length, third_party_balance: tp.reduce((a: number, r: Row) => a + Number(r.balance_due || 0), 0),
     last_checked_at: nowIso, last_check_error: errors.length ? errors.join(" | ").slice(0, 1000) : null,
   }).eq("id", p.id);
@@ -254,7 +275,7 @@ async function geosearch(text: string) {
   return (j.features || []).map((f: Row) => {
     const pad = f.properties?.addendum?.pad || {};
     const s = splitBbl(pad.bbl);
-    return { label: f.properties?.label, bbl: pad.bbl || null, bin: pad.bin || null, borough: s ? BORO_LABEL[s.boro] : f.properties?.borough || null, block: s ? String(Number(s.block)) : null, lot: s ? String(Number(s.lot)) : null, lng: f.geometry?.coordinates?.[0], lat: f.geometry?.coordinates?.[1] };
+    return { label: f.properties?.label, street: String(f.properties?.label || "").split(",")[0], bbl: pad.bbl || null, bin: pad.bin || null, borough: s ? BORO_LABEL[s.boro] : f.properties?.borough || null, block: s ? String(Number(s.block)) : null, lot: s ? String(Number(s.lot)) : null, lng: f.geometry?.coordinates?.[0], lat: f.geometry?.coordinates?.[1] };
   }).filter((x: Row) => x.bbl);
 }
 async function lookupBbl(bbl: string) {
@@ -273,9 +294,10 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* empty body = cron */ }
   try {
     if (body.action === "lookup") return json({ results: await geosearch(String(body.address || "")) });
+    if (body.action === "lookup_us") return json({ results: await lookupUs(String(body.address || "")) });
     if (body.action === "lookup_bbl") return json({ results: await lookupBbl(String(body.bbl || "")) });
 
-    let qy = sb.from("violation_properties").select("*").eq("active", true).eq("nyc_covered", true);
+    let qy = sb.from("violation_properties").select("*").eq("active", true);
     if (Array.isArray(body.property_ids) && body.property_ids.length) qy = qy.in("id", body.property_ids);
     const { data: props, error } = await qy;
     if (error) throw new Error(error.message);
@@ -289,8 +311,6 @@ Deno.serve(async (req) => {
         await sb.from("violation_properties").update({ last_check_error: String(e).slice(0, 1000), last_checked_at: new Date().toISOString() }).eq("id", p.id);
       }
     }
-    // not-covered properties get a neutral health
-    await sb.from("violation_properties").update({ health: "na" }).eq("nyc_covered", false);
 
     const errs = results.flatMap((r) => (r.errors || []).map((e: string) => `${r.name}: ${e}`)).filter((e) => !/skipped$/.test(e));
     const summary = { properties: results.map(({ id, name, open, health, balance_due, new_open, newly_closed }) => ({ id, name, open, health, balance_due, new_open, newly_closed })) };
